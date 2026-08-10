@@ -283,12 +283,12 @@ export function PosteriorMarginalFigure({
 }: RowFigureProps & { readonly marginals: PosteriorMarginals }) {
   const titleId = useId();
   const [hovered, setHovered] = useState<{ site: SiteResult; bin: number }>();
-  const width = 1_280;
+  const width = 520;
   const left = 112;
-  const right = 32;
-  const top = 98;
-  const bottom = 124;
-  const rowGap = 50;
+  const right = 20;
+  const top = 92;
+  const bottom = 118;
+  const rowGap = 52;
   const plotWidth = width - left - right;
   const plotHeight = Math.max(rowGap, sites.length * rowGap);
   const height = top + plotHeight + bottom;
@@ -302,7 +302,10 @@ export function PosteriorMarginalFigure({
   const laneOffset = rowGap * 0.2;
   const maximumThickness = rowGap * 0.7;
   const minimumThickness = 1.15;
-  const barWidth = Math.min(32, xStep * 0.72);
+  // The paper panel is deliberately narrow and Plots.jl bars occupy most of
+  // their categorical bin. Keeping that intrinsic width is essential: a
+  // responsive full-width SVG turns the marginal into disconnected dashes.
+  const barWidth = xStep * 0.8;
   const distributions = useMemo(() => {
     const alpha: MarginalMark[] = [];
     const omega1: MarginalMark[] = [];
@@ -351,20 +354,29 @@ export function PosteriorMarginalFigure({
   };
 
   return (
-    <svg ref={svgRef} viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby={titleId} style={{ ...svgStyle(), minWidth: "960px" }}>
+    <svg
+      ref={svgRef}
+      viewBox={`0 0 ${width} ${height}`}
+      role="img"
+      aria-labelledby={titleId}
+      data-layout="paper-portrait"
+      data-bin-occupancy="0.8"
+      style={{ ...svgStyle(), width: `${width}px`, minWidth: `${width}px`, margin: "0 auto" }}
+    >
       <title id={titleId}>{labels.marginalsTitle}</title>
       <desc>For every codon, green alpha marginal mass is centered above the site line and red and blue omega marginal masses are centered below it. Rectangle thickness is proportional to posterior probability at that parameter-grid value.</desc>
-      <text x={left} y="31" fill={INK} fontSize="22" fontWeight="650">{labels.marginalsTitle}</text>
-      <g transform={`translate(${width / 2 - 184} 66)`} fill={INK} fontSize="13">
-        <rect x="0" y="-10" width="25" height="12" fill={RED} opacity="0.78" /><text x="34" y="1">ω · {labels.group1}</text>
-        <rect x="142" y="-10" width="25" height="12" fill={BLUE} opacity="0.78" /><text x="176" y="1">ω · {labels.group2}</text>
-        <rect x="288" y="-10" width="25" height="12" fill={GREEN} opacity="0.78" /><text x="322" y="1">{labels.alpha}</text>
+      <text x={left} y="25" fill={INK} fontSize="18" fontWeight="650">{labels.marginalsTitle}</text>
+      <g transform="translate(125 62)" fill={INK} fontSize="11">
+        <rect x="0" y="-19" width="272" height="31" fill="#fff" stroke={INK} strokeWidth="0.8" />
+        <rect x="11" y="-11" width="20" height="10" fill={RED} opacity="0.78" /><text x="38" y="-2">ω · {labels.group1}</text>
+        <rect x="108" y="-11" width="20" height="10" fill={BLUE} opacity="0.78" /><text x="135" y="-2">ω · {labels.group2}</text>
+        <rect x="214" y="-11" width="20" height="10" fill={GREEN} opacity="0.78" /><text x="241" y="-2">{labels.alpha}</text>
       </g>
       {oneBin >= 0 && <rect x={x(oneBin) - xStep / 2} y={top} width={xStep} height={plotHeight} fill="#8e9794" opacity="0.055" />}
       {sites.map((site, row) => (
         <g key={site.site}>
           {site.site === selectedSite && <rect x={left - 64} y={top + row * rowGap} width={plotWidth + 66} height={rowGap} fill="#eaf4f0" />}
-          <text x={left - 16} y={y(row) + 5} textAnchor="end" fill={site.site === selectedSite ? "#0d5e57" : INK} fontSize="14" fontWeight={site.site === selectedSite ? "800" : "650"}>{site.site}</text>
+          <text x={left - 15} y={y(row) + 4} textAnchor="end" fill={site.site === selectedSite ? "#0d5e57" : INK} fontSize="13" fontWeight={site.site === selectedSite ? "800" : "650"}>{site.site}</text>
         </g>
       ))}
       <g data-series="alpha" fill={GREEN} opacity="0.78" shapeRendering="crispEdges">
@@ -385,7 +397,7 @@ export function PosteriorMarginalFigure({
       <line x1={left} x2={left} y1={top} y2={top + plotHeight} stroke={INK} strokeWidth="1.35" />
       <line x1={left} x2={left + plotWidth} y1={top + plotHeight} y2={top + plotHeight} stroke={INK} strokeWidth="1.35" />
       {Array.from(marginals.omegaValues).map((value, bin) => (
-        <text key={bin} x={x(bin)} y={top + plotHeight + 23} textAnchor="end" fill={INK} fontSize="12" transform={`rotate(-90 ${x(bin)} ${top + plotHeight + 23})`}>{gridLabel(value)}</text>
+        <text key={bin} x={x(bin)} y={top + plotHeight + 20} textAnchor="end" fill={INK} fontSize="10" transform={`rotate(-90 ${x(bin)} ${top + plotHeight + 20})`}>{gridLabel(value)}</text>
       ))}
       <rect
         data-transient="true"
@@ -420,8 +432,8 @@ export function PosteriorMarginalFigure({
           </g>
         );
       })()}
-      <text x={left + plotWidth / 2} y={height - 18} textAnchor="middle" fill={INK} fontSize="21">{labels.marginalsXAxis}</text>
-      <text x="27" y={top + plotHeight / 2} textAnchor="middle" fill={INK} fontSize="22" transform={`rotate(-90 27 ${top + plotHeight / 2})`}>{labels.marginalsYAxis}</text>
+      <text x={left + plotWidth / 2} y={height - 16} textAnchor="middle" fill={INK} fontSize="18">{labels.marginalsXAxis}</text>
+      <text x="24" y={top + plotHeight / 2} textAnchor="middle" fill={INK} fontSize="19" transform={`rotate(-90 24 ${top + plotHeight / 2})`}>{labels.marginalsYAxis}</text>
     </svg>
   );
 }

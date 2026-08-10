@@ -98,6 +98,11 @@ test("posterior marginals render Julia-style alpha and omega probability-mass la
   for (const series of ["alpha", "omega1", "omega2"]) {
     assert.equal((group(series).match(/<rect/g) ?? []).length, 8);
   }
+  assert.match(markup, /viewBox="0 0 520 /);
+  assert.match(markup, /data-layout="paper-portrait"/);
+  assert.match(markup, /data-bin-occupancy="0.8"/);
+  assert.match(markup, /style="[^"]*width:520px/);
+  assert.match(markup, /min-width:520px/);
   const alpha = mark("alpha", 1, 1);
   const alphaTail = mark("alpha", 1, 0);
   const omega1 = mark("omega1", 1, 1);
