@@ -1,4 +1,4 @@
-import type { PosteriorMarginals, SiteResult } from "@phylo-workbench/model-diffubar/browser-source";
+import type { PosteriorMarginals, ProgressDetail, SiteResult } from "@phylo-workbench/model-diffubar/browser-source";
 
 export interface DifFubarRunResult {
   readonly sites: readonly SiteResult[];
@@ -25,6 +25,6 @@ export interface WorkerRunRequest {
 }
 
 export type WorkerResponse =
-  | { readonly type: "progress"; readonly id: string; readonly stage: string; readonly fraction: number }
+  | { readonly type: "progress"; readonly id: string; readonly stage: string; readonly fraction: number; readonly detail?: ProgressDetail }
   | { readonly type: "result"; readonly id: string; readonly result: DifFubarRunResult }
   | { readonly type: "error"; readonly id: string; readonly error: string };

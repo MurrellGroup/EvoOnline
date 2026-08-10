@@ -83,8 +83,19 @@ export class ParallelWasmBackend {
       return this.local.evaluate(request);
     }
     const started = performance.now();
+    request.onProgress?.(0, {
+      message: `Starting ${Math.min(this.workerCount, request.siteCount)} parallel WASM workers`,
+      current: 0,
+      total: request.siteCount,
+      indeterminate: true,
+    });
     const pool = await this.workers();
     const activeCount = Math.min(pool.length, request.siteCount);
+    request.onProgress?.(0, {
+      message: `Evaluating ${request.grid.categoryCount.toLocaleString()} categories across sites`,
+      current: 0,
+      total: request.siteCount,
+    });
     const jobs: Array<{ readonly start: number; readonly count: number; readonly result: Promise<Float64Array> }> = [];
     for (let index = 0; index < activeCount; index += 1) {
       const start = Math.floor(index * request.siteCount / activeCount);
@@ -109,7 +120,17 @@ export class ParallelWasmBackend {
       };
       jobs.push({ start, count, result: this.call(pool[index]!, workerRequest) });
     }
-    const pieces = await Promise.all(jobs.map((job) => job.result));
+    let completedSites = 0;
+    const pieces = await Promise.all(jobs.map(async (job) => {
+      const piece = await job.result;
+      completedSites += job.count;
+      request.onProgress?.(completedSites / request.siteCount, {
+        message: `Evaluating ${request.grid.categoryCount.toLocaleString()} categories across sites`,
+        current: completedSites,
+        total: request.siteCount,
+      });
+      return piece;
+    }));
     request.signal?.throwIfAborted();
     const logLikelihoods = new Float64Array(request.grid.categoryCount * request.siteCount);
     for (let job = 0; job < jobs.length; job += 1) {
@@ -122,7 +143,6 @@ export class ParallelWasmBackend {
         );
       }
     }
-    request.onProgress?.(1);
     return {
       logLikelihoods,
       backend: "wasm-parallel",

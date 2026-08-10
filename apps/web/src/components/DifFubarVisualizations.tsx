@@ -25,7 +25,7 @@ type SvgInteractionEvent = ReactPointerEvent<SVGRectElement> | ReactMouseEvent<S
 
 type FigureKey = "overview" | "marginals" | "evidence";
 
-interface FigureLabels {
+export interface FigureLabels {
   readonly group1: string;
   readonly group2: string;
   readonly alpha: string;
@@ -39,7 +39,7 @@ interface FigureLabels {
   readonly evidenceYAxis: string;
 }
 
-const DEFAULT_LABELS: FigureLabels = {
+export const DEFAULT_LABELS: FigureLabels = {
   group1: "G1",
   group2: "G2",
   alpha: "α",
@@ -261,7 +261,18 @@ interface RowFigureProps {
   readonly svgRef: RefObject<SVGSVGElement | null>;
 }
 
-function PosteriorMarginalFigure({
+interface MarginalMark {
+  readonly site: number;
+  readonly bin: number;
+  readonly x: number;
+  readonly y: number;
+  readonly baseline: number;
+  readonly width: number;
+  readonly height: number;
+  readonly mass: number;
+}
+
+export function PosteriorMarginalFigure({
   sites,
   threshold: _threshold,
   labels,
@@ -272,12 +283,12 @@ function PosteriorMarginalFigure({
 }: RowFigureProps & { readonly marginals: PosteriorMarginals }) {
   const titleId = useId();
   const [hovered, setHovered] = useState<{ site: SiteResult; bin: number }>();
-  const width = 820;
-  const left = 98;
-  const right = 26;
-  const top = 82;
-  const bottom = 108;
-  const rowGap = 31;
+  const width = 1_280;
+  const left = 112;
+  const right = 32;
+  const top = 98;
+  const bottom = 124;
+  const rowGap = 50;
   const plotWidth = width - left - right;
   const plotHeight = Math.max(rowGap, sites.length * rowGap);
   const height = top + plotHeight + bottom;
@@ -285,36 +296,48 @@ function PosteriorMarginalFigure({
   const xStep = plotWidth / Math.max(1, bins);
   const x = (bin: number): number => left + (bin + 0.5) * xStep;
   const y = (row: number): number => top + row * rowGap + rowGap / 2;
-  const barWidth = Math.min(18, xStep * 0.68);
+  // The Julia figure spaces sites by 0.5 units, offsets alpha/omega by ±0.1,
+  // and scales each marginal mass by 0.35. These ratios reproduce that exact
+  // geometry in SVG coordinates: ±20% of a row and up to 70% row thickness.
+  const laneOffset = rowGap * 0.2;
+  const maximumThickness = rowGap * 0.7;
+  const minimumThickness = 1.15;
+  const barWidth = Math.min(32, xStep * 0.72);
   const distributions = useMemo(() => {
-    let alpha = "";
-    let omega1 = "";
-    let omega2 = "";
-    let alphaBase = "";
-    let omega1Base = "";
-    let omega2Base = "";
+    const alpha: MarginalMark[] = [];
+    const omega1: MarginalMark[] = [];
+    const omega2: MarginalMark[] = [];
     for (let row = 0; row < sites.length; row += 1) {
       const site = sites[row]!;
       const siteIndex = site.site - 1;
       for (let bin = 0; bin < bins; bin += 1) {
         const binX = x(bin);
         const center = y(row);
-        const alphaMass = marginals.alpha[siteIndex * marginals.alphaValues.length + bin] ?? 0;
-        const omega1Mass = marginals.omega1[siteIndex * bins + bin] ?? 0;
-        const omega2Mass = marginals.omega2[siteIndex * bins + bin] ?? 0;
-        const alphaHeight = Math.max(1, alphaMass * rowGap * 0.7);
-        const omega1Height = Math.max(1, omega1Mass * rowGap * 0.7);
-        const omega2Height = Math.max(1, omega2Mass * rowGap * 0.7);
-        alpha += rectPath(binX - barWidth / 2, center + 3 - alphaHeight / 2, barWidth, alphaHeight);
-        omega1 += rectPath(binX - barWidth / 2, center - 3 - omega1Height / 2, barWidth, omega1Height);
-        omega2 += rectPath(binX - barWidth / 2, center - 3 - omega2Height / 2, barWidth, omega2Height);
-        alphaBase += `M${(binX - barWidth / 2).toFixed(2)},${(center + 3).toFixed(2)}h${barWidth.toFixed(2)}`;
-        omega1Base += `M${(binX - barWidth / 2).toFixed(2)},${(center - 3).toFixed(2)}h${barWidth.toFixed(2)}`;
-        omega2Base += `M${(binX - barWidth / 2).toFixed(2)},${(center - 3).toFixed(2)}h${barWidth.toFixed(2)}`;
+        const alphaMass = clamp(marginals.alpha[siteIndex * marginals.alphaValues.length + bin] ?? 0, 0, 1);
+        const omega1Mass = clamp(marginals.omega1[siteIndex * bins + bin] ?? 0, 0, 1);
+        const omega2Mass = clamp(marginals.omega2[siteIndex * bins + bin] ?? 0, 0, 1);
+        const alphaBaseline = center - laneOffset;
+        const omegaBaseline = center + laneOffset;
+        const makeMark = (mass: number, baseline: number): MarginalMark => {
+          const markHeight = Math.max(minimumThickness, mass * maximumThickness);
+          return {
+            site: site.site,
+            bin,
+            x: binX - barWidth / 2,
+            y: baseline - markHeight / 2,
+            baseline,
+            width: barWidth,
+            height: markHeight,
+            mass,
+          };
+        };
+        alpha.push(makeMark(alphaMass, alphaBaseline));
+        omega1.push(makeMark(omega1Mass, omegaBaseline));
+        omega2.push(makeMark(omega2Mass, omegaBaseline));
       }
     }
-    return { alpha, omega1, omega2, alphaBase, omega1Base, omega2Base };
-  }, [barWidth, bins, marginals, sites]);
+    return { alpha, omega1, omega2 };
+  }, [barWidth, bins, laneOffset, marginals, maximumThickness, sites]);
   const oneBin = Array.from(marginals.omegaValues).findIndex((value) => value >= 1);
 
   const hoverFromPointer = (event: SvgInteractionEvent): { site: SiteResult; bin: number } | undefined => {
@@ -328,31 +351,41 @@ function PosteriorMarginalFigure({
   };
 
   return (
-    <svg ref={svgRef} viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby={titleId} style={{ ...svgStyle(), minWidth: "620px" }}>
+    <svg ref={svgRef} viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby={titleId} style={{ ...svgStyle(), minWidth: "960px" }}>
       <title id={titleId}>{labels.marginalsTitle}</title>
-      <text x={left} y="29" fill={INK} fontSize="21" fontWeight="650">{labels.marginalsTitle}</text>
-      <g transform={`translate(${left + 205} 55)`} fill={INK} fontSize="11">
-        <rect x="0" y="-7" width="17" height="9" fill={RED} opacity="0.78" /><text x="23" y="1">ω · {labels.group1}</text>
-        <rect x="120" y="-7" width="17" height="9" fill={BLUE} opacity="0.78" /><text x="143" y="1">ω · {labels.group2}</text>
-        <rect x="242" y="-7" width="17" height="9" fill={GREEN} opacity="0.78" /><text x="265" y="1">{labels.alpha}</text>
+      <desc>For every codon, green alpha marginal mass is centered above the site line and red and blue omega marginal masses are centered below it. Rectangle thickness is proportional to posterior probability at that parameter-grid value.</desc>
+      <text x={left} y="31" fill={INK} fontSize="22" fontWeight="650">{labels.marginalsTitle}</text>
+      <g transform={`translate(${width / 2 - 184} 66)`} fill={INK} fontSize="13">
+        <rect x="0" y="-10" width="25" height="12" fill={RED} opacity="0.78" /><text x="34" y="1">ω · {labels.group1}</text>
+        <rect x="142" y="-10" width="25" height="12" fill={BLUE} opacity="0.78" /><text x="176" y="1">ω · {labels.group2}</text>
+        <rect x="288" y="-10" width="25" height="12" fill={GREEN} opacity="0.78" /><text x="322" y="1">{labels.alpha}</text>
       </g>
       {oneBin >= 0 && <rect x={x(oneBin) - xStep / 2} y={top} width={xStep} height={plotHeight} fill="#8e9794" opacity="0.055" />}
       {sites.map((site, row) => (
         <g key={site.site}>
           {site.site === selectedSite && <rect x={left - 64} y={top + row * rowGap} width={plotWidth + 66} height={rowGap} fill="#eaf4f0" />}
-          <text x={left - 13} y={y(row) + 4} textAnchor="end" fill={site.site === selectedSite ? "#0d5e57" : INK} fontSize="11" fontWeight={site.site === selectedSite ? "800" : "600"}>{site.site}</text>
+          <text x={left - 16} y={y(row) + 5} textAnchor="end" fill={site.site === selectedSite ? "#0d5e57" : INK} fontSize="14" fontWeight={site.site === selectedSite ? "800" : "650"}>{site.site}</text>
         </g>
       ))}
-      <path d={distributions.alphaBase} stroke={GREEN} strokeWidth="0.8" opacity="0.8" />
-      <path d={distributions.omega1Base} stroke={RED} strokeWidth="0.8" opacity="0.8" />
-      <path d={distributions.omega2Base} stroke={BLUE} strokeWidth="0.8" opacity="0.8" />
-      <path d={distributions.alpha} fill={GREEN} opacity="0.78" />
-      <path d={distributions.omega1} fill={RED} opacity="0.78" />
-      <path d={distributions.omega2} fill={BLUE} opacity="0.78" />
-      <line x1={left} x2={left} y1={top} y2={top + plotHeight} stroke={INK} />
-      <line x1={left} x2={left + plotWidth} y1={top + plotHeight} y2={top + plotHeight} stroke={INK} />
+      <g data-series="alpha" fill={GREEN} opacity="0.78" shapeRendering="crispEdges">
+        {distributions.alpha.map((mark) => (
+          <rect key={`${mark.site}-${mark.bin}`} data-site={mark.site} data-bin={mark.bin} data-baseline={mark.baseline.toFixed(2)} data-mass={mark.mass.toFixed(6)} x={mark.x} y={mark.y} width={mark.width} height={mark.height} />
+        ))}
+      </g>
+      <g data-series="omega1" fill={RED} opacity="0.78" shapeRendering="crispEdges">
+        {distributions.omega1.map((mark) => (
+          <rect key={`${mark.site}-${mark.bin}`} data-site={mark.site} data-bin={mark.bin} data-baseline={mark.baseline.toFixed(2)} data-mass={mark.mass.toFixed(6)} x={mark.x} y={mark.y} width={mark.width} height={mark.height} />
+        ))}
+      </g>
+      <g data-series="omega2" fill={BLUE} opacity="0.78" shapeRendering="crispEdges">
+        {distributions.omega2.map((mark) => (
+          <rect key={`${mark.site}-${mark.bin}`} data-site={mark.site} data-bin={mark.bin} data-baseline={mark.baseline.toFixed(2)} data-mass={mark.mass.toFixed(6)} x={mark.x} y={mark.y} width={mark.width} height={mark.height} />
+        ))}
+      </g>
+      <line x1={left} x2={left} y1={top} y2={top + plotHeight} stroke={INK} strokeWidth="1.35" />
+      <line x1={left} x2={left + plotWidth} y1={top + plotHeight} y2={top + plotHeight} stroke={INK} strokeWidth="1.35" />
       {Array.from(marginals.omegaValues).map((value, bin) => (
-        <text key={bin} x={x(bin)} y={top + plotHeight + 19} textAnchor="end" fill={INK} fontSize="10" transform={`rotate(-90 ${x(bin)} ${top + plotHeight + 19})`}>{gridLabel(value)}</text>
+        <text key={bin} x={x(bin)} y={top + plotHeight + 23} textAnchor="end" fill={INK} fontSize="12" transform={`rotate(-90 ${x(bin)} ${top + plotHeight + 23})`}>{gridLabel(value)}</text>
       ))}
       <rect
         data-transient="true"
@@ -387,8 +420,8 @@ function PosteriorMarginalFigure({
           </g>
         );
       })()}
-      <text x={left + plotWidth / 2} y={height - 17} textAnchor="middle" fill={INK} fontSize="16">{labels.marginalsXAxis}</text>
-      <text x="24" y={top + plotHeight / 2} textAnchor="middle" fill={INK} fontSize="17" transform={`rotate(-90 24 ${top + plotHeight / 2})`}>{labels.marginalsYAxis}</text>
+      <text x={left + plotWidth / 2} y={height - 18} textAnchor="middle" fill={INK} fontSize="21">{labels.marginalsXAxis}</text>
+      <text x="27" y={top + plotHeight / 2} textAnchor="middle" fill={INK} fontSize="22" transform={`rotate(-90 27 ${top + plotHeight / 2})`}>{labels.marginalsYAxis}</text>
     </svg>
   );
 }
@@ -564,7 +597,7 @@ export function DifFubarVisualizations({
   const activeDescription = activeFigure === "overview"
     ? "All sites; significant evidence controls mark opacity exactly as in the Julia plot. Click anywhere to inspect a codon."
     : activeFigure === "marginals"
-      ? "Collapsed allocation mass for α, ω in group 1, and ω in group 2 on the fitted grid."
+      ? "Per-site marginal mass on the fitted grid: green α above each codon, with red G1 ω and blue G2 ω below; local thickness is posterior probability."
       : "The four posterior tests from the paper; bar height is threshold-relative evidence.";
 
   return (

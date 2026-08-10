@@ -152,6 +152,13 @@ export class WasmBackend {
 
   async evaluate(request: LikelihoodRequest): Promise<LikelihoodResult> {
     request.signal?.throwIfAborted();
+    const totalPairs = request.grid.categoryCount * request.siteCount;
+    request.onProgress?.(0, {
+      message: "Running the fused SIMD likelihood kernel",
+      current: 0,
+      total: totalPairs,
+      indeterminate: true,
+    });
     const wasm = await this.instance();
     const pinned = new PinnedArrays(wasm);
     const u8 = globalValue(wasm.Uint8Array_ID);
@@ -228,7 +235,11 @@ export class WasmBackend {
       const resultPointer = wasm.__pin(rawResult);
       const logLikelihoods = wasm.__getFloat64Array(resultPointer).slice();
       wasm.__unpin(resultPointer);
-      request.onProgress?.(1);
+      request.onProgress?.(1, {
+        message: "Likelihood grid evaluated",
+        current: totalPairs,
+        total: totalPairs,
+      });
       request.signal?.throwIfAborted();
       return { logLikelihoods, backend: "wasm", elapsedMs: performance.now() - started, precision: "f64" };
     } finally {
@@ -252,6 +263,10 @@ export class WasmBackend {
     const iterations = options.iterations ?? 2_500;
     const burnin = options.burnin ?? Math.floor(iterations / 5);
     if (!(iterations > 0 && burnin >= 0 && burnin < iterations)) throw new RangeError("Sampler burn-in must be smaller than iterations.");
+    options.onProgress?.(0, {
+      message: `${iterations.toLocaleString()} Gibbs iterations in the fused WASM sampler`,
+      indeterminate: true,
+    });
     const started = performance.now();
     try {
       const categoriesPointer = pinned.add(f64, categories);
@@ -339,7 +354,11 @@ export class WasmBackend {
       }
       let allocations: Uint32Array | undefined;
       if (options.trackAllocations) allocations = wasm.__getUint32Array(wasm.getLastAllocations()).slice();
-      options.onProgress?.(1);
+      options.onProgress?.(1, {
+        message: "Posterior sampling complete",
+        current: iterations,
+        total: iterations,
+      });
       options.signal?.throwIfAborted();
       return {
         sites,

@@ -8,6 +8,7 @@ import {
   type LikelihoodResult,
   type ModelBank,
   type ParsedTree,
+  type ProgressDetail,
 } from "../types.js";
 import {
   buildModelBank,
@@ -20,6 +21,8 @@ import {
 export interface EvaluationBackend {
   evaluate(request: LikelihoodRequest): Promise<LikelihoodResult>;
 }
+
+type ProgressCallback = (fraction: number, detail?: ProgressDetail) => void;
 
 const NUCLEOTIDE_INDEX = new Map([["A", 0], ["C", 1], ["G", 2], ["T", 3], ["U", 3]]);
 const IUPAC_MASK = new Map<string, number>([
@@ -196,6 +199,7 @@ async function optimizeGtr(
   backend: EvaluationBackend,
   equilibrium: Float64Array,
   tipStates: Uint8Array,
+  onProgress?: ProgressCallback,
   signal?: AbortSignal,
 ): Promise<Float64Array> {
   const dimension = 6;
@@ -205,8 +209,15 @@ async function optimizeGtr(
     point[axis] = 0.25;
     simplex.push(point);
   }
+  onProgress?.(0, {
+    message: "Initializing the nucleotide optimizer",
+    current: 0,
+    total: 90,
+    indeterminate: true,
+  });
   let values = Array.from(await evaluateNucleotideCandidates(simplex, alignment, tree, compiled, backend, equilibrium, tipStates, signal));
   const clamp = (value: number): number => Math.max(-5, Math.min(5, value));
+  let completedIterations = 0;
 
   for (let iteration = 0; iteration < 90; iteration += 1) {
     signal?.throwIfAborted();
@@ -218,6 +229,14 @@ async function optimizeGtr(
       for (let d = 0; d < dimension; d += 1) diameter = Math.max(diameter, Math.abs(simplex[i]![d]! - simplex[0]![d]!));
     }
     if (diameter < 2e-3) break;
+    onProgress?.(iteration / 90, {
+      message: "Nucleotide Nelder–Mead step",
+      current: iteration,
+      total: 90,
+      metricLabel: "log L",
+      metricValue: values[0]!,
+      indeterminate: true,
+    });
 
     const centroid = new Float64Array(dimension);
     for (let i = 0; i < dimension; i += 1) {
@@ -250,8 +269,23 @@ async function optimizeGtr(
         }
       }
     }
+    completedIterations = iteration + 1;
+    onProgress?.(completedIterations / 90, {
+      message: "Nucleotide Nelder–Mead step",
+      current: completedIterations,
+      total: 90,
+      metricLabel: "log L",
+      metricValue: Math.max(...values),
+    });
   }
   const best = values.indexOf(Math.max(...values));
+  onProgress?.(1, {
+    message: `Nucleotide optimizer converged after ${completedIterations.toLocaleString()} steps`,
+    current: completedIterations,
+    total: completedIterations,
+    metricLabel: "log L",
+    metricValue: values[best]!,
+  });
   return Float64Array.from(simplex[best]!, Math.exp);
 }
 
@@ -315,29 +349,61 @@ async function goldenMaximum(
   lower: number,
   upper: number,
   tolerance: number,
+  message: string,
+  onProgress?: ProgressCallback,
 ): Promise<{ x: number; value: number }> {
   const ratio = (Math.sqrt(5) - 1) / 2;
+  const expectedEvaluations = 2 + Math.max(0, Math.ceil(Math.log(tolerance / (upper - lower)) / Math.log(ratio)));
+  let evaluations = 0;
+  let bestValue = -Infinity;
+  const evaluate = async (value: number): Promise<number> => {
+    onProgress?.(Math.min(0.99, evaluations / expectedEvaluations), {
+      message,
+      current: evaluations,
+      total: expectedEvaluations,
+      ...(Number.isFinite(bestValue) ? { metricLabel: "log L", metricValue: bestValue } : {}),
+      indeterminate: true,
+    });
+    const result = await objective(value);
+    evaluations += 1;
+    bestValue = Math.max(bestValue, result);
+    onProgress?.(Math.min(1, evaluations / expectedEvaluations), {
+      message,
+      current: evaluations,
+      total: expectedEvaluations,
+      metricLabel: "log L",
+      metricValue: bestValue,
+    });
+    return result;
+  };
   let a = lower;
   let b = upper;
   let c = b - ratio * (b - a);
   let d = a + ratio * (b - a);
-  let fc = await objective(c);
-  let fd = await objective(d);
+  let fc = await evaluate(c);
+  let fd = await evaluate(d);
   while (Math.abs(b - a) > tolerance) {
     if (fc > fd) {
       b = d;
       d = c;
       fd = fc;
       c = b - ratio * (b - a);
-      fc = await objective(c);
+      fc = await evaluate(c);
     } else {
       a = c;
       c = d;
       fc = fd;
       d = a + ratio * (b - a);
-      fd = await objective(d);
+      fd = await evaluate(d);
     }
   }
+  onProgress?.(1, {
+    message,
+    current: evaluations,
+    total: evaluations,
+    metricLabel: "log L",
+    metricValue: Math.max(fc, fd),
+  });
   return fc > fd ? { x: c, value: fc } : { x: d, value: fd };
 }
 
@@ -351,6 +417,7 @@ async function optimizeAlphaBeta(
   f3x4: Float64Array,
   equilibrium: Float64Array,
   tipStates: Uint8Array,
+  onProgress?: ProgressCallback,
   signal?: AbortSignal,
 ): Promise<{ alpha: number; beta: number; logLikelihood: number }> {
   if (mode === "empirical-fast") {
@@ -362,7 +429,15 @@ async function optimizeAlphaBeta(
     // old 9x9 coarse grid (117 total candidates) with 54 smooth-objective
     // evaluations while retaining sub-percent final log resolution.
     const logSteps = [0.8, 0.4, 0.2, 0.1, 0.05, 0.025];
-    for (const logStep of logSteps) {
+    for (let pass = 0; pass < logSteps.length; pass += 1) {
+      const logStep = logSteps[pass]!;
+      onProgress?.(pass / logSteps.length, {
+        message: `Codon fit refinement ${pass + 1} of ${logSteps.length}`,
+        current: pass,
+        total: logSteps.length,
+        ...(Number.isFinite(score) ? { metricLabel: "log L", metricValue: score } : {}),
+        indeterminate: true,
+      });
       const multipliers = [Math.exp(-logStep), 1, Math.exp(logStep)];
       const pairs: Array<[number, number]> = [];
       for (const am of multipliers) for (const bm of multipliers) pairs.push([Math.max(1e-4, Math.min(5, alpha * am)), Math.max(1e-4, Math.min(5, beta * bm))]);
@@ -371,6 +446,13 @@ async function optimizeAlphaBeta(
       alpha = pairs[best]![0];
       beta = pairs[best]![1];
       score = scores[best]!;
+      onProgress?.((pass + 1) / logSteps.length, {
+        message: `Codon fit refinement ${pass + 1} of ${logSteps.length} · α=${alpha.toPrecision(4)}, β=${beta.toPrecision(4)}`,
+        current: pass + 1,
+        total: logSteps.length,
+        metricLabel: "log L",
+        metricValue: score,
+      });
     }
     return { alpha, beta, logLikelihood: score };
   }
@@ -379,15 +461,15 @@ async function optimizeAlphaBeta(
   let beta = 1;
   const alphaFit = await goldenMaximum(async (candidate) => (
     await evaluateCodonCandidates([[candidate, beta]], alignment, tree, compiled, backend, gtrRates, f3x4, equilibrium, tipStates, signal)
-  )[0]!, 1e-6, 5, 1e-4);
+  )[0]!, 1e-6, 5, 1e-4, "Optimizing global α", (fraction, detail) => onProgress?.(fraction * 0.34, detail));
   alpha = alphaFit.x;
   const betaFit = await goldenMaximum(async (candidate) => (
     await evaluateCodonCandidates([[alpha, candidate]], alignment, tree, compiled, backend, gtrRates, f3x4, equilibrium, tipStates, signal)
-  )[0]!, 1e-6, 5, 1e-4);
+  )[0]!, 1e-6, 5, 1e-4, "Optimizing global β", (fraction, detail) => onProgress?.(0.34 + fraction * 0.33, detail));
   beta = betaFit.x;
   const polished = await goldenMaximum(async (candidate) => (
     await evaluateCodonCandidates([[candidate, beta]], alignment, tree, compiled, backend, gtrRates, f3x4, equilibrium, tipStates, signal)
-  )[0]!, Math.max(1e-6, alpha - 0.05), Math.min(5, alpha + 0.05), 1e-7);
+  )[0]!, Math.max(1e-6, alpha - 0.05), Math.min(5, alpha + 0.05), 1e-7, "Polishing global α", (fraction, detail) => onProgress?.(0.67 + fraction * 0.33, detail));
   return { alpha: polished.x, beta, logLikelihood: polished.value };
 }
 
@@ -397,23 +479,52 @@ export async function fitGlobalModel(
   compiled: CompiledTree,
   backend: EvaluationBackend,
   mode: "empirical-fast" | "reference-compatible" = "empirical-fast",
-  onProgress?: (fraction: number) => void,
+  onProgress?: ProgressCallback,
   signal?: AbortSignal,
 ): Promise<FittedModel> {
   signal?.throwIfAborted();
+  onProgress?.(0, { message: "Estimating F3×4 equilibrium frequencies", indeterminate: true });
   const f3x4 = countF3x4(alignment);
   const codonEquilibrium = codonEquilibriumFromF3x4(f3x4);
   const nucleotideEquilibrium = countNucleotideFrequencies(alignment);
   const nucleotideTips = encodeNucleotideTips(alignment, tree);
   const gtrRates = mode === "reference-compatible"
-    ? await optimizeGtr(alignment, tree, compiled, backend, nucleotideEquilibrium, nucleotideTips, signal)
+    ? await optimizeGtr(
+      alignment,
+      tree,
+      compiled,
+      backend,
+      nucleotideEquilibrium,
+      nucleotideTips,
+      (fraction, detail) => onProgress?.(0.02 + fraction * 0.5, detail),
+      signal,
+    )
     : empiricalGtr(alignment, nucleotideEquilibrium);
-  onProgress?.(0.55);
+  if (mode === "empirical-fast") {
+    onProgress?.(0.12, { message: "Empirical GTR initialization complete" });
+  }
   const codonTips = encodeCodonTips(alignment, tree);
   const fit = await optimizeAlphaBeta(
-    mode, alignment, tree, compiled, backend, gtrRates, f3x4, codonEquilibrium, codonTips, signal,
+    mode,
+    alignment,
+    tree,
+    compiled,
+    backend,
+    gtrRates,
+    f3x4,
+    codonEquilibrium,
+    codonTips,
+    (fraction, detail) => onProgress?.(
+      mode === "reference-compatible" ? 0.52 + fraction * 0.48 : 0.12 + fraction * 0.88,
+      detail,
+    ),
+    signal,
   );
-  onProgress?.(1);
+  onProgress?.(1, {
+    message: `Global codon fit complete · α=${fit.alpha.toPrecision(5)}, β=${fit.beta.toPrecision(5)}`,
+    metricLabel: "log L",
+    metricValue: fit.logLikelihood,
+  });
   return {
     gtrRates,
     f3x4,

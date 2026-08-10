@@ -27,8 +27,14 @@ scope.onmessage = (event: MessageEvent<WorkerRunRequest>): void => {
         fitMode: parameters.fitMode === "reference-compatible" ? "reference-compatible" : "empirical-fast",
         samplerMode,
         collectPosteriorMarginals: true,
-        onStage: (stage, fraction) => {
-          const message: WorkerResponse = { type: "progress", id: request.id, stage, fraction };
+        onStage: (stage, fraction, detail) => {
+          const message: WorkerResponse = {
+            type: "progress",
+            id: request.id,
+            stage,
+            fraction,
+            ...(detail === undefined ? {} : { detail }),
+          };
           scope.postMessage(message);
         },
       });

@@ -135,6 +135,10 @@ export class WebGPUBackend {
 
   async evaluate(request: LikelihoodRequest): Promise<LikelihoodResult> {
     request.signal?.throwIfAborted();
+    request.onProgress?.(0, {
+      message: "Preparing the WebGPU likelihood pipeline",
+      indeterminate: true,
+    });
     if (request.models.stateCount < 2 || request.models.stateCount > 61) {
       throw new DifFUBARError("GPU_STATE_COUNT", "The WebGPU pruning kernel supports between 2 and 61 states.");
     }
@@ -170,6 +174,12 @@ export class WebGPUBackend {
       maxSitesByTips,
       Number(device.limits.maxComputeWorkgroupsPerDimension),
     );
+    request.onProgress?.(0, {
+      message: `GPU dispatch: ${request.grid.categoryCount.toLocaleString()} categories × ${request.siteCount.toLocaleString()} sites`,
+      current: 0,
+      total: request.siteCount,
+      indeterminate: true,
+    });
 
     try {
       for (let siteOffset = 0; siteOffset < request.siteCount; siteOffset += chunkSize) {
@@ -219,7 +229,11 @@ export class WebGPUBackend {
         stagingBuffer.destroy();
         outputBuffer.destroy();
         tipBuffer.destroy();
-        request.onProgress?.((siteOffset + siteCount) / request.siteCount);
+        request.onProgress?.((siteOffset + siteCount) / request.siteCount, {
+          message: "GPU likelihood chunks read back",
+          current: siteOffset + siteCount,
+          total: request.siteCount,
+        });
       }
     } finally {
       parameterBuffer.destroy();

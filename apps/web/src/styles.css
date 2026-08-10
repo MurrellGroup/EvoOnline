@@ -437,10 +437,23 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .button--run:hover:not(:disabled) { background: #17413c; border-color: #17413c; }
 .button--run span { font-size: 13px; }
 .button--run small { color: #a9c9c1; font-size: 9px; font-weight: 500; }
-.run-progress { margin-top: 15px; padding: 13px 15px; background: #f1f6f3; border-radius: 8px; }
-.run-progress > div { display: flex; justify-content: space-between; margin-bottom: 8px; color: #39504b; font-size: 11px; }
-.run-progress progress { width: calc(100% - 90px); height: 8px; accent-color: var(--teal); }
-.run-progress .button { float: right; min-height: 28px; margin-top: -11px; }
+.run-progress { position: relative; margin-top: 15px; padding: 13px 105px 13px 15px; background: #f1f6f3; border-radius: 8px; }
+.run-progress__heading { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 8px; color: #39504b; font-size: 11px; }
+.run-progress__heading span { color: #59716b; font-variant-numeric: tabular-nums; }
+.run-progress__bar { position: relative; height: 8px; overflow: hidden; background: #d7e3dd; border-radius: 999px; }
+.run-progress__bar > span { display: block; height: 100%; background: var(--teal); border-radius: inherit; transition: width 180ms ease-out; }
+.run-progress__bar.is-indeterminate > span { width: 34%; background: linear-gradient(90deg, #5aa396, var(--teal), #5aa396); animation: run-progress-sweep 1.15s ease-in-out infinite; }
+.run-progress__detail { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; color: #657771; font-size: 9px; line-height: 1.35; }
+.run-progress__detail span:not(:first-child) { color: #355a53; font-variant-numeric: tabular-nums; font-weight: 750; }
+.run-progress .button { position: absolute; right: 14px; bottom: 12px; min-height: 28px; }
+@keyframes run-progress-sweep {
+  0% { transform: translateX(-115%); }
+  55% { transform: translateX(195%); }
+  100% { transform: translateX(195%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .run-progress__bar.is-indeterminate > span { animation-duration: 2.8s; }
+}
 
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
 .result-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 22px 0; }

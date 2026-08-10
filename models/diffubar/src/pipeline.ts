@@ -75,7 +75,9 @@ export async function analyzeDifFUBAR(
   const alignment = typeof fasta === "string" ? parseFasta(fasta) : fasta;
   const tree = typeof newick === "string" ? parseTaggedNewick(newick, options.tags) : cloneTree(newick);
   options.signal?.throwIfAborted();
-  options.onStage?.("initialization", 1);
+  options.onStage?.("initialization", 1, {
+    message: `${alignment.names.length.toLocaleString()} taxa · ${alignment.codonSites.toLocaleString()} codon sites`,
+  });
 
   const requestedBackend = options.backend ?? "auto";
   const grid = createDifFUBARGrid(tree.hasBackground, options.foregroundGrid ?? 6, options.backgroundGrid ?? 4);
@@ -90,7 +92,7 @@ export async function analyzeDifFUBAR(
   if (options.fittedModel !== undefined) {
     validateFittedModel(options.fittedModel);
     fittedModel = options.fittedModel;
-    options.onStage?.("global-fit", 1);
+    options.onStage?.("global-fit", 1, { message: "Using the supplied fitted model" });
   } else {
     try {
       fittedModel = await fitGlobalModel(
@@ -99,7 +101,7 @@ export async function analyzeDifFUBAR(
         initialCompiled,
         fitBackend,
         options.fitMode ?? "empirical-fast",
-        (fraction) => options.onStage?.("global-fit", fraction),
+        (fraction, detail) => options.onStage?.("global-fit", fraction, detail),
         options.signal,
       );
     } catch (error) {
@@ -112,7 +114,7 @@ export async function analyzeDifFUBAR(
         initialCompiled,
         fitBackend,
         options.fitMode ?? "empirical-fast",
-        (fraction) => options.onStage?.("global-fit", fraction),
+        (fraction, detail) => options.onStage?.("global-fit", fraction, detail),
         options.signal,
       );
     }
@@ -121,11 +123,19 @@ export async function analyzeDifFUBAR(
 
   // CodonMolecularEvolution rescales every branch by the fitted global alpha so
   // the downstream fixed grid is centered at alpha=1.
+  options.onStage?.("grid-preparation", 0, {
+    message: `Constructing ${grid.categoryCount.toLocaleString()} rate categories`,
+    indeterminate: true,
+  });
   rescaleTree(tree, fittedModel.globalAlpha);
   const compiled = compileTree(tree);
   const models = buildModelBank(grid, tree, fittedModel.gtrRates, fittedModel.f3x4);
   const tipStates = encodeCodonTips(alignment, tree);
-  options.onStage?.("grid-preparation", 1);
+  options.onStage?.("grid-preparation", 1, {
+    message: `${grid.categoryCount.toLocaleString()} categories · ${models.modelCount.toLocaleString()} unique codon models`,
+    current: grid.categoryCount,
+    total: grid.categoryCount,
+  });
 
   const gridStarted = performance.now();
   let likelihood;
@@ -137,7 +147,7 @@ export async function analyzeDifFUBAR(
       grid,
       models,
       equilibrium: fittedModel.codonEquilibrium,
-      onProgress: (fraction) => options.onStage?.("conditional-likelihoods", fraction),
+      onProgress: (fraction, detail) => options.onStage?.("conditional-likelihoods", fraction, detail),
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     });
   } catch (error) {
@@ -150,7 +160,7 @@ export async function analyzeDifFUBAR(
       grid,
       models,
       equilibrium: fittedModel.codonEquilibrium,
-      onProgress: (fraction) => options.onStage?.("conditional-likelihoods", fraction),
+      onProgress: (fraction, detail) => options.onStage?.("conditional-likelihoods", fraction, detail),
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     });
   }
@@ -172,11 +182,12 @@ export async function analyzeDifFUBAR(
       ...(options.samplerMode === undefined ? {} : { samplerMode: options.samplerMode }),
       ...(options.likelihoodCutoff === undefined ? {} : { likelihoodCutoff: options.likelihoodCutoff }),
       trackAllocations: options.trackAllocations === true || options.collectPosteriorMarginals === true,
-      onProgress: (fraction) => options.onStage?.("gibbs-sampler", fraction),
+      onProgress: (fraction, detail) => options.onStage?.("gibbs-sampler", fraction, detail),
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     },
   );
   const samplerMs = performance.now() - samplerStarted;
+  options.onStage?.("tabulation", 0, { message: "Collapsing allocations into site marginals", indeterminate: true });
   const posteriorThreshold = options.posteriorThreshold ?? 0.95;
   const posteriorMarginals = options.collectPosteriorMarginals === true && sampler.allocations !== undefined
     ? collapsePosteriorMarginals(sampler.allocations, sampler.retainedIterations, grid, alignment.codonSites)
@@ -184,7 +195,12 @@ export async function analyzeDifFUBAR(
   const detectedSites = sampler.sites
     .filter((site) => Math.max(site.pOmega1Greater, site.pOmega2Greater, site.pOmega1Positive, site.pOmega2Positive) > posteriorThreshold)
     .map((site) => site.site);
-  options.onStage?.("tabulation", 1);
+  options.onStage?.("tabulation", 1, {
+    message: `${detectedSites.length.toLocaleString()} sites exceed the posterior threshold`,
+    current: alignment.codonSites,
+    total: alignment.codonSites,
+  });
+  options.onStage?.("complete", 1, { message: `Analysis finished with ${likelihood.backend}` });
 
   return {
     sites: sampler.sites,

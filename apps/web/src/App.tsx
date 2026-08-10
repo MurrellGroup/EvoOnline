@@ -8,6 +8,7 @@ import {
 import type { ModelParameter, ParameterValues } from "@phylo-workbench/model-sdk";
 import { WidgetBridge } from "@phylo-workbench/viewer-bridge";
 import { WidgetModal } from "./components/WidgetModal.js";
+import type { RunProgress } from "./lib/diffubar-client.js";
 import { getRegisteredModel, modelRegistry, type BrowserModelExecutor } from "./model-registry.js";
 
 interface WidgetSnapshot {
@@ -27,6 +28,14 @@ const stageLabels: Readonly<Record<string, string>> = {
   tabulation: "Tabulating site posteriors",
   complete: "Complete",
 };
+
+function progressMetric(value: number): string {
+  if (!Number.isFinite(value)) return String(value);
+  const magnitude = Math.abs(value);
+  if (magnitude >= 100_000) return value.toExponential(4);
+  if (magnitude >= 1_000) return value.toFixed(2);
+  return value.toFixed(4);
+}
 
 async function readTextFile(file: File): Promise<string> {
   if (file.size > 50 * 1024 * 1024) throw new Error("Files larger than 50 MiB are not accepted in this browser build.");
@@ -96,7 +105,7 @@ export function App() {
   const [fastTreeFastest, setFastTreeFastest] = useState(false);
   const [notice, setNotice] = useState<Notice>();
   const [runState, setRunState] = useState<"idle" | "running">("idle");
-  const [progress, setProgress] = useState({ stage: "", fraction: 0 });
+  const [progress, setProgress] = useState<RunProgress>({ stage: "", fraction: 0 });
   const [result, setResult] = useState<unknown>();
 
   useEffect(() => {
@@ -254,7 +263,7 @@ export function App() {
     if (alignment === undefined || tree === undefined || !validation.ready) return;
     setRunState("running");
     setResult(undefined);
-    setProgress({ stage: "initialization", fraction: 0 });
+    setProgress({ stage: "initialization", fraction: 0, message: "Parsing alignment and tagged tree", indeterminate: true });
     setNotice(undefined);
     try {
       const next = await executor.current.run(alignment.text, tree.text, parameters, setProgress);
@@ -446,8 +455,20 @@ export function App() {
 
           {runState === "running" ? (
             <div className="run-progress" role="status">
-              <div><strong>{stageLabels[progress.stage] ?? progress.stage}</strong><span>{Math.round(progress.fraction * 100)}%</span></div>
-              <progress max={1} value={progress.fraction} />
+              <div className="run-progress__heading">
+                <strong>{stageLabels[progress.stage] ?? progress.stage}</strong>
+                <span>{progress.indeterminate ? "Working" : `${Math.round(progress.fraction * 100)}%`}</span>
+              </div>
+              <div className={`run-progress__bar ${progress.indeterminate ? "is-indeterminate" : ""}`} aria-hidden="true">
+                <span style={progress.indeterminate ? undefined : { width: `${Math.max(0, Math.min(100, progress.fraction * 100))}%` }} />
+              </div>
+              {(progress.message !== undefined || progress.current !== undefined || progress.metricValue !== undefined) && (
+                <div className="run-progress__detail">
+                  {progress.message !== undefined && <span>{progress.message}</span>}
+                  {progress.current !== undefined && progress.total !== undefined && <span>{progress.current.toLocaleString()} / {progress.total.toLocaleString()}</span>}
+                  {progress.metricValue !== undefined && <span>{progress.metricLabel ?? "value"} {progressMetric(progress.metricValue)}</span>}
+                </div>
+              )}
               <button type="button" className="button button--quiet" onClick={cancelAnalysis}>Cancel</button>
             </div>
           ) : (

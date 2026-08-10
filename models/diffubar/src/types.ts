@@ -93,6 +93,22 @@ export interface FittedModel {
   readonly fitKind: "reference-compatible" | "empirical-fast" | "provided";
 }
 
+/** Optional live telemetry attached to a stage-progress update. */
+export interface ProgressDetail {
+  /** Human-readable description of the work currently executing. */
+  readonly message?: string;
+  /** Completed units when the backend can expose a real counter. */
+  readonly current?: number;
+  /** Total units corresponding to `current`. */
+  readonly total?: number;
+  /** Label for an optimizer metric, for example "log L". */
+  readonly metricLabel?: string;
+  /** Current value of the optimizer metric. */
+  readonly metricValue?: number;
+  /** True when work is active but the fused kernel cannot report partial completion. */
+  readonly indeterminate?: boolean;
+}
+
 export interface LikelihoodRequest {
   readonly tree: CompiledTree;
   readonly tipStates: Uint8Array;
@@ -105,7 +121,7 @@ export interface LikelihoodRequest {
   /** Uniformization chunk size; the adaptive WASM default is 64. */
   readonly maxLambdaPerStep?: number;
   readonly signal?: AbortSignal;
-  readonly onProgress?: (fraction: number) => void;
+  readonly onProgress?: (fraction: number, detail?: ProgressDetail) => void;
 }
 
 export interface LikelihoodResult {
@@ -126,7 +142,7 @@ export interface SamplerOptions {
   /** Zero is exact dense sampling; positive values prune site likelihood ratios below the cutoff. */
   readonly likelihoodCutoff?: number;
   readonly trackAllocations?: boolean;
-  readonly onProgress?: (fraction: number) => void;
+  readonly onProgress?: (fraction: number, detail?: ProgressDetail) => void;
   readonly signal?: AbortSignal;
 }
 
@@ -173,7 +189,7 @@ export interface AnalysisOptions extends SamplerOptions {
   readonly tags?: readonly string[];
   /** Retain compact per-site alpha/omega marginals for result visualizations. */
   readonly collectPosteriorMarginals?: boolean;
-  readonly onStage?: (stage: string, fraction: number) => void;
+  readonly onStage?: (stage: string, fraction: number, detail?: ProgressDetail) => void;
 }
 
 export interface AnalysisResult {

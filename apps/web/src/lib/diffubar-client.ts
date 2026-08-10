@@ -1,6 +1,7 @@
+import type { ProgressDetail } from "@phylo-workbench/model-diffubar/browser-source";
 import type { DifFubarRunResult, WorkerResponse, WorkerRunRequest } from "../types.js";
 
-export interface RunProgress {
+export interface RunProgress extends ProgressDetail {
   readonly stage: string;
   readonly fraction: number;
 }
@@ -28,7 +29,13 @@ export class DifFubarClient {
       worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
         const message = event.data;
         if (message.id !== id) return;
-        if (message.type === "progress") onProgress({ stage: message.stage, fraction: message.fraction });
+        if (message.type === "progress") {
+          onProgress({
+            stage: message.stage,
+            fraction: message.fraction,
+            ...(message.detail ?? {}),
+          });
+        }
         else if (message.type === "result") {
           this.finish();
           resolve(message.result);

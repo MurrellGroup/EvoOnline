@@ -12,6 +12,7 @@ import {
 } from "../src/model/genetic-code.js";
 import { WasmBackend } from "../src/backends/wasm.js";
 import { ParallelWasmBackend } from "../src/backends/wasm-parallel.js";
+import type { ProgressDetail } from "../src/types.js";
 
 describe("WASM backend", () => {
   it("returns the analytical zero-length likelihood", async () => {
@@ -73,10 +74,17 @@ describe("WASM backend", () => {
     } as const;
     const serial = await new WasmBackend().evaluate(request);
     const parallelBackend = new ParallelWasmBackend(2);
+    const progress: Array<{ readonly fraction: number; readonly detail?: ProgressDetail }> = [];
     try {
-      const parallel = await parallelBackend.evaluate(request);
+      const parallel = await parallelBackend.evaluate({
+        ...request,
+        onProgress: (fraction, detail) => progress.push({ fraction, ...(detail === undefined ? {} : { detail }) }),
+      });
       assert.equal(parallel.backend, "wasm-parallel");
       assert.deepEqual(parallel.logLikelihoods, serial.logLikelihoods);
+      assert.ok(progress.some((update) => update.detail?.indeterminate === true));
+      assert.ok(progress.some((update) => update.fraction > 0 && update.fraction < 1));
+      assert.equal(progress.at(-1)?.detail?.current, alignment.codonSites);
     } finally {
       await parallelBackend.dispose();
     }
