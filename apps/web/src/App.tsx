@@ -493,7 +493,7 @@ export function App() {
           )}
         </section>
 
-        {result !== undefined && <div ref={resultsRef} className="results-anchor"><selectedModel.ResultView result={result} parameters={parameters} /></div>}
+        {result !== undefined && <div ref={resultsRef} className="results-anchor"><selectedModel.ResultView result={result} parameters={parameters} alignment={alignment?.text ?? ""} /></div>}
       </main>
 
       {bridges !== undefined && alignment !== undefined && (

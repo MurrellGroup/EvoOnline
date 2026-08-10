@@ -12,6 +12,7 @@ The browser workflow currently supports:
 6. Running DifFUBAR or FUBAR in a dedicated browser worker. Exact parallel WASM is the default and WebGPU remains selectable.
 7. Choosing deterministic Dirichlet-EM (the regular-FUBAR default) or exact Gibbs inference for FUBAR.
 8. Exploring model-owned, linked interactive SVG figures, editing publication labels, and exporting lossless SVG or CSV.
+9. Profile-aligning the translated codon alignment to an uploaded PDB/mmCIF structure or an RCSB PDB entry, then exploring residue-level selection calls in a simplified Mol* view.
 
 Sequence and tree data remain device-local when using the browser executor.
 
@@ -76,7 +77,13 @@ For memory efficiency, the model collapses the sampler's temporary category-by-s
 
 Regular FUBAR shares DifFUBAR's fitted MG94 model and optimized likelihood kernels, but evaluates the exact CodonMolecularEvolution.jl 20 × 20 α–β grid on a single untagged branch class. Dirichlet-EM is deterministic and remains the default. The optional exact uncollapsed Gibbs sampler uses fused WASM rejection draws, a reproducible seed and configurable burn-in; retained category allocations are collapsed into the same site posterior surfaces and marginals.
 
-The result renderer highlights both positive selection, P(β > α), and purifying selection, P(α > β). It provides the codon overview, paper-style α/β posterior-mass lanes at detected sites, an interactive posterior surface for any linked site, editable labels, and direct SVG/CSV export.
+The result renderer highlights both positive selection, P(β > α), and purifying selection, P(α > β). Positive and purifying visibility checkboxes are enabled by default and jointly filter the table, overview, marginal rows, posterior-surface choices, and structural detection calls. The studio provides the codon overview, paper-style α/β posterior-mass lanes at detected sites, an interactive posterior surface for any linked site, editable labels, and direct SVG/CSV export.
+
+## Structure mapping
+
+Both result renderers expose an optional, isolated structure-mapping panel. It translates every sequence at each aligned codon, builds an amino-acid frequency profile, and runs a BLOSUM62-scored affine-gap local profile alignment against every coordinate-bearing protein chain in a PDB or mmCIF file. Sequence-identical chains reuse one dynamic-programming pass. The highest-scoring chain is suggested, while identity, coverage, score, the full alignment, and all alternative chains remain visible for validation. Parsing and alignment run in a dedicated worker.
+
+The viewer defaults to a cartoon and offers simple atom/surface toggles plus model-appropriate coloring: categorical detection/direction, signed posterior evidence, posterior-mean rate ratios, or individual inferred rates. Mol* 5.11.0 is pinned and lazy-loaded from jsDelivr only after a mapped structure is ready, so it adds no bytes to EvoOnline's initial application bundle. Uploaded coordinates and all sequence/profile computations stay local; entering a PDB ID fetches that public mmCIF directly from RCSB.
 
 ## Static deployment
 

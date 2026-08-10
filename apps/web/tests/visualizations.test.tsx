@@ -89,7 +89,7 @@ test("FUBAR studio renders selection overview and site posterior products", () =
     tree: "((a:0.1,b:0.1):0.1,(c:0.1,d:0.1):0.1);",
     csv: "Codon Sites\n1\n2\n",
   };
-  const markup = renderToStaticMarkup(<FubarVisualizations result={result} threshold={0.95} onThresholdChange={() => undefined} />);
+  const markup = renderToStaticMarkup(<FubarVisualizations result={result} threshold={0.95} onThresholdChange={() => undefined} showPositive showPurifying />);
   assert.match(markup, /FUBAR figure studio/);
   assert.match(markup, /positive and purifying selection/i);
   assert.match(markup, /Posterior surface/);

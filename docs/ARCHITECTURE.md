@@ -32,6 +32,8 @@ Both models share the MG94 model bank, pruning kernels, fitted-model code, Newic
 
 Each renderer is model-owned and emits native SVG. DifFUBAR views share threshold, codon-window, label and selected-site state; its tagged phylogram adds independent label and size controls. FUBAR links its positive/purifying overview, α/β posterior-mass lanes and per-site posterior surface. SVG export serializes the live edited vector tree and strips transient hover targets/tooltips.
 
+`apps/web/src/features/structure-mapping` is a deliberately removable result-view layer. Its dedicated worker translates the immutable alignment into an amino-acid frequency profile, streams PDB/mmCIF coordinate records into compact chain/residue arrays, and performs BLOSUM62-scored local profile alignment. The UI passes only model-specific site annotations and color-mode descriptors into this generic layer. Mol* is pinned but loaded from a CDN only on demand; its declarative MolViewSpec state keeps the app's controls limited to chain, color, cartoon, atoms, and surface. Deleting the feature directory and the one panel import from each result renderer removes the capability without touching either numerical model.
+
 ## Control and compute planes
 
 `apps/api` is the initial control plane. It exposes one model catalog and one jobs API rather than an HTTP service per method:

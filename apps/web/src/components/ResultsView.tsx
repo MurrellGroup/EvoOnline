@@ -1,10 +1,13 @@
 import { useMemo, useState } from "react";
 import type { DifFubarRunResult } from "../types.js";
 import { DifFubarVisualizations } from "./DifFubarVisualizations.js";
+import { StructureMappingPanel } from "../features/structure-mapping/StructureMappingPanel.js";
+import { buildDifFubarStructureSites, difFubarStructureColorModes } from "../features/structure-mapping/result-colors.js";
 
 interface ResultsViewProps {
   readonly result: DifFubarRunResult;
   readonly threshold: number;
+  readonly alignment: string;
 }
 
 function probability(value: number): string {
@@ -20,7 +23,7 @@ function downloadCsv(csv: string): void {
   URL.revokeObjectURL(url);
 }
 
-export function ResultsView({ result, threshold }: ResultsViewProps) {
+export function ResultsView({ result, threshold, alignment }: ResultsViewProps) {
   const [detectedOnly, setDetectedOnly] = useState(false);
   const [posteriorThreshold, setPosteriorThreshold] = useState(Math.max(0.5, Math.min(0.999, threshold)));
   const detectedSites = useMemo(
@@ -34,6 +37,8 @@ export function ResultsView({ result, threshold }: ResultsViewProps) {
     () => (detectedOnly ? result.sites.filter((site) => detected.has(site.site)) : result.sites).slice(0, 500),
     [detected, detectedOnly, result.sites],
   );
+  const structureSites = useMemo(() => buildDifFubarStructureSites(result, posteriorThreshold), [posteriorThreshold, result]);
+  const structureColorModes = useMemo(() => difFubarStructureColorModes(structureSites), [structureSites]);
 
   return (
     <section className="results" aria-labelledby="results-heading">
@@ -95,6 +100,7 @@ export function ResultsView({ result, threshold }: ResultsViewProps) {
           </tbody>
         </table>
       </div>
+      <StructureMappingPanel alignmentText={alignment} sites={structureSites} colorModes={structureColorModes} />
     </section>
   );
 }

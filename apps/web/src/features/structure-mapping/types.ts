@@ -1,0 +1,81 @@
+export type StructureFormat = "pdb" | "mmcif";
+
+export interface AminoAcidProfileColumn {
+  readonly site: number;
+  readonly frequencies: Float32Array;
+  readonly consensus: string;
+  readonly validCount: number;
+  readonly missingCount: number;
+}
+
+export interface AminoAcidProfile {
+  readonly columns: readonly AminoAcidProfileColumn[];
+  readonly sequenceCount: number;
+}
+
+export interface StructureResidue {
+  readonly chainId: string;
+  readonly authChainId: string;
+  readonly labelSeqId?: number;
+  readonly authSeqId: number;
+  readonly insertionCode: string;
+  readonly compId: string;
+  readonly aminoAcid: string;
+}
+
+export interface StructureChain {
+  readonly id: string;
+  readonly label: string;
+  readonly residues: readonly StructureResidue[];
+  readonly sequence: string;
+}
+
+export interface ProfileAlignment {
+  readonly chainId: string;
+  readonly score: number;
+  readonly scorePerMappedResidue: number;
+  readonly identity: number;
+  readonly coverage: number;
+  readonly mappedResidues: number;
+  readonly siteToResidue: Int32Array;
+  readonly alignedProfile: string;
+  readonly alignedChain: string;
+  readonly matchLine: string;
+}
+
+export type SelectionDirection = "positive" | "purifying" | "g1" | "g2" | "none";
+
+export interface StructureSiteDatum {
+  readonly site: number;
+  readonly detected: boolean;
+  readonly direction: SelectionDirection;
+  readonly values: Readonly<Record<string, number>>;
+}
+
+export interface StructureColorMode {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+  readonly color: (site: StructureSiteDatum) => string;
+  readonly valueLabel: (site: StructureSiteDatum) => string;
+  readonly legend: readonly { readonly color: string; readonly label: string }[];
+}
+
+export interface StructureMappingWorkerResult {
+  readonly profile: AminoAcidProfile;
+  readonly chains: readonly StructureChain[];
+  readonly alignments: readonly ProfileAlignment[];
+}
+
+export interface StructureMappingWorkerRequest {
+  readonly type: "map";
+  readonly id: string;
+  readonly alignmentText: string;
+  readonly structureText: string;
+  readonly format: StructureFormat;
+}
+
+export type StructureMappingWorkerResponse =
+  | { readonly type: "progress"; readonly id: string; readonly message: string; readonly current?: number; readonly total?: number }
+  | { readonly type: "result"; readonly id: string; readonly result: StructureMappingWorkerResult }
+  | { readonly type: "error"; readonly id: string; readonly error: string };

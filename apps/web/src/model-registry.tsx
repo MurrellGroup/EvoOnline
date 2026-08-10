@@ -22,6 +22,7 @@ export interface BrowserModelExecutor {
 interface ResultProps {
   readonly result: unknown;
   readonly parameters: ParameterValues;
+  readonly alignment: string;
 }
 
 export interface BrowserModelRegistration {
@@ -33,12 +34,12 @@ export interface BrowserModelRegistration {
   readonly completionMessage: (result: unknown) => string;
 }
 
-function DifFubarResult({ result, parameters }: ResultProps) {
-  return <ResultsView result={result as DifFubarRunResult} threshold={Number(parameters.posteriorThreshold ?? 0.95)} />;
+function DifFubarResult({ result, parameters, alignment }: ResultProps) {
+  return <ResultsView result={result as DifFubarRunResult} threshold={Number(parameters.posteriorThreshold ?? 0.95)} alignment={alignment} />;
 }
 
-function FubarResult({ result, parameters }: ResultProps) {
-  return <FubarResultsView result={result as FubarRunResult} threshold={Number(parameters.posteriorThreshold ?? 0.95)} />;
+function FubarResult({ result, parameters, alignment }: ResultProps) {
+  return <FubarResultsView result={result as FubarRunResult} threshold={Number(parameters.posteriorThreshold ?? 0.95)} alignment={alignment} />;
 }
 
 export const modelRegistry: readonly BrowserModelRegistration[] = [

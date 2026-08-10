@@ -21,3 +21,7 @@ alivibe loads Aioli/bioWASM for Kalign and FastTree. Those runtime packages reta
 ## CodonMolecularEvolution.jl FUBAR behavior
 
 `models/fubar` independently implements the fixed-grid and DirichletFUBAR behavior documented by [MurrellGroup/CodonMolecularEvolution.jl](https://github.com/MurrellGroup/CodonMolecularEvolution.jl), which is MIT licensed. It reuses this repository's own optimized MG94 kernels; no Julia runtime or HyPhy FUBAR code is bundled.
+
+## Mol*
+
+The optional structure-mapping panel lazy-loads the pinned standalone [Mol*](https://github.com/molstar/molstar) 5.11.0 viewer from jsDelivr. Mol* is MIT licensed. It is not installed as an npm dependency or included in EvoOnline's application bundle; the runtime is requested only after the user maps a structure.

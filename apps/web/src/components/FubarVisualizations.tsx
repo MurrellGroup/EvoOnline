@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import type { FubarSiteResult } from "@phylo-workbench/model-fubar/browser-source";
 import type { FubarRunResult } from "../types.js";
 import { downloadSvg } from "../lib/svg-export.js";
@@ -82,8 +82,9 @@ function FigureShell({ title, description, svgRef, tall = false, children }: {
   );
 }
 
-function FubarOverview({ sites, threshold, labels, selectedSite, onSelectSite, svgRef }: {
+function FubarOverview({ sites, plottedSites, threshold, labels, selectedSite, onSelectSite, svgRef }: {
   readonly sites: readonly FubarSiteResult[];
+  readonly plottedSites: readonly FubarSiteResult[];
   readonly threshold: number;
   readonly labels: FubarLabels;
   readonly selectedSite: number;
@@ -130,7 +131,7 @@ function FubarOverview({ sites, threshold, labels, selectedSite, onSelectSite, s
       ))}
       <line x1={left} x2={left} y1={top} y2={top + plotHeight} stroke={INK} strokeWidth="1.2" />
       <line x1={left} x2={left + plotWidth} y1={top + plotHeight} y2={top + plotHeight} stroke={INK} strokeWidth="1.2" />
-      {sites.map((site) => {
+      {plottedSites.map((site) => {
         const color = selectionColor(site, threshold);
         const strong = selection(site, threshold) !== "none";
         return (
@@ -314,12 +315,14 @@ function LabelEditor({ labels, onChange }: { readonly labels: FubarLabels; reado
   );
 }
 
-export function FubarVisualizations({ result, threshold, onThresholdChange }: {
+export function FubarVisualizations({ result, threshold, onThresholdChange, showPositive, showPurifying }: {
   readonly result: FubarRunResult;
   readonly threshold: number;
   readonly onThresholdChange: (threshold: number) => void;
+  readonly showPositive: boolean;
+  readonly showPurifying: boolean;
 }) {
-  const detected = useMemo(() => result.sites.filter((site) => site.pPositive > threshold || site.pPurifying > threshold), [result.sites, threshold]);
+  const detected = useMemo(() => result.sites.filter((site) => (showPositive && site.pPositive > threshold) || (showPurifying && site.pPurifying > threshold)), [result.sites, showPositive, showPurifying, threshold]);
   const [activeFigure, setActiveFigure] = useState<FigureKey>("overview");
   const [selectedSite, setSelectedSite] = useState(result.positiveSites[0] ?? result.purifyingSites[0] ?? 1);
   const [rowLimit, setRowLimit] = useState(100);
@@ -329,6 +332,11 @@ export function FubarVisualizations({ result, threshold, onThresholdChange }: {
   const surfaceRef = useRef<SVGSVGElement>(null);
   const selected = result.sites[clamp(selectedSite - 1, 0, result.sites.length - 1)]!;
   const rows = detected.slice(0, rowLimit);
+  const plottedSites = showPositive && showPurifying ? result.sites : detected;
+
+  useEffect(() => {
+    if (detected.length > 0 && !detected.some((site) => site.site === selectedSite)) setSelectedSite(detected[0]!.site);
+  }, [detected, selectedSite]);
 
   return (
     <section className="figure-studio" aria-labelledby="fubar-figure-heading">
@@ -340,7 +348,7 @@ export function FubarVisualizations({ result, threshold, onThresholdChange }: {
         <label className="figure-control figure-control--threshold"><span>Posterior threshold <strong>{threshold.toFixed(3)}</strong></span><input type="range" min="0.5" max="0.999" step="0.001" value={threshold} onChange={(event) => onThresholdChange(Number(event.target.value))} /></label>
         <label className="figure-control"><span>Surface codon</span><input type="number" min="1" max={result.sites.length} value={selected.site} onChange={(event) => setSelectedSite(clamp(Number(event.target.value), 1, result.sites.length))} /></label>
         <label className="figure-control"><span>Maximum rows</span><select value={rowLimit} onChange={(event) => setRowLimit(Number(event.target.value))}>{[25, 50, 100, 250, 500].map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
-        <div className="figure-control figure-control--summary"><span>Positive / purifying</span><strong>{detected.filter((site) => site.pPositive > threshold).length} / {detected.filter((site) => site.pPurifying > threshold).length}</strong></div>
+        <div className="figure-control figure-control--summary"><span>Shown positive / purifying</span><strong>{showPositive ? detected.filter((site) => site.pPositive > threshold).length : 0} / {showPurifying ? detected.filter((site) => site.pPurifying > threshold).length : 0}</strong></div>
       </div>
       <LabelEditor labels={labels} onChange={setLabels} />
       <div className="figure-tabs" role="tablist" aria-label="FUBAR figures">
@@ -348,11 +356,15 @@ export function FubarVisualizations({ result, threshold, onThresholdChange }: {
         <button type="button" role="tab" aria-selected={activeFigure === "marginals"} className={activeFigure === "marginals" ? "is-active" : ""} onClick={() => setActiveFigure("marginals")}>Parameter posteriors</button>
         <button type="button" role="tab" aria-selected={activeFigure === "surface"} className={activeFigure === "surface" ? "is-active" : ""} onClick={() => setActiveFigure("surface")}>Posterior surface</button>
       </div>
-      {activeFigure === "overview" && <FigureShell title={labels.overviewTitle} description="Green α and one β per codon; red highlights positive and blue highlights purifying selection." svgRef={overviewRef}><FubarOverview sites={result.sites} threshold={threshold} labels={labels} selectedSite={selected.site} onSelectSite={setSelectedSite} svgRef={overviewRef} /></FigureShell>}
+      {activeFigure === "overview" && (plottedSites.length === 0
+        ? <div className="figure-empty"><strong>No selection direction is enabled.</strong><span>Enable positive and/or purifying selection above.</span></div>
+        : <FigureShell title={labels.overviewTitle} description="Green α and one β per codon; red highlights positive and blue highlights purifying selection." svgRef={overviewRef}><FubarOverview sites={result.sites} plottedSites={plottedSites} threshold={threshold} labels={labels} selectedSite={selected.site} onSelectSite={setSelectedSite} svgRef={overviewRef} /></FigureShell>)}
       {activeFigure === "marginals" && (rows.length === 0
         ? <div className="figure-empty"><strong>No sites exceed this threshold.</strong><span>Lower the threshold to reveal α and β posterior marginals.</span></div>
         : <FigureShell title={labels.marginalsTitle} description={`Green α is above each codon; β is below and colored by selection direction.${detected.length > rows.length ? ` Showing the first ${rows.length}.` : ""}`} svgRef={marginalsRef} tall><FubarMarginals result={result} sites={rows} threshold={threshold} labels={labels} selectedSite={selected.site} onSelectSite={setSelectedSite} svgRef={marginalsRef} /></FigureShell>)}
-      {activeFigure === "surface" && <FigureShell title={`${labels.surfaceTitle} · codon ${selected.site}`} description="Full site posterior over the fixed α×β grid; the dashed diagonal is β=α." svgRef={surfaceRef}><PosteriorSurface result={result} site={selected} labels={labels} svgRef={surfaceRef} /></FigureShell>}
+      {activeFigure === "surface" && (detected.length === 0
+        ? <div className="figure-empty"><strong>No enabled selection calls exceed this threshold.</strong><span>Enable a direction or lower the posterior threshold.</span></div>
+        : <FigureShell title={`${labels.surfaceTitle} · codon ${selected.site}`} description="Full site posterior over the fixed α×β grid; the dashed diagonal is β=α." svgRef={surfaceRef}><PosteriorSurface result={result} site={selected} labels={labels} svgRef={surfaceRef} /></FigureShell>)}
       <p className="figure-note">Click a codon in the overview or marginal plot to open its posterior surface. Red denotes P(β&gt;α); blue denotes P(α&gt;β).</p>
     </section>
   );
