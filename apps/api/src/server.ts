@@ -140,7 +140,7 @@ export const server = createServer(async (request, response) => {
       const tree = await createTreeArtifact(body.tree.name ?? "tree.nwk", body.tree.text, "upload");
       const validation = registration.validate({ alignment, tree });
       if (!validation.ready) {
-        json(response, 422, { error: "Inputs are not valid for DifFUBAR.", issues: validation.issues });
+        json(response, 422, { error: `Inputs are not valid for ${registration.manifest.shortTitle}.`, issues: validation.issues });
         return;
       }
       const id = randomUUID();
@@ -201,5 +201,5 @@ export const server = createServer(async (request, response) => {
 server.listen(port, () => {
   const address = server.address();
   const activePort = typeof address === "object" && address !== null ? address.port : port;
-  console.log(`PhyloWorkbench API listening on http://localhost:${activePort}`);
+  console.log(`EvoOnline API listening on http://localhost:${activePort}`);
 });

@@ -31,7 +31,7 @@ function chooseBackend(kind: AnalysisOptions["backend"], minimumParallelWork: nu
   if (kind === "webgpu") return new WebGPUBackend();
   if (kind === "wasm") return new WasmBackend();
   if (kind === "wasm-parallel") return new ParallelWasmBackend(undefined, minimumParallelWork);
-  return WebGPUBackend.isAvailable() ? new WebGPUBackend() : new ParallelWasmBackend(undefined, minimumParallelWork);
+  return new ParallelWasmBackend(undefined, minimumParallelWork);
 }
 
 function rescaleTree(tree: ParsedTree, scale: number): void {
@@ -79,7 +79,7 @@ export async function analyzeDifFUBAR(
     message: `${alignment.names.length.toLocaleString()} taxa · ${alignment.codonSites.toLocaleString()} codon sites`,
   });
 
-  const requestedBackend = options.backend ?? "auto";
+  const requestedBackend = options.backend ?? "wasm-parallel";
   const grid = createDifFUBARGrid(tree.hasBackground, options.foregroundGrid ?? 6, options.backgroundGrid ?? 4);
   // Large analyses use the pool even for the small fit batches. This warms all
   // worker instances before the dominant grid and amortizes cold startup.

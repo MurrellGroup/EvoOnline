@@ -25,6 +25,7 @@ const stageLabels: Readonly<Record<string, string>> = {
   "grid-preparation": "Building the rate grid",
   "conditional-likelihoods": "Evaluating conditional likelihoods",
   "gibbs-sampler": "Sampling the posterior",
+  "dirichlet-em": "Fitting the Dirichlet mixture",
   tabulation: "Tabulating site posteriors",
   complete: "Complete",
 };
@@ -90,6 +91,7 @@ function ParameterControl({
 export function App() {
   const alignmentFrame = useRef<HTMLIFrameElement>(null);
   const treeFrame = useRef<HTMLIFrameElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
   const [selectedModelId, setSelectedModelId] = useState(modelRegistry[0]?.plugin.manifest.id ?? "");
   const selectedModel = getRegisteredModel(selectedModelId);
   const executor = useRef<BrowserModelExecutor>(selectedModel.createExecutor());
@@ -132,13 +134,20 @@ export function App() {
     setResult(undefined);
   }, [alignment?.id, tree?.id]);
 
+  useEffect(() => {
+    if (result === undefined) return;
+    const frame = requestAnimationFrame(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    return () => cancelAnimationFrame(frame);
+  }, [result]);
+
   const validation = useMemo(() => selectedModel.plugin.validate({
     ...(alignment === undefined ? {} : { alignment }),
     ...(tree === undefined ? {} : { tree }),
-  }), [alignment, tree]);
+  }), [alignment, selectedModel, tree]);
   const manifest = selectedModel.plugin.manifest;
   const visibleParameters = manifest.parameters.filter((parameter) => showAdvanced || !parameter.advanced);
-  const tagReady = tree?.tags.length === 2;
+  const requiresForeground = manifest.inputSlots.some((slot) => slot.id === "foreground" && slot.required);
+  const tagReady = !requiresForeground || tree?.tags.length === 2;
   const webGpuAvailable = typeof navigator !== "undefined" && "gpu" in navigator;
 
   const loadAlignment = async (file: File): Promise<void> => {
@@ -244,10 +253,12 @@ export function App() {
       const artifact = await createTreeArtifact(tree.name, snapshot.tree, "editor");
       setTree(artifact);
       setTreeOpen(false);
-      setNotice({
-        tone: artifact.tags.length === 2 ? "success" : "info",
-        text: artifact.tags.length === 2 ? "G1 and G2 branch groups applied." : "Tree applied; DifFUBAR still needs exactly two branch groups.",
-      });
+      setNotice(requiresForeground
+        ? {
+            tone: artifact.tags.length === 2 ? "success" : "info",
+            text: artifact.tags.length === 2 ? "G1 and G2 branch groups applied." : "Tree applied; DifFUBAR still needs exactly two branch groups.",
+          }
+        : { tone: "success", text: "Tree changes applied to the workspace." });
     } catch (error) {
       setNotice({ tone: "error", text: error instanceof Error ? error.message : String(error) });
     } finally {
@@ -263,7 +274,7 @@ export function App() {
     if (alignment === undefined || tree === undefined || !validation.ready) return;
     setRunState("running");
     setResult(undefined);
-    setProgress({ stage: "initialization", fraction: 0, message: "Parsing alignment and tagged tree", indeterminate: true });
+    setProgress({ stage: "initialization", fraction: 0, message: requiresForeground ? "Parsing alignment and tagged tree" : "Parsing alignment and phylogeny", indeterminate: true });
     setNotice(undefined);
     try {
       const next = await executor.current.run(alignment.text, tree.text, parameters, setProgress);
@@ -289,7 +300,7 @@ export function App() {
       <header className="topbar">
         <div className="brand">
           <span className="brand-mark" aria-hidden="true">φ</span>
-          <div><strong>PhyloWorkbench</strong><span>Local phylogenetic analysis</span></div>
+          <div><strong>EvoOnline</strong><span>Local phylogenetic analysis</span></div>
         </div>
         <div className="runtime-badges">
           <span className={webGpuAvailable ? "status-dot is-online" : "status-dot"} />
@@ -325,9 +336,11 @@ export function App() {
       <main className="workspace">
         <section className="workspace-hero">
           <div>
-            <p className="eyebrow">Selection analysis / DifFUBAR</p>
+            <p className="eyebrow">Selection analysis / {manifest.shortTitle}</p>
             <h1>Build an analysis-ready phylogenetic workspace</h1>
-            <p>Load a codon alignment, inspect or edit it, attach a phylogeny, tag two foreground groups, then run entirely in this browser.</p>
+            <p>{requiresForeground
+              ? "Load a codon alignment, inspect or edit it, attach a phylogeny, tag two foreground groups, then run entirely in this browser."
+              : "Load a codon alignment, inspect or edit it, attach a phylogeny, then estimate positive and purifying selection entirely in this browser."}</p>
           </div>
           <div className="privacy-note"><span>Device-local</span>Your sequence data is not uploaded by the browser runner.</div>
         </section>
@@ -397,34 +410,36 @@ export function App() {
                   <div><dt>Tags</dt><dd>{tree.tags.length > 0 ? tree.tags.join(", ") : "None"}</dd></div>
                 </dl>
                 <div className="artifact__actions">
-                  <button type="button" className="button button--secondary" onClick={openTreeTagger}>View and tag tree</button>
+                  <button type="button" className="button button--secondary" onClick={openTreeTagger}>{requiresForeground ? "View and tag tree" : "View tree"}</button>
                   <label className="button button--quiet">Replace<input type="file" accept=".nwk,.newick,.tree,.tre,.nex,.nexus,.txt" onChange={treeInput} /></label>
                 </div>
               </div>
             )}
           </section>
 
-          <section className={`workflow-card workflow-card--foreground ${tagReady ? "is-complete" : ""}`}>
-            <div className="step-number">03</div>
-            <div className="workflow-card__heading">
-              <div><h2>Foreground groups</h2><p>Tag the branches DifFUBAR will compare</p></div>
-              {tagReady && <span className="ready-chip">2 groups</span>}
-            </div>
-            <div className="tag-summary">
-              <div className={`tag-group tag-group--g1 ${tree?.tags.includes("G1") ? "is-present" : ""}`}><span>G1</span><p>First foreground class</p></div>
-              <div className={`tag-group tag-group--g2 ${tree?.tags.includes("G2") ? "is-present" : ""}`}><span>G2</span><p>Second foreground class</p></div>
-            </div>
-            <p className="card-guidance">Use clade, node-to-root, regex, or box selection in Phylotagger, then apply G1 or G2.</p>
-            <button type="button" className="button button--secondary button--full" disabled={tree === undefined} onClick={openTreeTagger}>
-              {tree === undefined ? "Add a tree first" : tagReady ? "Review branch tags" : "Open tree tagger"}
-            </button>
-          </section>
+          {requiresForeground && (
+            <section className={`workflow-card workflow-card--foreground ${tagReady ? "is-complete" : ""}`}>
+              <div className="step-number">03</div>
+              <div className="workflow-card__heading">
+                <div><h2>Foreground groups</h2><p>Tag the branches DifFUBAR will compare</p></div>
+                {tagReady && <span className="ready-chip">2 groups</span>}
+              </div>
+              <div className="tag-summary">
+                <div className={`tag-group tag-group--g1 ${tree?.tags.includes("G1") ? "is-present" : ""}`}><span>G1</span><p>First foreground class</p></div>
+                <div className={`tag-group tag-group--g2 ${tree?.tags.includes("G2") ? "is-present" : ""}`}><span>G2</span><p>Second foreground class</p></div>
+              </div>
+              <p className="card-guidance">Use clade, node-to-root, regex, or box selection in Phylotagger, then apply G1 or G2.</p>
+              <button type="button" className="button button--secondary button--full" disabled={tree === undefined} onClick={openTreeTagger}>
+                {tree === undefined ? "Add a tree first" : tagReady ? "Review branch tags" : "Open tree tagger"}
+              </button>
+            </section>
+          )}
         </div>
 
         <section className="run-panel">
           <div className="run-panel__header">
-            <div><p className="eyebrow">04 / Configure and run</p><h2>{manifest.title}</h2><p>{manifest.description}</p></div>
-            <div className="runtime-choice"><span>Execution</span><strong>{String(parameters.backend ?? "auto")}</strong><small>{webGpuAvailable ? "WebGPU device detected" : "Parallel WASM available"}</small></div>
+            <div><p className="eyebrow">{requiresForeground ? "04" : "03"} / Configure and run</p><h2>{manifest.title}</h2><p>{manifest.description}</p></div>
+            <div className="runtime-choice"><span>Execution</span><strong>{String(parameters.backend ?? "wasm-parallel")}</strong><small>{webGpuAvailable ? "Parallel WASM recommended · WebGPU available" : "Parallel WASM available"}</small></div>
           </div>
           <div className="parameter-grid">
             {visibleParameters.map((parameter) => (
@@ -443,8 +458,8 @@ export function App() {
           <div className="validation-strip">
             <div className={alignment !== undefined ? "is-valid" : ""}><span>{alignment !== undefined ? "✓" : "1"}</span>Alignment</div>
             <div className={tree !== undefined ? "is-valid" : ""}><span>{tree !== undefined ? "✓" : "2"}</span>Tree</div>
-            <div className={tagReady ? "is-valid" : ""}><span>{tagReady ? "✓" : "3"}</span>Two groups</div>
-            <div className={validation.ready ? "is-valid" : ""}><span>{validation.ready ? "✓" : "4"}</span>Validated</div>
+            {requiresForeground && <div className={tagReady ? "is-valid" : ""}><span>{tagReady ? "✓" : "3"}</span>Two groups</div>}
+            <div className={validation.ready ? "is-valid" : ""}><span>{validation.ready ? "✓" : requiresForeground ? "4" : "3"}</span>Validated</div>
           </div>
 
           {!validation.ready && validation.issues.length > 0 && (
@@ -473,12 +488,12 @@ export function App() {
             </div>
           ) : (
             <button type="button" className="button button--run" disabled={!validation.ready} onClick={() => void runAnalysis()}>
-              <span>Run {manifest.shortTitle}</span><small>{webGpuAvailable ? "Auto-select WebGPU or exact WASM fallback" : "Exact parallel WASM"}</small>
+              <span>Run {manifest.shortTitle}</span><small>{parameters.backend === "webgpu" ? "Experimental WebGPU kernel" : parameters.backend === "wasm" ? "Exact single-worker WASM" : "Exact parallel WASM (recommended)"}</small>
             </button>
           )}
         </section>
 
-        {result !== undefined && <selectedModel.ResultView result={result} parameters={parameters} />}
+        {result !== undefined && <div ref={resultsRef} className="results-anchor"><selectedModel.ResultView result={result} parameters={parameters} /></div>}
       </main>
 
       {bridges !== undefined && alignment !== undefined && (
@@ -497,11 +512,11 @@ export function App() {
       {bridges !== undefined && tree !== undefined && (
         <WidgetModal
           open={treeOpen}
-          title="Phylogeny viewer and branch tagger"
-          description="Select branches or clades and assign G1 and G2. DifFUBAR compares those two foreground classes."
+          title={requiresForeground ? "Phylogeny viewer and branch tagger" : "Phylogeny viewer"}
+          description={requiresForeground ? "Select branches or clades and assign G1 and G2. DifFUBAR compares those two foreground classes." : "Inspect the phylogeny and branch lengths. FUBAR uses a single branch class, so tags are not required."}
           source={`${import.meta.env.BASE_URL}widgets/phylotagger.html`}
           frameRef={treeFrame}
-          applyLabel="Apply tagged tree"
+          applyLabel={requiresForeground ? "Apply tagged tree" : "Apply tree"}
           applying={applyingWidget}
           onCancel={() => setTreeOpen(false)}
           onApply={() => void applyTreeTagger()}

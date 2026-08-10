@@ -100,6 +100,16 @@ export async function instantiate(module, imports = {}) {
         __release(mu);
       }
     },
+    runWeightEM(categoryMajorConditionals, initialTheta, gridCount, siteCount, iterations, concentration, tolerance) {
+      // assembly/index/runWeightEM(~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, i32, i32, i32, f64, f64) => ~lib/typedarray/Float64Array
+      categoryMajorConditionals = __retain(__lowerTypedArray(Float64Array, 6, 3, categoryMajorConditionals) || __notnull());
+      initialTheta = __lowerTypedArray(Float64Array, 6, 3, initialTheta) || __notnull();
+      try {
+        return __liftTypedArray(Float64Array, exports.runWeightEM(categoryMajorConditionals, initialTheta, gridCount, siteCount, iterations, concentration, tolerance) >>> 0);
+      } finally {
+        __release(categoryMajorConditionals);
+      }
+    },
     runGibbs(siteMajorConditionals, categories, gridCount, siteCount, parameterCount, iterations, burnin, concentration, seed, likelihoodCutoff, trackAllocations) {
       // assembly/index/runGibbs(~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, i32, i32, i32, i32, i32, f64, u32, f64, bool) => ~lib/typedarray/Float64Array
       siteMajorConditionals = __retain(__lowerTypedArray(Float64Array, 6, 3, siteMajorConditionals) || __notnull());
@@ -118,6 +128,17 @@ export async function instantiate(module, imports = {}) {
       trackAllocations = trackAllocations ? 1 : 0;
       try {
         return __liftTypedArray(Float64Array, exports.runGibbsRejection(categoryMajorConditionals, categories, gridCount, siteCount, parameterCount, iterations, burnin, concentration, seed, likelihoodCutoff, trackAllocations) >>> 0);
+      } finally {
+        __release(categoryMajorConditionals);
+      }
+    },
+    runFubarGibbsRejection(categoryMajorConditionals, categories, gridCount, siteCount, iterations, burnin, concentration, seed, trackAllocations) {
+      // assembly/index/runFubarGibbsRejection(~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, i32, i32, i32, i32, f64, u32, bool) => ~lib/typedarray/Float64Array
+      categoryMajorConditionals = __retain(__lowerTypedArray(Float64Array, 6, 3, categoryMajorConditionals) || __notnull());
+      categories = __lowerTypedArray(Float64Array, 6, 3, categories) || __notnull();
+      trackAllocations = trackAllocations ? 1 : 0;
+      try {
+        return __liftTypedArray(Float64Array, exports.runFubarGibbsRejection(categoryMajorConditionals, categories, gridCount, siteCount, iterations, burnin, concentration, seed, trackAllocations) >>> 0);
       } finally {
         __release(categoryMajorConditionals);
       }

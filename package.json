@@ -1,5 +1,5 @@
 {
-  "name": "phylo-workbench",
+  "name": "evo-online",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,9 +12,10 @@
     "dev": "vite apps/web",
     "dev:api": "npm run dev --workspace @phylo-workbench/api",
     "build:shared": "npm run build --workspace @phylo-workbench/domain && npm run build --workspace @phylo-workbench/model-sdk && npm run build --workspace @phylo-workbench/viewer-bridge",
-    "build": "npm run build:shared && npm run build --workspace @phylo-workbench/model-diffubar && npm run build --workspace @phylo-workbench/api && npm run build --workspace @phylo-workbench/web",
-    "typecheck": "npm run build:shared && npm run build --workspace @phylo-workbench/model-diffubar && npm run typecheck --workspaces --if-present",
-    "test": "npm run build:shared && npm run test --workspaces --if-present"
+    "build:models": "npm run build --workspace @phylo-workbench/model-diffubar && npm run build --workspace @phylo-workbench/model-fubar",
+    "build": "npm run build:shared && npm run build:models && npm run build --workspace @phylo-workbench/api && npm run build --workspace @phylo-workbench/web",
+    "typecheck": "npm run build:shared && npm run build:models && npm run typecheck --workspaces --if-present",
+    "test": "npm run build:shared && npm run build:models && npm run test --workspaces --if-present"
   },
   "engines": {
     "node": ">=20"

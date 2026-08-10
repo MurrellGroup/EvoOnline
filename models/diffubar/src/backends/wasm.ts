@@ -1,5 +1,15 @@
 import * as loader from "@assemblyscript/loader";
-import type { LikelihoodRequest, LikelihoodResult, SamplerOptions, SamplerResult, SiteResult } from "../types.js";
+import type {
+  AlphaBetaSamplerOptions,
+  AlphaBetaSamplerResult,
+  LikelihoodRequest,
+  LikelihoodResult,
+  MixtureFitOptions,
+  MixtureFitResult,
+  SamplerOptions,
+  SamplerResult,
+  SiteResult,
+} from "../types.js";
 
 type WasmExports = Record<string, any> & {
   memory: WebAssembly.Memory;
@@ -8,6 +18,8 @@ type WasmExports = Record<string, any> & {
   Float64Array_ID: WebAssembly.Global;
   evaluateLikelihood(...args: number[]): number;
   evaluateLikelihoodCached(...args: number[]): number;
+  runWeightEM(...args: number[]): number;
+  runFubarGibbsRejection(...args: number[]): number;
   runGibbs(...args: number[]): number;
   runGibbsRejection(...args: number[]): number;
   runGibbsSparse(...args: number[]): number;
@@ -363,6 +375,166 @@ export class WasmBackend {
       return {
         sites,
         theta,
+        retainedIterations: iterations - burnin,
+        ...(allocations === undefined ? {} : { allocations }),
+        elapsedMs: performance.now() - started,
+      };
+    } finally {
+      pinned.release();
+      wasm.__collect();
+    }
+  }
+
+  async fitMixtureWeights(
+    conditionals: Float64Array,
+    gridCount: number,
+    siteCount: number,
+    options: MixtureFitOptions = {},
+  ): Promise<MixtureFitResult> {
+    options.signal?.throwIfAborted();
+    if (conditionals.length !== gridCount * siteCount) throw new RangeError("Conditional likelihood dimensions do not match the FUBAR grid.");
+    const iterations = options.iterations ?? 2_500;
+    const concentration = options.concentration ?? 0.5;
+    const tolerance = options.tolerance ?? 1e-10;
+    if (!(iterations > 0 && Number.isInteger(iterations))) throw new RangeError("EM iterations must be a positive integer.");
+    if (!(concentration > 0 && Number.isFinite(concentration))) throw new RangeError("EM concentration must be finite and positive.");
+    if (!(tolerance >= 0 && Number.isFinite(tolerance))) throw new RangeError("EM tolerance must be finite and non-negative.");
+    options.onProgress?.(0, {
+      message: `Fused Dirichlet EM · up to ${iterations.toLocaleString()} steps`,
+      current: 0,
+      total: iterations,
+    });
+    const wasm = await this.instance();
+    const pinned = new PinnedArrays(wasm);
+    const f64 = globalValue(wasm.Float64Array_ID);
+    let theta = new Float64Array(gridCount).fill(1 / gridCount);
+    const started = performance.now();
+    try {
+      const conditionalsPointer = pinned.add(f64, conditionals);
+      const chunkSize = 64;
+      let completedIterations = 0;
+      let logLikelihood = -Infinity;
+      while (completedIterations < iterations) {
+        options.signal?.throwIfAborted();
+        const requestedChunk = Math.min(chunkSize, iterations - completedIterations);
+        const thetaPointer = wasm.__pin(wasm.__newArray(f64, theta));
+        const resultPointer = wasm.__pin(wasm.runWeightEM(
+          conditionalsPointer,
+          thetaPointer,
+          gridCount,
+          siteCount,
+          requestedChunk,
+          concentration,
+          tolerance,
+        ));
+        wasm.__unpin(thetaPointer);
+        const flat = wasm.__getFloat64Array(resultPointer).slice();
+        wasm.__unpin(resultPointer);
+        const completedChunk = Math.round(flat[gridCount]!);
+        theta = flat.slice(0, gridCount);
+        logLikelihood = flat[gridCount + 1]!;
+        completedIterations += completedChunk;
+        options.onProgress?.(completedIterations / iterations, {
+          message: `Dirichlet EM step ${completedIterations.toLocaleString()}`,
+          current: completedIterations,
+          total: iterations,
+          metricLabel: "mixture log L",
+          metricValue: logLikelihood,
+        });
+        if (completedChunk < requestedChunk) break;
+        // The kernel stays fused for useful batches, but yielding between them
+        // lets the worker publish real iteration/likelihood telemetry and abort.
+        if (completedIterations < iterations) await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      }
+      options.onProgress?.(1, {
+        message: `Dirichlet EM converged after ${completedIterations.toLocaleString()} steps`,
+        current: completedIterations,
+        total: completedIterations,
+        metricLabel: "mixture log L",
+        metricValue: logLikelihood,
+      });
+      options.signal?.throwIfAborted();
+      return {
+        theta,
+        completedIterations,
+        logLikelihood,
+        elapsedMs: performance.now() - started,
+      };
+    } finally {
+      pinned.release();
+      wasm.__collect();
+    }
+  }
+
+  async sampleAlphaBeta(
+    conditionals: Float64Array,
+    categories: Float64Array,
+    gridCount: number,
+    siteCount: number,
+    options: AlphaBetaSamplerOptions = {},
+  ): Promise<AlphaBetaSamplerResult> {
+    options.signal?.throwIfAborted();
+    if (conditionals.length !== gridCount * siteCount || categories.length !== gridCount * 2) {
+      throw new RangeError("Alpha-beta sampler dimensions do not match the FUBAR grid.");
+    }
+    const iterations = options.iterations ?? 2_500;
+    const burnin = options.burnin ?? Math.floor(iterations / 5);
+    const concentration = options.concentration ?? 0.5;
+    if (!(Number.isInteger(iterations) && Number.isInteger(burnin) && iterations > 0 && burnin >= 0 && burnin < iterations)) {
+      throw new RangeError("Gibbs iterations and burn-in must be integers, with burn-in smaller than iterations.");
+    }
+    if (!(concentration > 0 && Number.isFinite(concentration))) {
+      throw new RangeError("Gibbs concentration must be finite and positive.");
+    }
+    options.onProgress?.(0, {
+      message: `${iterations.toLocaleString()} exact Gibbs iterations in the fused WASM sampler`,
+      current: 0,
+      total: iterations,
+      indeterminate: true,
+    });
+    const wasm = await this.instance();
+    const pinned = new PinnedArrays(wasm);
+    const f64 = globalValue(wasm.Float64Array_ID);
+    const started = performance.now();
+    try {
+      const resultPointer = wasm.__pin(wasm.runFubarGibbsRejection(
+        pinned.add(f64, conditionals),
+        pinned.add(f64, categories),
+        gridCount,
+        siteCount,
+        iterations,
+        burnin,
+        concentration,
+        options.seed ?? 0x5eed1234,
+        options.trackAllocations ? 1 : 0,
+      ));
+      const flat = wasm.__getFloat64Array(resultPointer).slice();
+      wasm.__unpin(resultPointer);
+      const positive = new Float64Array(siteCount);
+      const purifying = new Float64Array(siteCount);
+      const meanAlpha = new Float64Array(siteCount);
+      const meanBeta = new Float64Array(siteCount);
+      for (let site = 0; site < siteCount; site += 1) {
+        const offset = gridCount + site * 4;
+        positive[site] = flat[offset]!;
+        purifying[site] = flat[offset + 1]!;
+        meanAlpha[site] = flat[offset + 2]!;
+        meanBeta[site] = flat[offset + 3]!;
+      }
+      let allocations: Uint32Array | undefined;
+      if (options.trackAllocations) allocations = wasm.__getUint32Array(wasm.getLastAllocations()).slice();
+      options.onProgress?.(1, {
+        message: "FUBAR Gibbs sampling complete",
+        current: iterations,
+        total: iterations,
+      });
+      options.signal?.throwIfAborted();
+      return {
+        theta: flat.slice(0, gridCount),
+        positive,
+        purifying,
+        meanAlpha,
+        meanBeta,
         retainedIterations: iterations - burnin,
         ...(allocations === undefined ? {} : { allocations }),
         elapsedMs: performance.now() - started,

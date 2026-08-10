@@ -1,0 +1,273 @@
+import {
+  DifFUBARError,
+  ParallelWasmBackend,
+  WasmBackend,
+  WebGPUBackend,
+  buildModelBank,
+  compileTree,
+  encodeCodonTips,
+  fitGlobalModel,
+  normalizeConditionalLikelihoodsInPlace,
+  parseFasta,
+  parseNewick,
+  type FittedModel,
+  type ParsedTree,
+  type TreeNode,
+} from "@phylo-workbench/model-diffubar";
+import { createFubarGrid } from "./model/grid.js";
+import { postprocessFubar, postprocessFubarAllocations } from "./posterior/postprocess.js";
+import type {
+  FubarAnalysisOptions,
+  FubarAnalysisResult,
+  FubarInput,
+  FubarTreeInput,
+} from "./types.js";
+
+type Backend = WasmBackend | ParallelWasmBackend | WebGPUBackend;
+
+function chooseBackend(kind: FubarAnalysisOptions["backend"], minimumParallelWork: number): Backend {
+  if (kind === "webgpu") return new WebGPUBackend();
+  if (kind === "wasm") return new WasmBackend();
+  return new ParallelWasmBackend(undefined, minimumParallelWork);
+}
+
+function validateFittedModel(model: FittedModel): void {
+  if (model.gtrRates.length !== 6 || model.f3x4.length !== 12 || model.codonEquilibrium.length !== 61) {
+    throw new DifFUBARError("INVALID_FITTED_MODEL", "Provided fitted model has invalid array dimensions.");
+  }
+  if (!(model.globalAlpha > 0) || !Number.isFinite(model.globalAlpha)) {
+    throw new DifFUBARError("INVALID_FITTED_MODEL", "Provided global alpha must be finite and positive.");
+  }
+}
+
+function cloneSingleClassTree(tree: ParsedTree): ParsedTree {
+  const clones = new Map<TreeNode, TreeNode>();
+  for (const node of tree.nodes) {
+    clones.set(node, {
+      id: node.id,
+      name: node.name.replaceAll(/\{[^}]+\}/g, ""),
+      branchLength: node.branchLength,
+      branchClass: 0,
+      parent: null,
+      children: [],
+      tipIndex: node.tipIndex,
+    });
+  }
+  for (const node of tree.nodes) {
+    const clone = clones.get(node)!;
+    clone.parent = node.parent === null ? null : clones.get(node.parent)!;
+    clone.children = node.children.map((child) => clones.get(child)!);
+  }
+  return {
+    root: clones.get(tree.root)!,
+    nodes: tree.nodes.map((node) => clones.get(node)!),
+    tips: tree.tips.map((node) => clones.get(node)!),
+    classCount: 1,
+    hasBackground: false,
+    tags: [],
+  };
+}
+
+/** FUBAR_grid additionally normalizes every site's max-shifted likelihood column. */
+function normalizeFubarColumnsInPlace(conditionals: Float64Array, categoryCount: number, siteCount: number): void {
+  for (let site = 0; site < siteCount; site += 1) {
+    let total = 0;
+    for (let category = 0; category < categoryCount; category += 1) total += conditionals[category * siteCount + site]!;
+    if (!(total > 0)) throw new RangeError(`FUBAR likelihoods are undefined at codon site ${site + 1}.`);
+    const inverse = 1 / total;
+    for (let category = 0; category < categoryCount; category += 1) {
+      const index = category * siteCount + site;
+      conditionals[index] = conditionals[index]! * inverse;
+    }
+  }
+}
+
+export async function analyzeFubar(
+  fasta: FubarInput,
+  newick: FubarTreeInput,
+  options: FubarAnalysisOptions = {},
+): Promise<FubarAnalysisResult> {
+  const started = performance.now();
+  const alignment = typeof fasta === "string" ? parseFasta(fasta) : fasta;
+  const tree = typeof newick === "string" ? parseNewick(newick) : cloneSingleClassTree(newick);
+  options.signal?.throwIfAborted();
+  options.onStage?.("initialization", 1, {
+    message: `${alignment.names.length.toLocaleString()} taxa · ${alignment.codonSites.toLocaleString()} codon sites · one branch class`,
+  });
+
+  const grid = createFubarGrid(options.gridPoints ?? 20);
+  const minimumParallelWork = grid.categoryCount * alignment.codonSites >= 150_000 ? 0 : 150_000;
+  const backend = chooseBackend(options.backend ?? "wasm-parallel", minimumParallelWork);
+  // Small optimizer dispatches are latency-bound on WebGPU; retain the exact
+  // f64 CPU kernel for the global fit even when the user explicitly selects GPU.
+  const fitBackend: Backend = backend instanceof WebGPUBackend ? new WasmBackend() : backend;
+  const initialCompiled = compileTree(tree);
+  const fitStarted = performance.now();
+  let fittedModel: FittedModel;
+  if (options.fittedModel !== undefined) {
+    validateFittedModel(options.fittedModel);
+    fittedModel = options.fittedModel;
+    options.onStage?.("global-fit", 1, { message: "Using the supplied fitted model" });
+  } else {
+    fittedModel = await fitGlobalModel(
+      alignment,
+      tree,
+      initialCompiled,
+      fitBackend,
+      options.fitMode ?? "empirical-fast",
+      (fraction, detail) => options.onStage?.("global-fit", fraction, detail),
+      options.signal,
+    );
+  }
+  const fitMs = performance.now() - fitStarted;
+
+  options.onStage?.("grid-preparation", 0, {
+    message: `Constructing the ${grid.values.length} × ${grid.values.length} α–β grid`,
+    indeterminate: true,
+  });
+  // Matches alphabetagrid/FUBAR_grid: fit alpha globally, then absorb it into
+  // every branch length before evaluating the fixed alpha-beta surface.
+  for (const node of tree.nodes) node.branchLength *= fittedModel.globalAlpha;
+  const compiled = compileTree(tree);
+  const models = buildModelBank(grid, tree, fittedModel.gtrRates, fittedModel.f3x4);
+  const tipStates = encodeCodonTips(alignment, tree);
+  options.onStage?.("grid-preparation", 1, {
+    message: `${grid.categoryCount.toLocaleString()} α–β categories · ${models.modelCount.toLocaleString()} unique MG94 models`,
+    current: grid.categoryCount,
+    total: grid.categoryCount,
+  });
+
+  const gridStarted = performance.now();
+  const likelihood = await backend.evaluate({
+    tree: compiled,
+    tipStates,
+    siteCount: alignment.codonSites,
+    grid,
+    models,
+    equilibrium: fittedModel.codonEquilibrium,
+    onProgress: (fraction, detail) => options.onStage?.("conditional-likelihoods", fraction, detail),
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
+  });
+  const gridMs = performance.now() - gridStarted;
+  const conditionals = normalizeConditionalLikelihoodsInPlace(
+    likelihood.logLikelihoods,
+    grid.categoryCount,
+    alignment.codonSites,
+  );
+  normalizeFubarColumnsInPlace(conditionals, grid.categoryCount, alignment.codonSites);
+
+  const inferenceStarted = performance.now();
+  const inferenceMethod = options.inferenceMethod ?? "dirichlet-em";
+  const inferenceBackend = new WasmBackend();
+  let theta: Float64Array;
+  let inferenceIterations: number;
+  let inferenceBurnin = 0;
+  let inferenceLogLikelihood: number | null = null;
+  let allocations: Uint32Array | undefined;
+  let retainedIterations = 0;
+  if (inferenceMethod === "gibbs") {
+    const sampler = await inferenceBackend.sampleAlphaBeta(conditionals, grid.categories, grid.categoryCount, alignment.codonSites, {
+      ...(options.iterations === undefined ? {} : { iterations: options.iterations }),
+      ...(options.burnin === undefined ? {} : { burnin: options.burnin }),
+      ...(options.concentration === undefined ? {} : { concentration: options.concentration }),
+      ...(options.seed === undefined ? {} : { seed: options.seed }),
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+      trackAllocations: true,
+      onProgress: (fraction, detail) => options.onStage?.("gibbs-sampler", fraction, detail),
+    });
+    if (sampler.allocations === undefined) throw new Error("FUBAR Gibbs sampler did not retain site allocations.");
+    theta = sampler.theta;
+    allocations = sampler.allocations;
+    retainedIterations = sampler.retainedIterations;
+    inferenceBurnin = options.burnin ?? Math.floor((options.iterations ?? 2_500) / 5);
+    inferenceIterations = sampler.retainedIterations + inferenceBurnin;
+  } else {
+    const mixture = await inferenceBackend.fitMixtureWeights(conditionals, grid.categoryCount, alignment.codonSites, {
+      ...(options.iterations === undefined ? {} : { iterations: options.iterations }),
+      ...(options.concentration === undefined ? {} : { concentration: options.concentration }),
+      ...(options.tolerance === undefined ? {} : { tolerance: options.tolerance }),
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+      onProgress: (fraction, detail) => options.onStage?.("dirichlet-em", fraction, detail),
+    });
+    theta = mixture.theta;
+    inferenceIterations = mixture.completedIterations;
+    inferenceLogLikelihood = mixture.logLikelihood;
+  }
+  const inferenceMs = performance.now() - inferenceStarted;
+
+  const posteriorStarted = performance.now();
+  options.onStage?.("tabulation", 0, { message: "Collapsing site posterior surfaces and marginals", indeterminate: true });
+  const threshold = options.posteriorThreshold ?? 0.95;
+  const postprocessed = inferenceMethod === "gibbs"
+    ? postprocessFubarAllocations(allocations!, retainedIterations, grid, alignment.codonSites, threshold)
+    : postprocessFubar(conditionals, theta, grid, alignment.codonSites, threshold);
+  const positiveSites = postprocessed.sites.filter((site) => site.pPositive > threshold).map((site) => site.site);
+  const purifyingSites = postprocessed.sites.filter((site) => site.pPurifying > threshold).map((site) => site.site);
+  const posteriorMs = performance.now() - posteriorStarted;
+  options.onStage?.("tabulation", 1, {
+    message: `${positiveSites.length.toLocaleString()} positive · ${purifyingSites.length.toLocaleString()} purifying sites`,
+    current: alignment.codonSites,
+    total: alignment.codonSites,
+  });
+  options.onStage?.("complete", 1, {
+    message: `FUBAR finished with ${likelihood.backend} · ${inferenceMethod === "gibbs" ? "Gibbs" : "Dirichlet EM"}`,
+  });
+
+  return {
+    sites: postprocessed.sites,
+    positiveSites,
+    purifyingSites,
+    fittedModel,
+    grid,
+    posterior: postprocessed.posterior,
+    theta,
+    backend: likelihood.backend,
+    timings: {
+      fitMs,
+      gridMs,
+      inferenceMs,
+      posteriorMs,
+      totalMs: performance.now() - started,
+    },
+    diagnostics: {
+      taxa: tree.tips.length,
+      codonSites: alignment.codonSites,
+      categories: grid.categoryCount,
+      treeRegisterNumber: compiled.registerNumber,
+      precision: likelihood.precision,
+      inferenceMethod,
+      inferenceIterations,
+      inferenceBurnin,
+      inferenceLogLikelihood,
+    },
+  };
+}
+
+export function fubarResultsToCsv(result: FubarAnalysisResult, threshold = 0.95): string {
+  const header = [
+    "Codon Sites",
+    "P(beta > alpha)",
+    "P(alpha > beta)",
+    "mean(alpha)",
+    "mean(beta)",
+    "positive_selected",
+    "purifying_selected",
+    "selection",
+  ];
+  const rows = result.sites.map((site) => {
+    const positive = site.pPositive > threshold;
+    const purifying = site.pPurifying > threshold;
+    const selection = positive ? "positive" : purifying ? "purifying" : "none";
+    return [
+      site.site,
+      site.pPositive,
+      site.pPurifying,
+      site.meanAlpha,
+      site.meanBeta,
+      positive,
+      purifying,
+      selection,
+    ].join(",");
+  });
+  return `${header.join(",")}\n${rows.join("\n")}\n`;
+}

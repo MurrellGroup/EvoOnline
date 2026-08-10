@@ -7,6 +7,13 @@ import {
   type AnalysisResult,
 } from "@phylo-workbench/model-diffubar";
 import type { ModelManifest, ModelValidation, ParameterValues } from "@phylo-workbench/model-sdk";
+import {
+  analyzeFubar,
+  fubarManifest,
+  fubarResultsToCsv,
+  validateFubarWorkspace,
+  type FubarAnalysisResult,
+} from "@phylo-workbench/model-fubar";
 
 export interface ServerRunContext {
   readonly alignment: string;
@@ -46,6 +53,28 @@ function serialiseDifFubarResult(result: AnalysisResult) {
   };
 }
 
+function serialiseFubarResult(result: FubarAnalysisResult, threshold: number) {
+  return {
+    sites: result.sites,
+    positiveSites: result.positiveSites,
+    purifyingSites: result.purifyingSites,
+    backend: result.backend,
+    timings: result.timings,
+    diagnostics: result.diagnostics,
+    fittedModel: {
+      gtrRates: [...result.fittedModel.gtrRates],
+      f3x4: [...result.fittedModel.f3x4],
+      globalAlpha: result.fittedModel.globalAlpha,
+      globalBeta: result.fittedModel.globalBeta,
+      logLikelihood: result.fittedModel.logLikelihood,
+      fitKind: result.fittedModel.fitKind,
+    },
+    gridValues: [...result.grid.values],
+    theta: [...result.theta],
+    csv: fubarResultsToCsv(result, threshold),
+  };
+}
+
 export const serverModelRegistry: readonly ServerModelRegistration[] = [
   {
     manifest: difFubarManifest,
@@ -69,6 +98,27 @@ export const serverModelRegistry: readonly ServerModelRegistration[] = [
         onStage: onProgress,
       });
       return serialiseDifFubarResult(result);
+    },
+  },
+  {
+    manifest: fubarManifest,
+    validate: validateFubarWorkspace,
+    run: async ({ alignment, tree, parameters, signal, onProgress }) => {
+      const posteriorThreshold = numberParameter(parameters, "posteriorThreshold", 0.95);
+      const result = await analyzeFubar(alignment, tree, {
+        backend: "wasm",
+        gridPoints: numberParameter(parameters, "gridPoints", 20),
+        inferenceMethod: parameters.inferenceMethod === "gibbs" ? "gibbs" : "dirichlet-em",
+        iterations: numberParameter(parameters, "iterations", 2500),
+        burnin: numberParameter(parameters, "burnin", 500),
+        concentration: numberParameter(parameters, "concentration", 0.5),
+        seed: numberParameter(parameters, "seed", 1234),
+        posteriorThreshold,
+        fitMode: parameters.fitMode === "reference-compatible" ? "reference-compatible" : "empirical-fast",
+        signal,
+        onStage: onProgress,
+      });
+      return serialiseFubarResult(result, posteriorThreshold);
     },
   },
 ];

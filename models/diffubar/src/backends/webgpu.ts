@@ -174,10 +174,11 @@ export class WebGPUBackend {
       maxSitesByTips,
       Number(device.limits.maxComputeWorkgroupsPerDimension),
     );
+    const categorySites = request.grid.categoryCount * request.siteCount;
     request.onProgress?.(0, {
       message: `GPU dispatch: ${request.grid.categoryCount.toLocaleString()} categories × ${request.siteCount.toLocaleString()} sites`,
       current: 0,
-      total: request.siteCount,
+      total: categorySites,
       indeterminate: true,
     });
 
@@ -230,9 +231,9 @@ export class WebGPUBackend {
         outputBuffer.destroy();
         tipBuffer.destroy();
         request.onProgress?.((siteOffset + siteCount) / request.siteCount, {
-          message: "GPU likelihood chunks read back",
-          current: siteOffset + siteCount,
-          total: request.siteCount,
+          message: `${(siteOffset + siteCount).toLocaleString()}/${request.siteCount.toLocaleString()} site chunks read back · all ${request.grid.categoryCount.toLocaleString()} categories per site`,
+          current: (siteOffset + siteCount) * request.grid.categoryCount,
+          total: categorySites,
         });
       }
     } finally {

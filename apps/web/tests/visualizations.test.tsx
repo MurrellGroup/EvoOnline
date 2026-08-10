@@ -8,6 +8,9 @@ import {
   PosteriorMarginalFigure,
 } from "../src/components/DifFubarVisualizations.js";
 import type { DifFubarRunResult } from "../src/types.js";
+import { FubarVisualizations } from "../src/components/FubarVisualizations.js";
+import { PhylogramFigure } from "../src/components/PhylogramFigure.js";
+import type { FubarRunResult } from "../src/types.js";
 
 test("DifFUBAR result studio renders a native SVG overview and export control", () => {
   const result: DifFubarRunResult = {
@@ -33,6 +36,7 @@ test("DifFUBAR result studio renders a native SVG overview and export control", 
     backend: "wasm",
     timings: { totalMs: 12 },
     diagnostics: { taxa: 4, codonSites: 1, categories: 27, treeRegisterNumber: 1, precision: "f64" },
+    tree: "((a{G1}:0.1,b{G1}:0.1){G1}:0.1,(c{G2}:0.1,d{G2}:0.1){G2}:0.1);",
     csv: "Codon Sites\n1\n",
   };
   const markup = renderToStaticMarkup(<DifFubarVisualizations result={result} threshold={0.95} onThresholdChange={() => undefined} />);
@@ -41,6 +45,56 @@ test("DifFUBAR result studio renders a native SVG overview and export control", 
   assert.match(markup, /Export SVG/);
   assert.match(markup, /<svg/);
   assert.match(markup, /data-transient="true"/);
+});
+
+test("tagged phylogram exposes branch colors, label controls, and SVG export", () => {
+  const markup = renderToStaticMarkup(<PhylogramFigure newick="((a{G1}:0.1,b{G1}:0.1){G1}:0.1,(c{G2}:0.1,d{G2}:0.1){G2}:0.1);" tagged />);
+  assert.match(markup, /Tagged input phylogeny/);
+  assert.match(markup, /Tip labels/);
+  assert.match(markup, /Label size/);
+  assert.match(markup, /Export SVG/);
+  assert.match(markup, /#ff4b4f/);
+  assert.match(markup, /#4f46f5/);
+});
+
+test("FUBAR studio renders selection overview and site posterior products", () => {
+  const result: FubarRunResult = {
+    sites: [
+      { site: 1, pPositive: 0.98, pPurifying: 0.01, meanAlpha: 0.3, meanBeta: 2.1, selection: "positive" },
+      { site: 2, pPositive: 0.02, pPurifying: 0.97, meanAlpha: 2.2, meanBeta: 0.4, selection: "purifying" },
+    ],
+    positiveSites: [1],
+    purifyingSites: [2],
+    posterior: {
+      siteCount: 2,
+      gridSize: 2,
+      gridValues: Float64Array.of(0.1, 2),
+      surfaces: Float32Array.of(0.05, 0.85, 0.05, 0.05, 0.05, 0.05, 0.85, 0.05),
+      alpha: Float32Array.of(0.9, 0.1, 0.1, 0.9),
+      beta: Float32Array.of(0.1, 0.9, 0.9, 0.1),
+    },
+    backend: "wasm-parallel",
+    timings: { totalMs: 25 },
+    diagnostics: {
+      taxa: 4,
+      codonSites: 2,
+      categories: 4,
+      treeRegisterNumber: 2,
+      precision: "f64",
+      inferenceMethod: "dirichlet-em",
+      inferenceIterations: 14,
+      inferenceBurnin: 0,
+      inferenceLogLikelihood: -2.3,
+    },
+    tree: "((a:0.1,b:0.1):0.1,(c:0.1,d:0.1):0.1);",
+    csv: "Codon Sites\n1\n2\n",
+  };
+  const markup = renderToStaticMarkup(<FubarVisualizations result={result} threshold={0.95} onThresholdChange={() => undefined} />);
+  assert.match(markup, /FUBAR figure studio/);
+  assert.match(markup, /positive and purifying selection/i);
+  assert.match(markup, /Posterior surface/);
+  assert.match(markup, /Export SVG/);
+  assert.match(markup, /mean α/);
 });
 
 test("posterior marginals render Julia-style alpha and omega probability-mass lanes", () => {

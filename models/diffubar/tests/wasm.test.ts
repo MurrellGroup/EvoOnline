@@ -84,7 +84,8 @@ describe("WASM backend", () => {
       assert.deepEqual(parallel.logLikelihoods, serial.logLikelihoods);
       assert.ok(progress.some((update) => update.detail?.indeterminate === true));
       assert.ok(progress.some((update) => update.fraction > 0 && update.fraction < 1));
-      assert.equal(progress.at(-1)?.detail?.current, alignment.codonSites);
+      assert.equal(progress.at(-1)?.detail?.current, alignment.codonSites * grid.categoryCount);
+      assert.match(progress.at(-1)?.detail?.message ?? "", /site blocks complete/);
     } finally {
       await parallelBackend.dispose();
     }

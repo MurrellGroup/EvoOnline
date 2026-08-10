@@ -19,7 +19,7 @@ See [Parity and validation](docs/PARITY.md) before treating results as interchan
 
 ## Monorepo usage
 
-This engine is the first model package in PhyloWorkbench. From the repository root:
+This engine is a model package in EvoOnline. From the repository root:
 
 ```bash
 npm install

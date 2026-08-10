@@ -12,6 +12,7 @@ import {
 import type { PosteriorMarginals, SiteResult } from "@phylo-workbench/model-diffubar/browser-source";
 import { downloadSvg } from "../lib/svg-export.js";
 import type { DifFubarRunResult } from "../types.js";
+import { PhylogramFigure } from "./PhylogramFigure.js";
 
 const RED = "#ff4b4f";
 const BLUE = "#4f46f5";
@@ -23,7 +24,7 @@ const FONT = "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont
 
 type SvgInteractionEvent = ReactPointerEvent<SVGRectElement> | ReactMouseEvent<SVGRectElement>;
 
-type FigureKey = "overview" | "marginals" | "evidence";
+type FigureKey = "overview" | "marginals" | "evidence" | "tree";
 
 export interface FigureLabels {
   readonly group1: string;
@@ -610,7 +611,9 @@ export function DifFubarVisualizations({
     ? "All sites; significant evidence controls mark opacity exactly as in the Julia plot. Click anywhere to inspect a codon."
     : activeFigure === "marginals"
       ? "Per-site marginal mass on the fitted grid: green α above each codon, with red G1 ω and blue G2 ω below; local thickness is posterior probability."
-      : "The four posterior tests from the paper; bar height is threshold-relative evidence.";
+      : activeFigure === "evidence"
+        ? "The four posterior tests from the paper; bar height is threshold-relative evidence."
+        : "The analyzed tagged phylogeny, colored by G1, G2, and background branches.";
 
   return (
     <section className="figure-studio" aria-labelledby="figure-studio-heading">
@@ -655,6 +658,7 @@ export function DifFubarVisualizations({
         <button type="button" role="tab" aria-selected={activeFigure === "overview"} className={activeFigure === "overview" ? "is-active" : ""} onClick={() => setActiveFigure("overview")}>ω overview</button>
         <button type="button" role="tab" aria-selected={activeFigure === "marginals"} className={activeFigure === "marginals" ? "is-active" : ""} onClick={() => setActiveFigure("marginals")}>Parameter posteriors</button>
         <button type="button" role="tab" aria-selected={activeFigure === "evidence"} className={activeFigure === "evidence" ? "is-active" : ""} onClick={() => setActiveFigure("evidence")}>Evidence matrix</button>
+        <button type="button" role="tab" aria-selected={activeFigure === "tree"} className={activeFigure === "tree" ? "is-active" : ""} onClick={() => setActiveFigure("tree")}>Tagged tree</button>
       </div>
 
       {activeFigure === "overview" && (
@@ -708,6 +712,8 @@ export function DifFubarVisualizations({
           </FigureShell>
         )
       )}
+
+      {activeFigure === "tree" && <PhylogramFigure newick={result.tree} tagged />}
     </section>
   );
 }

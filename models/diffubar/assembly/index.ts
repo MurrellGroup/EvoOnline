@@ -489,6 +489,83 @@ function splitmix(value: u32): u32 {
   return z ^ (z >> 16);
 }
 
+/**
+ * Deterministic finite-Dirichlet mixture EM used by CodonMolecularEvolution's
+ * DirichletFUBAR. Conditionals stay category-major so both matrix passes are
+ * contiguous and SIMD-friendly. The result is theta followed by the number
+ * of completed iterations and the final mixture log likelihood.
+ */
+export function runWeightEM(
+  categoryMajorConditionals: Float64Array,
+  initialTheta: Float64Array,
+  gridCount: i32,
+  siteCount: i32,
+  iterations: i32,
+  concentration: f64,
+  tolerance: f64,
+): Float64Array {
+  const theta = new Float64Array(gridCount);
+  const nextTheta = new Float64Array(gridCount);
+  const denominators = new Float64Array(siteCount);
+  let thetaTotal = 0.0;
+  for (let category = 0; category < gridCount; category += 1) thetaTotal += initialTheta[category];
+  if (!(thetaTotal > 0.0)) thetaTotal = 1.0;
+  for (let category = 0; category < gridCount; category += 1) theta[category] = initialTheta[category] / thetaTotal;
+
+  let completed = 0;
+  let logLikelihood = -Infinity;
+  const denominatorTotal = <f64>siteCount + concentration * <f64>gridCount;
+  for (let iteration = 0; iteration < iterations; iteration += 1) {
+    let site = 0;
+    const zero = f64x2.splat(0.0);
+    for (; site + 1 < siteCount; site += 2) storeF64x2(denominators, site, zero);
+    for (; site < siteCount; site += 1) denominators[site] = 0.0;
+
+    for (let category = 0; category < gridCount; category += 1) {
+      const categoryOffset = category * siteCount;
+      const weight = f64x2.splat(theta[category]);
+      site = 0;
+      for (; site + 1 < siteCount; site += 2) {
+        storeF64x2(
+          denominators,
+          site,
+          f64x2.add(loadF64x2(denominators, site), f64x2.mul(weight, loadF64x2(categoryMajorConditionals, categoryOffset + site))),
+        );
+      }
+      for (; site < siteCount; site += 1) denominators[site] += theta[category] * categoryMajorConditionals[categoryOffset + site];
+    }
+
+    logLikelihood = 0.0;
+    for (site = 0; site < siteCount; site += 1) {
+      const denominator = denominators[site];
+      if (denominator > 0.0) logLikelihood += Math.log(denominator);
+    }
+
+    let maximumChange = 0.0;
+    for (let category = 0; category < gridCount; category += 1) {
+      const categoryOffset = category * siteCount;
+      const weight = theta[category];
+      let expectedCount = concentration;
+      for (site = 0; site < siteCount; site += 1) {
+        const denominator = denominators[site];
+        if (denominator > 0.0) expectedCount += weight * categoryMajorConditionals[categoryOffset + site] / denominator;
+      }
+      const updated = expectedCount / denominatorTotal;
+      nextTheta[category] = updated;
+      maximumChange = Math.max(maximumChange, Math.abs(updated - weight));
+    }
+    for (let category = 0; category < gridCount; category += 1) theta[category] = nextTheta[category];
+    completed = iteration + 1;
+    if (tolerance > 0.0 && maximumChange <= tolerance) break;
+  }
+
+  const result = new Float64Array(gridCount + 2);
+  for (let category = 0; category < gridCount; category += 1) result[category] = theta[category];
+  result[gridCount] = <f64>completed;
+  result[gridCount + 1] = logLikelihood;
+  return result;
+}
+
 function seedRng(seed: u32): void {
   rng0 = splitmix(seed);
   rng1 = splitmix(rng0);
@@ -792,6 +869,104 @@ export function runGibbsRejection(
   let thetaSumTotal = 0.0;
   for (let category = 0; category < gridCount; category += 1) thetaSumTotal += thetaSum[category];
   for (let category = 0; category < gridCount; category += 1) result[category] = thetaSum[category] / thetaSumTotal;
+  for (let index = 0; index < summaries.length; index += 1) result[gridCount + index] = summaries[index] * inverseRetained;
+  return result;
+}
+
+/** Exact uncollapsed Gibbs sampler specialized for a single alpha-beta FUBAR grid. */
+export function runFubarGibbsRejection(
+  categoryMajorConditionals: Float64Array,
+  categories: Float64Array,
+  gridCount: i32,
+  siteCount: i32,
+  iterations: i32,
+  burnin: i32,
+  concentration: f64,
+  seed: u32,
+  trackAllocations: bool,
+): Float64Array {
+  seedRng(seed);
+  const retained = iterations - burnin;
+  const theta = new Float64Array(gridCount);
+  const thetaCumulative = new Float64Array(gridCount);
+  const thetaSum = new Float64Array(gridCount);
+  const phi = new Float64Array(gridCount);
+  const denseCumulative = new Float64Array(gridCount);
+  const siteMaximum = new Float64Array(siteCount);
+  const summaries = new Float64Array(siteCount * 4);
+  lastAllocations = trackAllocations ? new Uint32Array(gridCount * siteCount) : new Uint32Array(0);
+
+  const uniformTheta = 1.0 / <f64>gridCount;
+  let thetaCumulativeTotal = 0.0;
+  for (let category = 0; category < gridCount; category += 1) {
+    theta[category] = uniformTheta;
+    thetaCumulativeTotal += uniformTheta;
+    thetaCumulative[category] = thetaCumulativeTotal;
+  }
+  for (let site = 0; site < siteCount; site += 1) {
+    let maximum = 0.0;
+    for (let category = 0; category < gridCount; category += 1) {
+      maximum = Math.max(maximum, categoryMajorConditionals[category * siteCount + site]);
+    }
+    siteMaximum[site] = maximum;
+  }
+
+  for (let iteration = 1; iteration <= iterations; iteration += 1) {
+    for (let category = 0; category < gridCount; category += 1) phi[category] = concentration;
+    for (let site = 0; site < siteCount; site += 1) {
+      const maximum = siteMaximum[site];
+      let sampled = -1;
+      for (let attempt = 0; attempt < 128; attempt += 1) {
+        const proposal = cumulativeLowerBound(thetaCumulative, gridCount, uniformOpen() * thetaCumulativeTotal);
+        const likelihood = categoryMajorConditionals[proposal * siteCount + site];
+        if (uniformOpen() * maximum < likelihood) {
+          sampled = proposal;
+          break;
+        }
+      }
+      if (sampled < 0) {
+        let total = 0.0;
+        for (let category = 0; category < gridCount; category += 1) {
+          total += theta[category] * categoryMajorConditionals[category * siteCount + site];
+          denseCumulative[category] = total;
+        }
+        sampled = cumulativeLowerBound(denseCumulative, gridCount, uniformOpen() * total);
+      }
+      phi[sampled] += 1.0;
+      if (iteration > burnin) {
+        const categoryOffset = sampled * 2;
+        const alpha = categories[categoryOffset];
+        const beta = alpha * categories[categoryOffset + 1];
+        const summaryOffset = site * 4;
+        if (beta > alpha) summaries[summaryOffset] += 1.0;
+        else if (alpha > beta) summaries[summaryOffset + 1] += 1.0;
+        summaries[summaryOffset + 2] += alpha;
+        summaries[summaryOffset + 3] += beta;
+        if (trackAllocations) lastAllocations[sampled * siteCount + site] += 1;
+      }
+    }
+
+    let thetaTotal = 0.0;
+    for (let category = 0; category < gridCount; category += 1) {
+      const draw = gammaSample(phi[category]);
+      theta[category] = draw;
+      thetaTotal += draw;
+    }
+    const inverseThetaTotal = 1.0 / thetaTotal;
+    thetaCumulativeTotal = 0.0;
+    for (let category = 0; category < gridCount; category += 1) {
+      theta[category] *= inverseThetaTotal;
+      thetaCumulativeTotal += theta[category];
+      thetaCumulative[category] = thetaCumulativeTotal;
+      if (iteration > burnin) thetaSum[category] += theta[category];
+    }
+  }
+
+  const result = new Float64Array(gridCount + siteCount * 4);
+  let thetaSumTotal = 0.0;
+  for (let category = 0; category < gridCount; category += 1) thetaSumTotal += thetaSum[category];
+  for (let category = 0; category < gridCount; category += 1) result[category] = thetaSum[category] / thetaSumTotal;
+  const inverseRetained = 1.0 / <f64>retained;
   for (let index = 0; index < summaries.length; index += 1) result[gridCount + index] = summaries[index] * inverseRetained;
   return result;
 }

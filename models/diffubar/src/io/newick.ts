@@ -180,3 +180,28 @@ export function parseTaggedNewick(input: string, requestedTags?: readonly string
   const classCount = tags.length + (hasBackground ? 1 : 0);
   return { root, nodes, tips, classCount, hasBackground, tags };
 }
+
+/** Parse an ordinary untagged phylogeny as a single branch class (FUBAR). */
+export function parseNewick(input: string): ParsedTree {
+  const normalized = normalizeDifFubarTreeText(input);
+  // Tags and color annotations are meaningful to DifFUBAR, but standard
+  // FUBAR deliberately treats every edge as belonging to the same class.
+  const text = normalized.newick.replaceAll(/\{[^}]+\}/g, "");
+  const root = new NewickParser(text).parse();
+  const nodes: TreeNode[] = [];
+  const tips: TreeNode[] = [];
+  const stack = [root];
+  while (stack.length > 0) {
+    const node = stack.pop()!;
+    node.branchClass = 0;
+    nodes.push(node);
+    if (node.children.length === 0) {
+      node.tipIndex = tips.length;
+      tips.push(node);
+    } else {
+      for (let index = node.children.length - 1; index >= 0; index -= 1) stack.push(node.children[index]!);
+    }
+  }
+  if (tips.length < 2) throw new DifFUBARError("TOO_FEW_TIPS", "The tree must contain at least two tips.");
+  return { root, nodes, tips, classCount: 1, hasBackground: false, tags: [] };
+}

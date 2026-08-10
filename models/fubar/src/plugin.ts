@@ -5,20 +5,22 @@ import {
   type ModelManifest,
   type ModelPlugin,
   type ModelValidation,
-  type ParameterValues,
   type ValidationIssue,
 } from "@phylo-workbench/model-sdk";
-import { parseFasta } from "./io/fasta.js";
-import { normalizeDifFubarTreeText, parseTaggedNewick } from "./io/newick.js";
-import { resultsToCsv } from "./pipeline.js";
-import type { AnalysisResult } from "./types.js";
+import {
+  normalizeDifFubarTreeText,
+  parseFasta,
+  parseNewick,
+} from "@phylo-workbench/model-diffubar";
+import { fubarResultsToCsv } from "./pipeline.js";
+import type { FubarAnalysisResult } from "./types.js";
 
-export const difFubarManifest: ModelManifest = {
-  id: "diffubar",
+export const fubarManifest: ModelManifest = {
+  id: "fubar",
   version: "0.1.0",
-  title: "Differential selection with DifFUBAR",
-  shortTitle: "DifFUBAR",
-  description: "Compare site-wise selective pressure between two tagged foreground branch groups.",
+  title: "Pervasive selection with FUBAR",
+  shortTitle: "FUBAR",
+  description: "Infer site-wise positive and purifying selection from a single branch-class codon model.",
   category: "selection",
   inputSlots: [
     {
@@ -33,14 +35,7 @@ export const difFubarManifest: ModelManifest = {
       label: "Phylogeny",
       kind: "tree",
       required: true,
-      description: "Newick or NEXUS tree with branch lengths.",
-    },
-    {
-      id: "foreground",
-      label: "Two foreground groups",
-      kind: "selection",
-      required: true,
-      description: "Branches tagged as G1 and G2 in the phylogeny.",
+      description: "An untagged Newick or NEXUS tree with branch lengths.",
     },
   ],
   parameters: [
@@ -58,49 +53,30 @@ export const difFubarManifest: ModelManifest = {
       ],
     },
     {
-      id: "foregroundGrid",
-      label: "Foreground grid",
-      description: "Grid resolution for both tagged groups.",
+      id: "gridPoints",
+      label: "Grid points per axis",
+      description: "CodonMolecularEvolution.jl uses 20, producing 400 alpha-beta categories.",
       type: "integer",
-      default: 6,
-      minimum: 2,
-      maximum: 12,
+      default: 20,
+      minimum: 8,
+      maximum: 40,
       step: 1,
     },
     {
-      id: "backgroundGrid",
-      label: "Background grid",
-      description: "Grid resolution for untagged branches.",
-      type: "integer",
-      default: 4,
-      minimum: 2,
-      maximum: 10,
-      step: 1,
-    },
-    {
-      id: "iterations",
-      label: "Gibbs iterations",
-      description: "Total posterior sampling iterations.",
-      type: "integer",
-      default: 2500,
-      minimum: 250,
-      maximum: 100000,
-      step: 250,
-    },
-    {
-      id: "burnin",
-      label: "Burn-in",
-      description: "Initial Gibbs iterations discarded.",
-      type: "integer",
-      default: 500,
-      minimum: 0,
-      maximum: 50000,
-      step: 100,
+      id: "inferenceMethod",
+      label: "Posterior inference",
+      description: "Dirichlet-EM is deterministic and remains the default; Gibbs provides exact allocation sampling.",
+      type: "select",
+      default: "dirichlet-em",
+      options: [
+        { value: "dirichlet-em", label: "Dirichlet-EM (default)" },
+        { value: "gibbs", label: "Exact Gibbs sampling" },
+      ],
     },
     {
       id: "posteriorThreshold",
       label: "Posterior threshold",
-      description: "Threshold used to mark detected codon sites.",
+      description: "Threshold applied to both positive and purifying selection evidence.",
       type: "number",
       default: 0.95,
       minimum: 0.5,
@@ -108,9 +84,42 @@ export const difFubarManifest: ModelManifest = {
       step: 0.01,
     },
     {
+      id: "iterations",
+      label: "Inference iterations",
+      description: "Maximum EM steps, or total Gibbs iterations when Gibbs is selected.",
+      type: "integer",
+      default: 2500,
+      minimum: 100,
+      maximum: 100000,
+      step: 100,
+      advanced: true,
+    },
+    {
+      id: "burnin",
+      label: "Gibbs burn-in",
+      description: "Initial Gibbs iterations discarded; ignored by Dirichlet-EM.",
+      type: "integer",
+      default: 500,
+      minimum: 0,
+      maximum: 50000,
+      step: 100,
+      advanced: true,
+    },
+    {
+      id: "concentration",
+      label: "Dirichlet concentration",
+      description: "Per-category pseudocount used by CodonMolecularEvolution DirichletFUBAR.",
+      type: "number",
+      default: 0.5,
+      minimum: 0.001,
+      maximum: 10,
+      step: 0.1,
+      advanced: true,
+    },
+    {
       id: "seed",
-      label: "Random seed",
-      description: "Fixed seed for reproducible posterior sampling.",
+      label: "Gibbs random seed",
+      description: "Fixed seed for reproducible Gibbs sampling; ignored by Dirichlet-EM.",
       type: "integer",
       default: 1234,
       minimum: 1,
@@ -130,26 +139,13 @@ export const difFubarManifest: ModelManifest = {
       ],
       advanced: true,
     },
-    {
-      id: "samplerMode",
-      label: "Sampler",
-      description: "Fast-exact preserves the uncollapsed posterior with rejection draws.",
-      type: "select",
-      default: "fast-exact",
-      options: [
-        { value: "fast-exact", label: "Fast exact" },
-        { value: "reference", label: "Reference transition" },
-        { value: "collapsed", label: "Collapsed" },
-      ],
-      advanced: true,
-    },
   ],
   runtimes: ["browser-webgpu", "browser-wasm", "server-native"],
-  outputKinds: ["site-posterior-table", "detected-site-set", "csv"],
-  citation: "Murrell et al., DifFUBAR preprint (2025)",
+  outputKinds: ["site-posterior-table", "posterior-surface", "detected-site-set", "csv"],
+  citation: "Murrell et al., FUBAR; implementation follows CodonMolecularEvolution.jl DirichletFUBAR",
 };
 
-export function validateDifFubarWorkspace(workspace: PhyloWorkspaceSnapshot): ModelValidation {
+export function validateFubarWorkspace(workspace: PhyloWorkspaceSnapshot): ModelValidation {
   const issues: ValidationIssue[] = [];
   let alignment;
   let tree;
@@ -171,49 +167,45 @@ export function validateDifFubarWorkspace(workspace: PhyloWorkspaceSnapshot): Mo
     issues.push({ severity: "error", code: "TREE_REQUIRED", message: "Upload or infer a phylogeny.", artifact: "tree" });
   } else {
     try {
-      tree = parseTaggedNewick(workspace.tree.text);
+      tree = parseNewick(workspace.tree.text);
     } catch (error) {
       issues.push({
         severity: "error",
         code: error instanceof Error && "code" in error ? String(error.code) : "INVALID_TREE",
         message: error instanceof Error ? error.message : String(error),
-        artifact: workspace.tree.tags.length === 2 ? "tree" : "foreground",
+        artifact: "tree",
       });
     }
   }
   if (alignment !== undefined && tree !== undefined) {
     const alignmentNames = new Set(alignment.names);
     const treeNames = new Set(tree.tips.map((tip) => tip.name));
-    const absentFromTree = alignment.names.filter((name) => !treeNames.has(name));
-    const absentFromAlignment = tree.tips.map((tip) => tip.name).filter((name) => !alignmentNames.has(name));
-    if (absentFromTree.length > 0 || absentFromAlignment.length > 0) {
-      const examples = [...absentFromTree.slice(0, 2), ...absentFromAlignment.slice(0, 2)].join(", ");
-      issues.push({
-        severity: "error",
-        code: "TIP_NAME_MISMATCH",
-        message: `Tree tips and FASTA identifiers do not match${examples.length > 0 ? ` (${examples})` : ""}.`,
-        artifact: "tree",
-      });
-    }
+    const mismatch = alignment.names.some((name) => !treeNames.has(name))
+      || tree.tips.some((tip) => !alignmentNames.has(tip.name));
+    if (mismatch) issues.push({
+      severity: "error",
+      code: "TIP_NAME_MISMATCH",
+      message: "Tree tips and FASTA identifiers do not match.",
+      artifact: "tree",
+    });
   }
   return { ready: !issues.some((issue) => issue.severity === "error"), issues };
 }
 
-export const difFubarPlugin: ModelPlugin<AnalysisResult> = {
-  manifest: difFubarManifest,
+export const fubarPlugin: ModelPlugin<FubarAnalysisResult> = {
+  manifest: fubarManifest,
   prepareTreeInput: (text) => normalizeDifFubarTreeText(text).newick,
-  validate: validateDifFubarWorkspace,
-  defaultParameters: () => defaultsFromManifest(difFubarManifest),
+  validate: validateFubarWorkspace,
+  defaultParameters: () => defaultsFromManifest(fubarManifest),
   createJob: (workspace, parameters): AnalysisJobSpec => ({
     schemaVersion: 1,
-    model: { id: difFubarManifest.id, version: difFubarManifest.version },
+    model: { id: fubarManifest.id, version: fubarManifest.version },
     inputs: {
       alignmentSha256: workspace.alignment.sha256,
       treeSha256: workspace.tree.sha256,
     },
     parameters,
-    seed: Number(parameters.seed ?? 1234),
     requestedRuntime: "auto",
   }),
-  resultToCsv: resultsToCsv,
+  resultToCsv: fubarResultsToCsv,
 };

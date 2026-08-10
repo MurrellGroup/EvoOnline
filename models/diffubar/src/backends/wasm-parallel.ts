@@ -31,7 +31,7 @@ async function createWorker(wasmModule: WebAssembly.Module): Promise<WorkerLike>
     worker.unref?.();
     return worker;
   }
-  const worker = new Worker(new URL("./wasm-browser.worker.ts", import.meta.url), { type: "module" });
+  const worker = new Worker(new URL("./wasm-browser.worker.js", import.meta.url), { type: "module" });
   worker.postMessage({ type: "initialize", wasmModule });
   return worker;
 }
@@ -78,7 +78,8 @@ export class ParallelWasmBackend {
 
   async evaluate(request: LikelihoodRequest): Promise<LikelihoodResult> {
     request.signal?.throwIfAborted();
-    const categorySites = request.grid.categoryCount * request.siteCount;
+    const categoryCount = request.grid.categoryCount;
+    const categorySites = categoryCount * request.siteCount;
     if (this.workerCount <= 1 || categorySites < this.minimumCategorySites || request.siteCount < 2) {
       return this.local.evaluate(request);
     }
@@ -86,15 +87,15 @@ export class ParallelWasmBackend {
     request.onProgress?.(0, {
       message: `Starting ${Math.min(this.workerCount, request.siteCount)} parallel WASM workers`,
       current: 0,
-      total: request.siteCount,
+      total: categorySites,
       indeterminate: true,
     });
     const pool = await this.workers();
     const activeCount = Math.min(pool.length, request.siteCount);
     request.onProgress?.(0, {
-      message: `Evaluating ${request.grid.categoryCount.toLocaleString()} categories across sites`,
+      message: `0/${request.siteCount.toLocaleString()} site blocks complete · ${categoryCount.toLocaleString()} categories per site`,
       current: 0,
-      total: request.siteCount,
+      total: categorySites,
     });
     const jobs: Array<{ readonly start: number; readonly count: number; readonly result: Promise<Float64Array> }> = [];
     for (let index = 0; index < activeCount; index += 1) {
@@ -125,9 +126,9 @@ export class ParallelWasmBackend {
       const piece = await job.result;
       completedSites += job.count;
       request.onProgress?.(completedSites / request.siteCount, {
-        message: `Evaluating ${request.grid.categoryCount.toLocaleString()} categories across sites`,
-        current: completedSites,
-        total: request.siteCount,
+        message: `${completedSites.toLocaleString()}/${request.siteCount.toLocaleString()} site blocks complete · ${categoryCount.toLocaleString()} categories per site`,
+        current: completedSites * categoryCount,
+        total: categorySites,
       });
       return piece;
     }));

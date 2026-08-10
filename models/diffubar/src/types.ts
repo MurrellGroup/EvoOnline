@@ -146,6 +146,42 @@ export interface SamplerOptions {
   readonly signal?: AbortSignal;
 }
 
+export interface MixtureFitOptions {
+  readonly iterations?: number;
+  readonly concentration?: number;
+  readonly tolerance?: number;
+  readonly signal?: AbortSignal;
+  readonly onProgress?: (fraction: number, detail?: ProgressDetail) => void;
+}
+
+export interface MixtureFitResult {
+  readonly theta: Float64Array;
+  readonly completedIterations: number;
+  readonly logLikelihood: number;
+  readonly elapsedMs: number;
+}
+
+export interface AlphaBetaSamplerOptions {
+  readonly iterations?: number;
+  readonly burnin?: number;
+  readonly concentration?: number;
+  readonly seed?: number;
+  readonly trackAllocations?: boolean;
+  readonly signal?: AbortSignal;
+  readonly onProgress?: (fraction: number, detail?: ProgressDetail) => void;
+}
+
+export interface AlphaBetaSamplerResult {
+  readonly theta: Float64Array;
+  readonly positive: Float64Array;
+  readonly purifying: Float64Array;
+  readonly meanAlpha: Float64Array;
+  readonly meanBeta: Float64Array;
+  readonly retainedIterations: number;
+  readonly allocations?: Uint32Array;
+  readonly elapsedMs: number;
+}
+
 export interface SiteResult {
   readonly site: number;
   readonly pOmega1Greater: number;

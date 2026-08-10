@@ -1,6 +1,6 @@
 export * from "./types.js";
 export { parseFasta, writeFasta } from "./io/fasta.js";
-export { normalizeDifFubarTreeText, parseTaggedNewick } from "./io/newick.js";
+export { normalizeDifFubarTreeText, parseNewick, parseTaggedNewick } from "./io/newick.js";
 export { createDifFUBARGrid } from "./model/grid.js";
 export {
   CODON_COUNT,

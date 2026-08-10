@@ -13,6 +13,7 @@
   "dependencies": {
     "@phylo-workbench/domain": "*",
     "@phylo-workbench/model-diffubar": "*",
+    "@phylo-workbench/model-fubar": "*",
     "@phylo-workbench/model-sdk": "*",
     "@phylo-workbench/viewer-bridge": "*",
     "react": "^19.1.1",

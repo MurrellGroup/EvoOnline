@@ -1,4 +1,4 @@
-name: Deploy PhyloWorkbench to Pages
+name: Deploy EvoOnline to Pages
 
 on:
   push:

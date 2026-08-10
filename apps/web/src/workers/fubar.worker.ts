@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
-import { analyzeDifFUBAR, resultsToCsv } from "@phylo-workbench/model-diffubar/browser-source";
-import type { WorkerResponse, WorkerRunRequest } from "../types.js";
+import { analyzeFubar, fubarResultsToCsv } from "@phylo-workbench/model-fubar/browser-source";
+import type { FubarWorkerResponse, WorkerRunRequest } from "../types.js";
 
 const scope = self as DedicatedWorkerGlobalScope;
 
@@ -14,21 +14,20 @@ scope.onmessage = (event: MessageEvent<WorkerRunRequest>): void => {
       const backend = backendValue === "webgpu" || backendValue === "wasm" || backendValue === "wasm-parallel"
         ? backendValue
         : "auto";
-      const samplerValue = String(parameters.samplerMode ?? "fast-exact");
-      const samplerMode = samplerValue === "reference" || samplerValue === "collapsed" ? samplerValue : "fast-exact";
-      const result = await analyzeDifFUBAR(request.alignment, request.tree, {
+      const threshold = Number(parameters.posteriorThreshold ?? 0.95);
+      const inferenceMethod = parameters.inferenceMethod === "gibbs" ? "gibbs" : "dirichlet-em";
+      const result = await analyzeFubar(request.alignment, request.tree, {
         backend,
-        foregroundGrid: Number(parameters.foregroundGrid ?? 6),
-        backgroundGrid: Number(parameters.backgroundGrid ?? 4),
+        gridPoints: Number(parameters.gridPoints ?? 20),
+        inferenceMethod,
         iterations: Number(parameters.iterations ?? 2500),
         burnin: Number(parameters.burnin ?? 500),
-        posteriorThreshold: Number(parameters.posteriorThreshold ?? 0.95),
+        concentration: Number(parameters.concentration ?? 0.5),
         seed: Number(parameters.seed ?? 1234),
+        posteriorThreshold: threshold,
         fitMode: parameters.fitMode === "reference-compatible" ? "reference-compatible" : "empirical-fast",
-        samplerMode,
-        collectPosteriorMarginals: true,
         onStage: (stage, fraction, detail) => {
-          const message: WorkerResponse = {
+          const message: FubarWorkerResponse = {
             type: "progress",
             id: request.id,
             stage,
@@ -40,25 +39,24 @@ scope.onmessage = (event: MessageEvent<WorkerRunRequest>): void => {
       });
       const compact = {
         sites: result.sites,
-        detectedSites: result.detectedSites,
-        ...(result.posteriorMarginals === undefined ? {} : { posteriorMarginals: result.posteriorMarginals }),
+        positiveSites: result.positiveSites,
+        purifyingSites: result.purifyingSites,
+        posterior: result.posterior,
         backend: result.backend,
         timings: result.timings,
         diagnostics: result.diagnostics,
         tree: request.tree,
-        csv: resultsToCsv(result),
+        csv: fubarResultsToCsv(result, threshold),
       };
-      const message: WorkerResponse = { type: "result", id: request.id, result: compact };
-      const transfer = result.posteriorMarginals === undefined ? [] : [
-        result.posteriorMarginals.alphaValues.buffer,
-        result.posteriorMarginals.omegaValues.buffer,
-        result.posteriorMarginals.alpha.buffer,
-        result.posteriorMarginals.omega1.buffer,
-        result.posteriorMarginals.omega2.buffer,
-      ];
-      scope.postMessage(message, transfer);
+      const message: FubarWorkerResponse = { type: "result", id: request.id, result: compact };
+      scope.postMessage(message, [
+        result.posterior.gridValues.buffer,
+        result.posterior.surfaces.buffer,
+        result.posterior.alpha.buffer,
+        result.posterior.beta.buffer,
+      ]);
     } catch (error) {
-      const message: WorkerResponse = {
+      const message: FubarWorkerResponse = {
         type: "error",
         id: request.id,
         error: error instanceof Error ? error.message : String(error),

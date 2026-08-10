@@ -55,6 +55,7 @@ test("lists models and completes a small DifFUBAR job", async () => {
   const models = await requestJson("GET", "/v1/models");
   assert.equal(models.status, 200);
   assert.equal(models.body.models[0].id, "diffubar");
+  assert.ok(models.body.models.some((model: { id: string }) => model.id === "fubar"));
 
   const alignment = await readFile(new URL("../../../examples/diffubar-demo.fasta", import.meta.url), "utf8");
   const tree = await readFile(new URL("../../../examples/diffubar-demo.nwk", import.meta.url), "utf8");
@@ -74,4 +75,51 @@ test("lists models and completes a small DifFUBAR job", async () => {
   assert.equal(job.status, "succeeded", job.error);
   assert.equal(job.result.sites.length, 12);
   assert.equal(job.result.backend, "wasm");
+});
+
+test("completes a small untagged FUBAR job with both selection directions", async () => {
+  const alignment = await readFile(new URL("../../../examples/diffubar-demo.fasta", import.meta.url), "utf8");
+  const taggedTree = await readFile(new URL("../../../examples/diffubar-demo.nwk", import.meta.url), "utf8");
+  const tree = taggedTree.replaceAll(/\{[^}]+\}/g, "");
+  const submitted = await requestJson("POST", "/v1/jobs", {
+    modelId: "fubar",
+    alignment: { name: "demo.fasta", text: alignment },
+    tree: { name: "demo.nwk", text: tree },
+    parameters: { gridPoints: 4, iterations: 100, posteriorThreshold: 0.8 },
+  });
+  assert.equal(submitted.status, 202);
+  let job = submitted.body;
+  for (let attempt = 0; attempt < 100 && ["queued", "running"].includes(job.status); attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    job = (await requestJson("GET", `/v1/jobs/${submitted.body.id}`)).body;
+  }
+  assert.equal(job.status, "succeeded", job.error);
+  assert.equal(job.result.sites.length, 12);
+  assert.ok(Array.isArray(job.result.positiveSites));
+  assert.ok(Array.isArray(job.result.purifyingSites));
+  assert.match(job.result.csv, /P\(beta > alpha\)/);
+
+  const gibbsSubmitted = await requestJson("POST", "/v1/jobs", {
+    modelId: "fubar",
+    alignment: { name: "demo.fasta", text: alignment },
+    tree: { name: "demo.nwk", text: tree },
+    parameters: {
+      gridPoints: 4,
+      inferenceMethod: "gibbs",
+      iterations: 200,
+      burnin: 40,
+      seed: 19,
+      posteriorThreshold: 0.8,
+    },
+  });
+  assert.equal(gibbsSubmitted.status, 202);
+  let gibbsJob = gibbsSubmitted.body;
+  for (let attempt = 0; attempt < 100 && ["queued", "running"].includes(gibbsJob.status); attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    gibbsJob = (await requestJson("GET", `/v1/jobs/${gibbsSubmitted.body.id}`)).body;
+  }
+  assert.equal(gibbsJob.status, "succeeded", gibbsJob.error);
+  assert.equal(gibbsJob.result.diagnostics.inferenceMethod, "gibbs");
+  assert.equal(gibbsJob.result.diagnostics.inferenceIterations, 200);
+  assert.equal(gibbsJob.result.diagnostics.inferenceBurnin, 40);
 });

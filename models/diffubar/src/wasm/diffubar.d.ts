@@ -78,6 +78,18 @@ declare namespace __AdaptedExports {
    */
   export function evaluateLikelihoodCached(mainOps: Uint32Array, cacheOps: Uint32Array, cacheDescriptors: Uint32Array, combinationModels: Uint32Array, combinationCategories: Uint32Array, cacheCategoryMap: Uint32Array, edgeLengths: Float64Array, tipStates: Uint8Array, gridModels: Uint32Array, neighborCount: Uint32Array, neighborIndex: Uint32Array, rDiagonal: Float64Array, rOffDiagonal: Float64Array, mu: Float64Array, equilibrium: Float64Array, siteCount: number, gridCount: number, classCount: number, stateCount: number, maxNeighbors: number, slotCount: number, rootSlot: number, cacheCount: number, cacheEntryCount: number, poissonTerms: number, maxLambdaPerStep: number): Float64Array;
   /**
+   * assembly/index/runWeightEM
+   * @param categoryMajorConditionals `~lib/typedarray/Float64Array`
+   * @param initialTheta `~lib/typedarray/Float64Array`
+   * @param gridCount `i32`
+   * @param siteCount `i32`
+   * @param iterations `i32`
+   * @param concentration `f64`
+   * @param tolerance `f64`
+   * @returns `~lib/typedarray/Float64Array`
+   */
+  export function runWeightEM(categoryMajorConditionals: Float64Array, initialTheta: Float64Array, gridCount: number, siteCount: number, iterations: number, concentration: number, tolerance: number): Float64Array;
+  /**
    * assembly/index/runGibbs
    * @param siteMajorConditionals `~lib/typedarray/Float64Array`
    * @param categories `~lib/typedarray/Float64Array`
@@ -109,6 +121,20 @@ declare namespace __AdaptedExports {
    * @returns `~lib/typedarray/Float64Array`
    */
   export function runGibbsRejection(categoryMajorConditionals: Float64Array, categories: Float64Array, gridCount: number, siteCount: number, parameterCount: number, iterations: number, burnin: number, concentration: number, seed: number, likelihoodCutoff: number, trackAllocations: boolean): Float64Array;
+  /**
+   * assembly/index/runFubarGibbsRejection
+   * @param categoryMajorConditionals `~lib/typedarray/Float64Array`
+   * @param categories `~lib/typedarray/Float64Array`
+   * @param gridCount `i32`
+   * @param siteCount `i32`
+   * @param iterations `i32`
+   * @param burnin `i32`
+   * @param concentration `f64`
+   * @param seed `u32`
+   * @param trackAllocations `bool`
+   * @returns `~lib/typedarray/Float64Array`
+   */
+  export function runFubarGibbsRejection(categoryMajorConditionals: Float64Array, categories: Float64Array, gridCount: number, siteCount: number, iterations: number, burnin: number, concentration: number, seed: number, trackAllocations: boolean): Float64Array;
   /**
    * assembly/index/runGibbsSparse
    * @param conditionalValues `~lib/typedarray/Float64Array`
