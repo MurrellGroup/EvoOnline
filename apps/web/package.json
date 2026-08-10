@@ -1,0 +1,30 @@
+{
+  "name": "@phylo-workbench/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node --import tsx --test tests/*.test.tsx",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@phylo-workbench/domain": "*",
+    "@phylo-workbench/model-diffubar": "*",
+    "@phylo-workbench/model-sdk": "*",
+    "@phylo-workbench/viewer-bridge": "*",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
+    "@webgpu/types": "^0.1.64",
+    "@vitejs/plugin-react": "^5.0.2",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.2"
+  }
+}

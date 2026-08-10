@@ -1,0 +1,30 @@
+import type { PosteriorMarginals, SiteResult } from "@phylo-workbench/model-diffubar/browser-source";
+
+export interface DifFubarRunResult {
+  readonly sites: readonly SiteResult[];
+  readonly detectedSites: readonly number[];
+  readonly posteriorMarginals?: PosteriorMarginals;
+  readonly backend: "webgpu" | "wasm" | "wasm-parallel";
+  readonly timings: Readonly<Record<string, number>>;
+  readonly diagnostics: {
+    readonly taxa: number;
+    readonly codonSites: number;
+    readonly categories: number;
+    readonly treeRegisterNumber: number;
+    readonly precision: "f32" | "f64";
+  };
+  readonly csv: string;
+}
+
+export interface WorkerRunRequest {
+  readonly type: "run";
+  readonly id: string;
+  readonly alignment: string;
+  readonly tree: string;
+  readonly parameters: Readonly<Record<string, string | number | boolean>>;
+}
+
+export type WorkerResponse =
+  | { readonly type: "progress"; readonly id: string; readonly stage: string; readonly fraction: number }
+  | { readonly type: "result"; readonly id: string; readonly result: DifFubarRunResult }
+  | { readonly type: "error"; readonly id: string; readonly error: string };

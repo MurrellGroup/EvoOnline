@@ -1,0 +1,43 @@
+{
+  "name": "@phylo-workbench/model-diffubar",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser WebGPU/WASM and server runner for the DifFUBAR model",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./browser-source": "./src/browser.ts"
+  },
+  "scripts": {
+    "build:wasm": "node scripts/build-wasm.mjs",
+    "build": "npm run build:wasm && tsc -p tsconfig.build.json",
+    "test": "npm run build:wasm && node --import tsx --test tests/*.test.ts && node --import tsx scripts/validate-wgsl.ts",
+    "typecheck": "tsc --noEmit",
+    "bench": "npm run build:wasm && node --import tsx scripts/bench.ts",
+    "validate:wgsl": "node --import tsx scripts/validate-wgsl.ts",
+    "parity:webgpu": "node --import tsx scripts/webgpu-parity.ts",
+    "parity:julia": "node --import tsx scripts/compare-julia-reference.ts"
+  },
+  "dependencies": {
+    "@assemblyscript/loader": "^0.27.31",
+    "@phylo-workbench/domain": "*",
+    "@phylo-workbench/model-sdk": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.2.1",
+    "@webgpu/types": "^0.1.64",
+    "assemblyscript": "0.27.31",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "webgpu": "^0.4.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

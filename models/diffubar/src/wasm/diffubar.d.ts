@@ -1,0 +1,153 @@
+declare namespace __AdaptedExports {
+  /** Exported memory */
+  export const memory: WebAssembly.Memory;
+  // Exported runtime interface
+  export function __new(size: number, id: number): number;
+  export function __pin(ptr: number): number;
+  export function __unpin(ptr: number): void;
+  export function __collect(): void;
+  export const __rtti_base: number;
+  /** assembly/index/Uint8Array_ID */
+  export const Uint8Array_ID: {
+    /** @type `u32` */
+    get value(): number
+  };
+  /** assembly/index/Uint32Array_ID */
+  export const Uint32Array_ID: {
+    /** @type `u32` */
+    get value(): number
+  };
+  /** assembly/index/Float64Array_ID */
+  export const Float64Array_ID: {
+    /** @type `u32` */
+    get value(): number
+  };
+  /**
+   * assembly/index/evaluateLikelihood
+   * @param ops `~lib/typedarray/Uint32Array`
+   * @param edgeLengths `~lib/typedarray/Float64Array`
+   * @param tipStates `~lib/typedarray/Uint8Array`
+   * @param gridModels `~lib/typedarray/Uint32Array`
+   * @param neighborCount `~lib/typedarray/Uint32Array`
+   * @param neighborIndex `~lib/typedarray/Uint32Array`
+   * @param rDiagonal `~lib/typedarray/Float64Array`
+   * @param rOffDiagonal `~lib/typedarray/Float64Array`
+   * @param mu `~lib/typedarray/Float64Array`
+   * @param equilibrium `~lib/typedarray/Float64Array`
+   * @param siteCount `i32`
+   * @param gridCount `i32`
+   * @param classCount `i32`
+   * @param stateCount `i32`
+   * @param maxNeighbors `i32`
+   * @param slotCount `i32`
+   * @param rootSlot `i32`
+   * @param poissonTerms `i32`
+   * @param maxLambdaPerStep `f64`
+   * @returns `~lib/typedarray/Float64Array`
+   */
+  export function evaluateLikelihood(ops: Uint32Array, edgeLengths: Float64Array, tipStates: Uint8Array, gridModels: Uint32Array, neighborCount: Uint32Array, neighborIndex: Uint32Array, rDiagonal: Float64Array, rOffDiagonal: Float64Array, mu: Float64Array, equilibrium: Float64Array, siteCount: number, gridCount: number, classCount: number, stateCount: number, maxNeighbors: number, slotCount: number, rootSlot: number, poissonTerms: number, maxLambdaPerStep: number): Float64Array;
+  /**
+   * assembly/index/evaluateLikelihoodCached
+   * @param mainOps `~lib/typedarray/Uint32Array`
+   * @param cacheOps `~lib/typedarray/Uint32Array`
+   * @param cacheDescriptors `~lib/typedarray/Uint32Array`
+   * @param combinationModels `~lib/typedarray/Uint32Array`
+   * @param combinationCategories `~lib/typedarray/Uint32Array`
+   * @param cacheCategoryMap `~lib/typedarray/Uint32Array`
+   * @param edgeLengths `~lib/typedarray/Float64Array`
+   * @param tipStates `~lib/typedarray/Uint8Array`
+   * @param gridModels `~lib/typedarray/Uint32Array`
+   * @param neighborCount `~lib/typedarray/Uint32Array`
+   * @param neighborIndex `~lib/typedarray/Uint32Array`
+   * @param rDiagonal `~lib/typedarray/Float64Array`
+   * @param rOffDiagonal `~lib/typedarray/Float64Array`
+   * @param mu `~lib/typedarray/Float64Array`
+   * @param equilibrium `~lib/typedarray/Float64Array`
+   * @param siteCount `i32`
+   * @param gridCount `i32`
+   * @param classCount `i32`
+   * @param stateCount `i32`
+   * @param maxNeighbors `i32`
+   * @param slotCount `i32`
+   * @param rootSlot `i32`
+   * @param cacheCount `i32`
+   * @param cacheEntryCount `i32`
+   * @param poissonTerms `i32`
+   * @param maxLambdaPerStep `f64`
+   * @returns `~lib/typedarray/Float64Array`
+   */
+  export function evaluateLikelihoodCached(mainOps: Uint32Array, cacheOps: Uint32Array, cacheDescriptors: Uint32Array, combinationModels: Uint32Array, combinationCategories: Uint32Array, cacheCategoryMap: Uint32Array, edgeLengths: Float64Array, tipStates: Uint8Array, gridModels: Uint32Array, neighborCount: Uint32Array, neighborIndex: Uint32Array, rDiagonal: Float64Array, rOffDiagonal: Float64Array, mu: Float64Array, equilibrium: Float64Array, siteCount: number, gridCount: number, classCount: number, stateCount: number, maxNeighbors: number, slotCount: number, rootSlot: number, cacheCount: number, cacheEntryCount: number, poissonTerms: number, maxLambdaPerStep: number): Float64Array;
+  /**
+   * assembly/index/runGibbs
+   * @param siteMajorConditionals `~lib/typedarray/Float64Array`
+   * @param categories `~lib/typedarray/Float64Array`
+   * @param gridCount `i32`
+   * @param siteCount `i32`
+   * @param parameterCount `i32`
+   * @param iterations `i32`
+   * @param burnin `i32`
+   * @param concentration `f64`
+   * @param seed `u32`
+   * @param likelihoodCutoff `f64`
+   * @param trackAllocations `bool`
+   * @returns `~lib/typedarray/Float64Array`
+   */
+  export function runGibbs(siteMajorConditionals: Float64Array, categories: Float64Array, gridCount: number, siteCount: number, parameterCount: number, iterations: number, burnin: number, concentration: number, seed: number, likelihoodCutoff: number, trackAllocations: boolean): Float64Array;
+  /**
+   * assembly/index/runGibbsRejection
+   * @param categoryMajorConditionals `~lib/typedarray/Float64Array`
+   * @param categories `~lib/typedarray/Float64Array`
+   * @param gridCount `i32`
+   * @param siteCount `i32`
+   * @param parameterCount `i32`
+   * @param iterations `i32`
+   * @param burnin `i32`
+   * @param concentration `f64`
+   * @param seed `u32`
+   * @param likelihoodCutoff `f64`
+   * @param trackAllocations `bool`
+   * @returns `~lib/typedarray/Float64Array`
+   */
+  export function runGibbsRejection(categoryMajorConditionals: Float64Array, categories: Float64Array, gridCount: number, siteCount: number, parameterCount: number, iterations: number, burnin: number, concentration: number, seed: number, likelihoodCutoff: number, trackAllocations: boolean): Float64Array;
+  /**
+   * assembly/index/runGibbsSparse
+   * @param conditionalValues `~lib/typedarray/Float64Array`
+   * @param siteOffsets `~lib/typedarray/Uint32Array`
+   * @param categoryIndices `~lib/typedarray/Uint32Array`
+   * @param categories `~lib/typedarray/Float64Array`
+   * @param gridCount `i32`
+   * @param siteCount `i32`
+   * @param parameterCount `i32`
+   * @param iterations `i32`
+   * @param burnin `i32`
+   * @param concentration `f64`
+   * @param seed `u32`
+   * @param trackAllocations `bool`
+   * @returns `~lib/typedarray/Float64Array`
+   */
+  export function runGibbsSparse(conditionalValues: Float64Array, siteOffsets: Uint32Array, categoryIndices: Uint32Array, categories: Float64Array, gridCount: number, siteCount: number, parameterCount: number, iterations: number, burnin: number, concentration: number, seed: number, trackAllocations: boolean): Float64Array;
+  /**
+   * assembly/index/runCollapsedGibbs
+   * @param siteMajorConditionals `~lib/typedarray/Float64Array`
+   * @param categories `~lib/typedarray/Float64Array`
+   * @param gridCount `i32`
+   * @param siteCount `i32`
+   * @param parameterCount `i32`
+   * @param iterations `i32`
+   * @param burnin `i32`
+   * @param concentration `f64`
+   * @param seed `u32`
+   * @param trackAllocations `bool`
+   * @returns `~lib/typedarray/Float64Array`
+   */
+  export function runCollapsedGibbs(siteMajorConditionals: Float64Array, categories: Float64Array, gridCount: number, siteCount: number, parameterCount: number, iterations: number, burnin: number, concentration: number, seed: number, trackAllocations: boolean): Float64Array;
+  /**
+   * assembly/index/getLastAllocations
+   * @returns `~lib/typedarray/Uint32Array`
+   */
+  export function getLastAllocations(): Uint32Array;
+}
+/** Instantiates the compiled WebAssembly module with the given imports. */
+export declare function instantiate(module: WebAssembly.Module, imports: {
+  env: unknown,
+}): Promise<typeof __AdaptedExports>;

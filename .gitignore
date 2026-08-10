@@ -1,0 +1,7 @@
+node_modules/
+dist/
+coverage/
+*.log
+.DS_Store
+apps/web/dist/
+models/diffubar/src/wasm/*.wat
