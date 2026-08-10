@@ -1,4 +1,4 @@
-# PhyloWorkbench
+# EvoOnline
 
 An extensible phylogenetic analysis workbench with a static browser application, a shared artifact/model SDK, an optional job API, and independently packaged model runners. DifFUBAR is the first registered model.
 
