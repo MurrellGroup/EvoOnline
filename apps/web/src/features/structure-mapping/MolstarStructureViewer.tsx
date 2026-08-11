@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loadMolstar, type MolstarRuntime, type MolstarViewer } from "./molstar-loader.js";
-import type { StructureChain, StructureChainView, StructureColorMode, StructureFormat, StructureResidue, StructureSiteDatum } from "./types.js";
+import type { StructureChain, StructureChainView, StructureColorMode, StructureFormat, StructureRepresentations, StructureResidue, StructureSiteDatum } from "./types.js";
 
 interface MolstarStructureViewerProps {
   readonly sourceText: string;
@@ -8,9 +8,6 @@ interface MolstarStructureViewerProps {
   readonly chainViews: readonly StructureChainView[];
   readonly sites: readonly StructureSiteDatum[];
   readonly colorMode: StructureColorMode;
-  readonly showCartoon: boolean;
-  readonly showAtoms: boolean;
-  readonly showSurface: boolean;
 }
 
 function residueSelector(residue: StructureResidue): Readonly<Record<string, string | number>> {
@@ -32,6 +29,10 @@ function chainSelector(chain: StructureChain): Readonly<Record<string, string>> 
 function chainSelectors(chainViews: readonly StructureChainView[]): Readonly<Record<string, string>> | readonly Readonly<Record<string, string>>[] {
   const selectors = chainViews.map((view) => chainSelector(view.chain));
   return selectors.length === 1 ? selectors[0]! : selectors;
+}
+
+export function viewsForRepresentation(chainViews: readonly StructureChainView[], representation: keyof StructureRepresentations): readonly StructureChainView[] {
+  return chainViews.filter((view) => view.representations[representation]);
 }
 
 function residueKeys(residue: StructureResidue): readonly string[] {
@@ -69,9 +70,6 @@ export function MolstarStructureViewer({
   chainViews,
   sites,
   colorMode,
-  showCartoon,
-  showAtoms,
-  showSurface,
 }: MolstarStructureViewerProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const viewerRef = useRef<MolstarViewer | undefined>(undefined);
@@ -215,23 +213,21 @@ export function MolstarStructureViewer({
           .download({ url: sourceUrl })
           .parse({ format: format === "mmcif" ? "mmcif" : "pdb" })
           .modelStructure({});
-        const visibleSelector = chainSelectors(chainViews);
-        if (showCartoon) {
-          const representation = structure.component({ selector: visibleSelector }).representation({ type: "cartoon" });
-          addColorLayers(representation, chainViews, sites, colorMode);
+        const cartoonViews = viewsForRepresentation(chainViews, "cartoon");
+        const atomViews = viewsForRepresentation(chainViews, "atoms");
+        const surfaceViews = viewsForRepresentation(chainViews, "surface");
+        if (cartoonViews.length > 0) {
+          const representation = structure.component({ selector: chainSelectors(cartoonViews) }).representation({ type: "cartoon" });
+          addColorLayers(representation, cartoonViews, sites, colorMode);
         }
-        if (showAtoms) {
-          const representation = structure.component({ selector: visibleSelector }).representation({ type: "ball_and_stick", ignore_hydrogens: true, size_factor: 0.55 });
-          addColorLayers(representation, chainViews, sites, colorMode);
+        if (atomViews.length > 0) {
+          const representation = structure.component({ selector: chainSelectors(atomViews) }).representation({ type: "ball_and_stick", ignore_hydrogens: true, size_factor: 0.55 });
+          addColorLayers(representation, atomViews, sites, colorMode);
         }
-        if (showSurface) {
-          const representation = structure.component({ selector: visibleSelector }).representation({ type: "surface", surface_type: "molecular", ignore_hydrogens: true, size_factor: 1 });
-          addColorLayers(representation, chainViews, sites, colorMode);
+        if (surfaceViews.length > 0) {
+          const representation = structure.component({ selector: chainSelectors(surfaceViews) }).representation({ type: "surface", surface_type: "molecular", ignore_hydrogens: true, size_factor: 1 });
+          addColorLayers(representation, surfaceViews, sites, colorMode);
           representation.opacity({ opacity: 0.68 });
-        }
-        if (!showCartoon && !showAtoms && !showSurface) {
-          const representation = structure.component({ selector: visibleSelector }).representation({ type: "backbone", size_factor: 0.2 });
-          addColorLayers(representation, chainViews, sites, colorMode);
         }
         const keepCamera = lastSourceRef.current === sourceUrl;
         await viewer.loadMvsData(builder.getState(), "mvsj", { keepCamera, sanityChecks: false });
@@ -240,7 +236,7 @@ export function MolstarStructureViewer({
       }).catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)));
     }, 90);
     return () => window.clearTimeout(timer);
-  }, [chainViews, colorMode, format, ready, showAtoms, showCartoon, showSurface, sites, sourceUrl]);
+  }, [chainViews, colorMode, format, ready, sites, sourceUrl]);
 
   return (
     <div className="structure-viewer-shell">

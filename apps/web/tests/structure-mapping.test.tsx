@@ -3,7 +3,9 @@ import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { filterFubarSites, FubarResultsView } from "../src/components/FubarResultsView.js";
-import { ProfileChainAlignmentPanel, rawLogoLetters } from "../src/features/structure-mapping/ProfileChainAlignment.js";
+import { AMINO_ACID_GLYPHS } from "../src/features/structure-mapping/amino-acid-glyphs.js";
+import { layoutLogoSegments, ProfileChainAlignmentPanel, profileLetterColor, rawLogoLetters } from "../src/features/structure-mapping/ProfileChainAlignment.js";
+import { viewsForRepresentation } from "../src/features/structure-mapping/MolstarStructureViewer.js";
 import { updateChainMode } from "../src/features/structure-mapping/StructureMappingPanel.js";
 import { alignProfileToChain } from "../src/features/structure-mapping/profile-align.js";
 import { buildAminoAcidProfile } from "../src/features/structure-mapping/sequence-profile.js";
@@ -53,6 +55,19 @@ test("raw profile-logo mass retains gaps in its denominator", () => {
   assert.equal(letters.reduce((sum, letter) => sum + letter.mass, 0), 0.5);
 });
 
+test("stacked logo glyphs exactly share the same vertical envelope as one pure glyph", () => {
+  assert.equal(Object.keys(AMINO_ACID_GLYPHS).join(""), "ARNDCQEGHILKMFPSTWYV");
+  const pure = layoutLogoSegments([{ aminoAcid: "A", mass: 1 }], 1, 48);
+  const mixed = layoutLogoSegments([{ aminoAcid: "A", mass: 0.5 }, { aminoAcid: "R", mass: 0.3 }, { aminoAcid: "G", mass: 0.2 }], 1, 48);
+  assert.deepEqual(pure, [{ aminoAcid: "A", mass: 1, y: 1, height: 48 }]);
+  assert.equal(mixed.reduce((sum, segment) => sum + segment.height, 0), 48);
+  assert.equal(Math.min(...mixed.map((segment) => segment.y)), 1);
+  assert.equal(Math.max(...mixed.map((segment) => segment.y + segment.height)), 49);
+  for (let index = 1; index < mixed.length; index += 1) assert.equal(mixed[index]!.y + mixed[index]!.height, mixed[index - 1]!.y);
+  assert.equal(profileLetterColor("A", "A", true), "#dce2df");
+  assert.notEqual(profileLetterColor("R", "A", true), "#dce2df");
+});
+
 test("chain checkboxes implement mapped, context, and hidden modes", () => {
   assert.equal(updateChainMode("hidden", "show", true), "context");
   assert.equal(updateChainMode("context", "map", true), "mapped");
@@ -81,6 +96,7 @@ test("profile alignment panels render every mapped chain with raw occupancy", ()
     chain,
     alignment: alignProfileToChain(profile, chain),
     mode: "mapped",
+    representations: { cartoon: chain.label === "A", atoms: false, surface: chain.label === "B" },
   }));
   const colorMode: StructureColorMode = {
     id: "detected",
@@ -93,8 +109,16 @@ test("profile alignment panels render every mapped chain with raw occupancy", ()
   const markup = renderToStaticMarkup(<ProfileChainAlignmentPanel profile={profile} chainViews={views} sites={[{ site: 2, detected: true, direction: "positive", values: {} }]} colorMode={colorMode} />);
   assert.match(markup, /Chain A/);
   assert.match(markup, /Chain B/);
-  assert.match(markup, /Raw frequency · no entropy scaling/);
+  assert.match(markup, /raw frequency · no entropy scaling/);
   assert.match(markup, /data-occupancy="1\.000000"/);
+  assert.match(markup, /Scrollable full profile alignment/);
+  assert.match(markup, /Horizontal scale/);
+  assert.match(markup, /Highlight differences/);
+  assert.equal(/Previous|Next|60 columns/.test(markup), false);
+  assert.equal((markup.match(/profile-chain-alignment__chain-letter/g) ?? []).length, 6);
+  assert.match(markup, /<path d="M/);
+  assert.deepEqual(viewsForRepresentation(views, "cartoon").map((view) => view.chain.label), ["A"]);
+  assert.deepEqual(viewsForRepresentation(views, "surface").map((view) => view.chain.label), ["B"]);
 });
 
 test("PDB and mmCIF parsers retain coordinate residue identifiers", () => {

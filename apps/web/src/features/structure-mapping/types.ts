@@ -49,10 +49,17 @@ export interface ProfileAlignment {
 
 export type StructureChainMode = "mapped" | "context" | "hidden";
 
+export interface StructureRepresentations {
+  readonly cartoon: boolean;
+  readonly atoms: boolean;
+  readonly surface: boolean;
+}
+
 export interface StructureChainView {
   readonly chain: StructureChain;
   readonly alignment: ProfileAlignment;
   readonly mode: Exclude<StructureChainMode, "hidden">;
+  readonly representations: StructureRepresentations;
 }
 
 export type SelectionDirection = "positive" | "purifying" | "g1" | "g2" | "none";

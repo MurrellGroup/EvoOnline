@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
+import { AMINO_ACID_GLYPHS } from "./amino-acid-glyphs.js";
 import { AMINO_ACIDS } from "./sequence-profile.js";
 import type {
   AminoAcidProfile,
@@ -8,13 +9,13 @@ import type {
   StructureSiteDatum,
 } from "./types.js";
 
-const COLUMN_WIDTH = 22;
-const LABEL_WIDTH = 92;
-const LOGO_HEIGHT = 78;
-const LOGO_TOP = 25;
-const CHAIN_TOP = LOGO_TOP + LOGO_HEIGHT + 18;
-const SVG_HEIGHT = 166;
-const WINDOW_SIZES = [40, 60, 100] as const;
+const DEFAULT_COLUMN_WIDTH = 16;
+const PROFILE_HEIGHT = 48;
+const CHAIN_HEIGHT = 28;
+const PROFILE_TOP = 1;
+const CHAIN_TOP = PROFILE_TOP + PROFILE_HEIGHT + 2;
+const NUMBER_TOP = CHAIN_TOP + CHAIN_HEIGHT + 1;
+const ALIGNMENT_HEIGHT = NUMBER_TOP + 12;
 
 const AMINO_COLORS: Readonly<Record<string, string>> = Object.freeze({
   D: "#d64545", E: "#d64545",
@@ -30,6 +31,11 @@ export interface LogoLetter {
   readonly mass: number;
 }
 
+export interface LogoSegment extends LogoLetter {
+  readonly y: number;
+  readonly height: number;
+}
+
 export function rawLogoLetters(column: AminoAcidProfileColumn, sequenceCount: number): readonly LogoLetter[] {
   if (sequenceCount <= 0) return [];
   const observedFraction = column.validCount / sequenceCount;
@@ -41,12 +47,48 @@ export function rawLogoLetters(column: AminoAcidProfileColumn, sequenceCount: nu
     .sort((left, right) => right.mass - left.mass || left.aminoAcid.localeCompare(right.aminoAcid));
 }
 
+/** Returns exact, non-overlapping bottom-up segment boxes whose total height is the observed mass. */
+export function layoutLogoSegments(letters: readonly LogoLetter[], top: number, totalHeight: number): readonly LogoSegment[] {
+  let occupied = 0;
+  return letters.map((letter) => {
+    const height = Math.max(0, letter.mass * totalHeight);
+    occupied += height;
+    return { ...letter, y: top + totalHeight - occupied, height };
+  });
+}
+
+export function profileLetterColor(aminoAcid: string, chainAminoAcid: string | undefined, highlightDifferences: boolean): string {
+  return highlightDifferences && aminoAcid === chainAminoAcid ? "#dce2df" : AMINO_COLORS[aminoAcid] ?? "#667a75";
+}
+
 function percent(value: number): string {
   return `${(value * 100).toFixed(value < 0.1 ? 1 : 0)}%`;
 }
 
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(maximum, Math.max(minimum, value));
+interface LogoGlyphProps {
+  readonly aminoAcid: string;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly color: string;
+  readonly className?: string;
+}
+
+/**
+ * A nested viewport clips every glyph to its mathematically assigned segment.
+ * This avoids SVG font ascender/descender metrics leaking between stacked letters.
+ */
+export function LogoGlyph({ aminoAcid, x, y, width, height, color, className }: LogoGlyphProps) {
+  if (height <= 0) return null;
+  if (height < 1.25) return <rect className={className} x={x} y={y} width={width} height={Math.max(0.35, height)} fill={color} />;
+  const path = AMINO_ACID_GLYPHS[aminoAcid];
+  if (path === undefined) return null;
+  return (
+    <svg className={className} x={x} y={y} width={width} height={height} viewBox="0 0 100 100" preserveAspectRatio="none" overflow="hidden" aria-hidden="true">
+      <path d={path} fill={color} />
+    </svg>
+  );
 }
 
 interface ChainAlignmentProps {
@@ -56,93 +98,80 @@ interface ChainAlignmentProps {
   readonly colorMode: StructureColorMode;
 }
 
-function initialWindowStart(view: StructureChainView, sites: readonly StructureSiteDatum[], windowSize: number): number {
-  const detected = new Set(sites.filter((site) => site.detected).map((site) => site.site - 1));
-  const alignmentColumn = Array.from(view.alignment.profileIndices).findIndex((profileIndex) => detected.has(profileIndex));
-  return Math.max(0, alignmentColumn < 0 ? 0 : alignmentColumn - Math.floor(windowSize / 3));
-}
-
 function ProfileChainAlignment({ profile, view, sites, colorMode }: ChainAlignmentProps) {
-  const [windowSize, setWindowSize] = useState<number>(60);
-  const [windowStart, setWindowStart] = useState(() => initialWindowStart(view, sites, 60));
-  const alignmentLength = view.alignment.profileIndices.length;
-  const maximumStart = Math.max(0, alignmentLength - windowSize);
-  const start = clamp(windowStart, 0, maximumStart);
-  const end = Math.min(alignmentLength, start + windowSize);
+  const [columnWidth, setColumnWidth] = useState(DEFAULT_COLUMN_WIDTH);
+  const [highlightDifferences, setHighlightDifferences] = useState(false);
   const siteByNumber = useMemo(() => new Map(sites.map((site) => [site.site, site])), [sites]);
-  const visibleColumns = useMemo(() => {
-    const columns: Array<{ readonly alignmentIndex: number; readonly profileIndex: number; readonly residueIndex: number }> = [];
-    for (let index = start; index < end; index += 1) {
-      columns.push({
-        alignmentIndex: index,
-        profileIndex: view.alignment.profileIndices[index]!,
-        residueIndex: view.alignment.residueIndices[index]!,
-      });
-    }
-    return columns;
-  }, [end, start, view.alignment.profileIndices, view.alignment.residueIndices]);
-  const width = LABEL_WIDTH + visibleColumns.length * COLUMN_WIDTH + 12;
-
-  const changeWindowSize = (next: number): void => {
-    const center = start + windowSize / 2;
-    setWindowSize(next);
-    setWindowStart(Math.max(0, Math.round(center - next / 2)));
-  };
+  const alignmentColumns = useMemo(() => Array.from(view.alignment.profileIndices, (profileIndex, alignmentIndex) => ({
+    alignmentIndex,
+    profileIndex,
+    residueIndex: view.alignment.residueIndices[alignmentIndex]!,
+  })), [view.alignment.profileIndices, view.alignment.residueIndices]);
+  const width = Math.max(1, alignmentColumns.length * columnWidth + 4);
 
   return (
-    <article className="profile-chain-alignment" aria-labelledby={`profile-chain-${view.chain.id}`}>
-      <div className="profile-chain-alignment__header">
-        <div>
-          <h5 id={`profile-chain-${view.chain.id}`}>Chain {view.chain.label}</h5>
-          <span>{view.chain.residues.length.toLocaleString()} residues · {percent(view.alignment.identity)} identity · {percent(view.alignment.coverage)} profile coverage</span>
-        </div>
-        <div className="profile-chain-alignment__controls">
-          <button type="button" disabled={start === 0} onClick={() => setWindowStart(Math.max(0, start - windowSize))}>Previous</button>
-          <label>Window <select value={windowSize} onChange={(event) => changeWindowSize(Number(event.target.value))}>{WINDOW_SIZES.map((size) => <option key={size} value={size}>{size} columns</option>)}</select></label>
-          <button type="button" disabled={end === alignmentLength} onClick={() => setWindowStart(Math.min(maximumStart, start + windowSize))}>Next</button>
+    <details className="profile-chain-alignment" open>
+      <summary id={`profile-chain-${view.chain.id}`}>
+        <strong>Chain {view.chain.label}</strong>
+        <span>{view.chain.residues.length.toLocaleString()} aa</span>
+        <span>{percent(view.alignment.identity)} identity</span>
+        <span>{percent(view.alignment.coverage)} coverage</span>
+        <span>{view.alignment.mappedResidues.toLocaleString()} mapped</span>
+      </summary>
+      <div className="profile-chain-alignment__controls">
+        <label className="toggle"><input type="checkbox" checked={highlightDifferences} onChange={(event) => setHighlightDifferences(event.target.checked)} /><span>Highlight differences</span></label>
+        <small>Matching profile letters become light gray.</small>
+        <label className="profile-chain-alignment__scale"><span>Horizontal scale</span><input type="range" min={7} max={32} step={1} value={columnWidth} onChange={(event) => setColumnWidth(Number(event.target.value))} aria-label={`Horizontal alignment scale for chain ${view.chain.label}`} /><output>{columnWidth} px</output></label>
+      </div>
+      <div className="profile-chain-alignment__body">
+        <div className="profile-chain-alignment__labels" aria-hidden="true"><span>AA profile</span><span>Chain {view.chain.label}</span><i /></div>
+        <div className="profile-chain-alignment__scroll" tabIndex={0} aria-label={`Scrollable full profile alignment for chain ${view.chain.label}`}>
+          <svg width={width} height={ALIGNMENT_HEIGHT} viewBox={`0 0 ${width} ${ALIGNMENT_HEIGHT}`} role="img" aria-labelledby={`profile-chain-${view.chain.id}`}>
+            <line x1={0} x2={width} y1={CHAIN_TOP - 1} y2={CHAIN_TOP - 1} className="profile-chain-alignment__baseline" />
+            {alignmentColumns.map(({ alignmentIndex, profileIndex, residueIndex }) => {
+              const x = alignmentIndex * columnWidth + 2;
+              const glyphWidth = Math.max(2, columnWidth - 2);
+              const column = profileIndex < 0 ? undefined : profile.columns[profileIndex];
+              const residue = residueIndex < 0 ? undefined : view.chain.residues[residueIndex];
+              const letters = column === undefined ? [] : rawLogoLetters(column, profile.sequenceCount);
+              const segments = layoutLogoSegments(letters, PROFILE_TOP, PROFILE_HEIGHT);
+              const occupancy = column === undefined ? 0 : column.validCount / profile.sequenceCount;
+              const site = column === undefined ? undefined : siteByNumber.get(column.site);
+              const selectionColor = site === undefined ? "#eef1ef" : colorMode.color(site);
+              const title = column === undefined
+                ? `Alignment column ${alignmentIndex + 1}: insertion in structure chain`
+                : `Codon ${column.site}: ${percent(occupancy)} unambiguous AA occupancy; ${letters.map((letter) => `${letter.aminoAcid} ${percent(letter.mass)}`).join(", ") || "no resolved amino acids"}`;
+              return (
+                <g key={alignmentIndex} data-profile-site={column?.site ?? "gap"} data-occupancy={occupancy.toFixed(6)}>
+                  <title>{`${title}${residue === undefined ? "; gap in structure chain" : `; chain residue ${residue.compId} ${residue.authSeqId}${residue.insertionCode}`}`}</title>
+                  {column === undefined && <rect x={x} y={PROFILE_TOP} width={glyphWidth} height={PROFILE_HEIGHT} className="profile-chain-alignment__profile-gap" />}
+                  {segments.map((segment) => <LogoGlyph
+                    key={segment.aminoAcid}
+                    aminoAcid={segment.aminoAcid}
+                    x={x}
+                    y={segment.y}
+                    width={glyphWidth}
+                    height={segment.height}
+                    color={profileLetterColor(segment.aminoAcid, residue?.aminoAcid, highlightDifferences)}
+                    className="profile-chain-alignment__profile-letter"
+                  />)}
+                  {residue === undefined
+                    ? <text x={x + glyphWidth / 2} y={CHAIN_TOP + CHAIN_HEIGHT * 0.72} textAnchor="middle" className="profile-chain-alignment__gap-letter">–</text>
+                    : <>
+                      <rect x={x} y={CHAIN_TOP} width={glyphWidth} height={CHAIN_HEIGHT} rx={1.5} fill={selectionColor} fillOpacity={0.2} stroke={site?.detected ? selectionColor : "none"} strokeWidth={site?.detected ? 1 : 0} />
+                      <LogoGlyph aminoAcid={residue.aminoAcid} x={x} y={CHAIN_TOP} width={glyphWidth} height={CHAIN_HEIGHT} color={AMINO_COLORS[residue.aminoAcid] ?? "#667a75"} className="profile-chain-alignment__chain-letter" />
+                    </>}
+                  {(alignmentIndex === 0 || (column !== undefined && column.site % 10 === 0)) && <>
+                    <line x1={x + glyphWidth / 2} x2={x + glyphWidth / 2} y1={NUMBER_TOP} y2={NUMBER_TOP + 2} className="profile-chain-alignment__tick" />
+                    <text x={x + glyphWidth / 2} y={NUMBER_TOP + 9} textAnchor="middle" className="profile-chain-alignment__number">{column?.site ?? ""}</text>
+                  </>}
+                </g>
+              );
+            })}
+          </svg>
         </div>
       </div>
-      {maximumStart > 0 && <label className="profile-chain-alignment__range"><span>Alignment columns {start + 1}–{end} of {alignmentLength}</span><input type="range" min={0} max={maximumStart} value={start} onChange={(event) => setWindowStart(Number(event.target.value))} aria-label={`Visible alignment window for chain ${view.chain.label}`} /></label>}
-      <div className="profile-chain-alignment__scroll">
-        <svg width={width} height={SVG_HEIGHT} viewBox={`0 0 ${width} ${SVG_HEIGHT}`} role="img" aria-label={`Raw amino-acid profile aligned to structure chain ${view.chain.label}`}>
-          <text className="profile-chain-alignment__row-label" x={LABEL_WIDTH - 10} y={LOGO_TOP + LOGO_HEIGHT / 2} textAnchor="end">AA profile</text>
-          <text className="profile-chain-alignment__row-label" x={LABEL_WIDTH - 10} y={CHAIN_TOP + 12} textAnchor="end">Chain {view.chain.label}</text>
-          <line x1={LABEL_WIDTH} x2={width - 8} y1={LOGO_TOP + LOGO_HEIGHT} y2={LOGO_TOP + LOGO_HEIGHT} className="profile-chain-alignment__baseline" />
-          {visibleColumns.map(({ alignmentIndex, profileIndex, residueIndex }, visibleIndex) => {
-            const x = LABEL_WIDTH + visibleIndex * COLUMN_WIDTH;
-            const column = profileIndex < 0 ? undefined : profile.columns[profileIndex];
-            const residue = residueIndex < 0 ? undefined : view.chain.residues[residueIndex];
-            const letters = column === undefined ? [] : rawLogoLetters(column, profile.sequenceCount);
-            const occupancy = column === undefined ? 0 : column.validCount / profile.sequenceCount;
-            const site = column === undefined ? undefined : siteByNumber.get(column.site);
-            const selectionColor = site === undefined ? "#dce3df" : colorMode.color(site);
-            let cumulative = 0;
-            const title = column === undefined
-              ? `Alignment column ${alignmentIndex + 1}: insertion in structure chain`
-              : `Codon ${column.site}: ${percent(occupancy)} unambiguous AA occupancy; ${letters.map((letter) => `${letter.aminoAcid} ${percent(letter.mass)}`).join(", ") || "no resolved amino acids"}`;
-            return (
-              <g key={alignmentIndex} data-profile-site={column?.site ?? "gap"} data-occupancy={occupancy.toFixed(6)}>
-                <title>{`${title}${residue === undefined ? "; gap in structure chain" : `; chain residue ${residue.compId} ${residue.authSeqId}${residue.insertionCode}`}`}</title>
-                {column === undefined && <rect x={x + 2} y={LOGO_TOP} width={COLUMN_WIDTH - 4} height={LOGO_HEIGHT} className="profile-chain-alignment__profile-gap" />}
-                {letters.map((letter) => {
-                  const letterHeight = letter.mass * LOGO_HEIGHT;
-                  const y = LOGO_TOP + LOGO_HEIGHT - cumulative - letterHeight;
-                  cumulative += letterHeight;
-                  if (letterHeight < 1.5) return <rect key={letter.aminoAcid} x={x + 3} y={y} width={COLUMN_WIDTH - 6} height={Math.max(0.5, letterHeight)} fill={AMINO_COLORS[letter.aminoAcid] ?? "#667a75"} />;
-                  return <text key={letter.aminoAcid} x={x + COLUMN_WIDTH / 2} y={y} dy="0.82em" textAnchor="middle" textLength={COLUMN_WIDTH - 4} lengthAdjust="spacingAndGlyphs" fontSize={letterHeight} fontWeight={850} fill={AMINO_COLORS[letter.aminoAcid] ?? "#667a75"}>{letter.aminoAcid}</text>;
-                })}
-                <rect x={x + 2} y={CHAIN_TOP} width={COLUMN_WIDTH - 4} height={21} rx={2} fill={selectionColor} fillOpacity={0.82} stroke={site?.detected ? "#344742" : "none"} strokeWidth={site?.detected ? 0.7 : 0} />
-                <text x={x + COLUMN_WIDTH / 2} y={CHAIN_TOP + 15} textAnchor="middle" className="profile-chain-alignment__residue">{residue?.aminoAcid ?? "–"}</text>
-                {(visibleIndex === 0 || (column !== undefined && column.site % 10 === 0)) && <>
-                  <line x1={x + COLUMN_WIDTH / 2} x2={x + COLUMN_WIDTH / 2} y1={CHAIN_TOP + 22} y2={CHAIN_TOP + 27} className="profile-chain-alignment__tick" />
-                  <text x={x + COLUMN_WIDTH / 2} y={CHAIN_TOP + 38} textAnchor="middle" className="profile-chain-alignment__number">{column?.site ?? ""}</text>
-                </>}
-              </g>
-            );
-          })}
-        </svg>
-      </div>
-    </article>
+    </details>
   );
 }
 
@@ -156,15 +185,10 @@ interface ProfileChainAlignmentPanelProps {
 export function ProfileChainAlignmentPanel({ profile, chainViews, sites, colorMode }: ProfileChainAlignmentPanelProps) {
   if (chainViews.length === 0) return null;
   return (
-    <section className="profile-chain-alignments" aria-labelledby="profile-chain-alignments-heading">
-      <div className="profile-chain-alignments__heading">
-        <div>
-          <h4 id="profile-chain-alignments-heading">Sequence profile aligned to mapped chains</h4>
-          <p>Letter height is raw amino-acid frequency across all input sequences. Stacks sum to observed non-gap occupancy; empty height is missing, ambiguous, or gapped sequence mass.</p>
-        </div>
-        <span>Raw frequency · no entropy scaling</span>
-      </div>
-      {chainViews.map((view) => <ProfileChainAlignment key={view.chain.id} profile={profile} view={view} sites={sites} colorMode={colorMode} />)}
-    </section>
+    <details className="profile-chain-alignments" open>
+      <summary id="profile-chain-alignments-heading"><strong>Sequence profile aligned to mapped chains</strong><span>{chainViews.length} chain{chainViews.length === 1 ? "" : "s"} · raw frequency · no entropy scaling</span></summary>
+      <p>Each complete local alignment uses native horizontal scrolling. Profile stacks sum to observed non-gap occupancy; structure residues are pure, 100%-height glyphs.</p>
+      <div className="profile-chain-alignments__list">{chainViews.map((view) => <ProfileChainAlignment key={view.chain.id} profile={profile} view={view} sites={sites} colorMode={colorMode} />)}</div>
+    </details>
   );
 }
