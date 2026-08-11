@@ -6,7 +6,7 @@ export class BameClient {
   private worker: Worker | undefined;
   private rejectActive: ((error: Error) => void) | undefined;
 
-  constructor(private readonly method: "fame" | "flavor" | "global-gamma") {}
+  constructor(private readonly method: "fame" | "flavor" | "glamma") {}
 
   private createWorker(): Worker {
     return new Worker(new URL("../workers/bame.worker.ts", import.meta.url), { type: "module" });

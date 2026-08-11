@@ -1,13 +1,13 @@
-# FAME, FLAVOR, and the Global-Gamma scan
+# FAME, FLAVOR, and Glamma
 
 Browser-parallel f64 WASM ports of the experimental FAME and FLAVOR models on
 `CodonMolecularEvolution.jl`'s `MixtureModels` branch, pinned to commit
 `4c65c984b2e7ad121f5e28298de69bdc0dd427b7`.
 
-The package also contains EvoOnline's exploratory global-Gamma branch–site
+The package also contains EvoOnline's exploratory Glamma branch–site
 scan. That model is not claimed as part of the pinned Julia branch: it fits a
 single Gamma(ω) over branch–site cells and a mean-one Gamma(α) over sites,
-always reports exact capped-edge evidence, and integrates a sparse branch
+always reports exact full-vs-ω>1→1-null evidence, and integrates a sparse branch
 activation alternative from the same two-sided local likelihood ratios.
 
 - FAME uses an explicit convex mixture of two MG94 transition matrices on every
@@ -29,7 +29,7 @@ activation alternative from the same two-sided local likelihood ratios.
   categories); the exact 3,375/6,720-category development grids remain a
   selectable reproducibility preset.
 
-For Global-Gamma, α is an outer site category shared by the entire tree and ω
+For Glamma, α is an outer site category shared by the entire tree and ω
 is an inner transition mixture drawn independently on each branch. Its tests
 compare that nesting to complete enumeration of latent branch states. The ω
 quadrature is split at one and uses conditional-bin means/weights, preserving
@@ -48,6 +48,11 @@ upstream acceleration.
 
 Run `npm run bench:transitions -w @phylo-workbench/model-bame` to compare the
 two FLAVOR transition engines on the bundled demo.
+
+Run `npm run bench:glamma -w @phylo-workbench/model-bame` for a staged Glamma
+benchmark. The fast global fit evaluates a 64-point logarithmic parameter
+design followed by two local refinements; the thorough preset retains the
+dense 1,100-point coarse scan.
 
 ## Development-source audit
 

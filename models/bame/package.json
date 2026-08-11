@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Browser-parallel FAME/FLAVOR ports and exploratory global-Gamma branch-site scan",
+  "description": "Browser-parallel FAME/FLAVOR ports and the exploratory Glamma branch-site scan",
   "license": "MIT",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -17,7 +17,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "bench:transitions": "node --import tsx scripts/compare-transition-engines.ts",
-    "bench:global-gamma": "node --import tsx scripts/run-global-gamma-demo.ts",
+    "bench:glamma": "node --import tsx scripts/run-global-gamma-demo.ts",
+    "bench:global-gamma": "npm run bench:glamma",
     "test": "node --import tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit"
   },

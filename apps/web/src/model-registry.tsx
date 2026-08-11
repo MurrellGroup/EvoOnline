@@ -118,12 +118,12 @@ export const modelRegistry: readonly BrowserModelRegistration[] = [
     plugin: globalGammaPlugin,
     glyph: "Γω↗",
     runtimeLabel: "Parallel WASM",
-    createExecutor: () => new BameClient("global-gamma"),
+    createExecutor: () => new BameClient("glamma"),
     ResultView: GlobalGammaResult,
     completionMessage: (result) => {
       const output = result as GlobalGammaRunResult;
       const supported = output.branches.filter((branch) => branch.activationLogBayesFactor >= Math.log(10)).length;
-      return `Global-Gamma scan completed with ${output.backend}: ${supported} branches have activation empirical BF ≥ 10.`;
+      return `Glamma completed with ${output.backend}: ${supported} branches have activation empirical BF ≥ 10.`;
     },
   },
 ];

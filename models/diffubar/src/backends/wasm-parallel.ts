@@ -7,6 +7,7 @@ import type {
   GlobalGammaMessageResult,
   LikelihoodRequest,
   LikelihoodResult,
+  ModelBank,
   RuntimeWorkload,
 } from "../types.js";
 import { WasmBackend, compileWasmModule } from "./wasm.js";
@@ -33,6 +34,68 @@ interface WorkerLike {
 function defaultWorkerCount(): number {
   const hardware = typeof navigator === "undefined" ? 4 : navigator.hardwareConcurrency;
   return Math.max(1, Math.min(16, hardware || 4));
+}
+
+/**
+ * Category-parallel interpolation workers only need the atomic rate models
+ * referenced by their own Gamma distributions. Sending the complete model
+ * bank to every worker multiplies both structured-clone traffic and retained
+ * memory by the worker count, which is particularly costly for Glamma's
+ * coarse global parameter scan.
+ */
+function compactModelBank(
+  models: ModelBank,
+  sourceComponents: Uint32Array,
+): { readonly models: ModelBank; readonly componentModels: Uint32Array } {
+  const oldIds: number[] = [];
+  const newIdByOld = new Map<number, number>();
+  const componentModels = new Uint32Array(sourceComponents.length);
+  for (let entry = 0; entry < sourceComponents.length; entry += 1) {
+    const oldId = sourceComponents[entry]!;
+    let newId = newIdByOld.get(oldId);
+    if (newId === undefined) {
+      if (oldId >= models.modelCount) throw new RangeError(`Atomic model id ${oldId} is outside the model bank.`);
+      newId = oldIds.length;
+      oldIds.push(oldId);
+      newIdByOld.set(oldId, newId);
+    }
+    componentModels[entry] = newId;
+  }
+  if (oldIds.length === models.modelCount) return { models, componentModels };
+  const diagonalStride = models.stateCount;
+  const offDiagonalStride = models.stateCount * models.maxNeighbors;
+  const rDiagonal = new Float64Array(oldIds.length * diagonalStride);
+  const rOffDiagonal = new Float64Array(oldIds.length * offDiagonalStride);
+  const mu = new Float64Array(oldIds.length);
+  const modelAlpha = new Float64Array(oldIds.length);
+  const modelOmega = new Float64Array(oldIds.length);
+  for (let newId = 0; newId < oldIds.length; newId += 1) {
+    const oldId = oldIds[newId]!;
+    rDiagonal.set(models.rDiagonal.subarray(oldId * diagonalStride, (oldId + 1) * diagonalStride), newId * diagonalStride);
+    rOffDiagonal.set(
+      models.rOffDiagonal.subarray(oldId * offDiagonalStride, (oldId + 1) * offDiagonalStride),
+      newId * offDiagonalStride,
+    );
+    mu[newId] = models.mu[oldId]!;
+    modelAlpha[newId] = models.modelAlpha[oldId]!;
+    modelOmega[newId] = models.modelOmega[oldId]!;
+  }
+  return {
+    componentModels,
+    models: {
+      stateCount: models.stateCount,
+      maxNeighbors: models.maxNeighbors,
+      modelCount: oldIds.length,
+      neighborCount: models.neighborCount,
+      neighborIndex: models.neighborIndex,
+      rDiagonal,
+      rOffDiagonal,
+      mu,
+      modelAlpha,
+      modelOmega,
+      gridModels: Uint32Array.from(oldIds, (_oldId, newId) => newId),
+    },
+  };
 }
 
 async function createWorker(wasmModule: WebAssembly.Module): Promise<WorkerLike> {
@@ -179,7 +242,7 @@ export class ParallelWasmBackend {
         if (message.id !== id) return;
         cleanup();
         if (message.error !== undefined) reject(new Error(message.error));
-        else if (message.globalGammaValues === undefined) reject(new Error("Parallel WASM worker returned no Global-Gamma messages."));
+        else if (message.globalGammaValues === undefined) reject(new Error("Parallel WASM worker returned no Glamma messages."));
         else resolve(message.globalGammaValues);
       };
       const receiveEvent = (event: MessageEvent<WorkerMessage>): void => receive(event.data);
@@ -371,10 +434,7 @@ export class ParallelWasmBackend {
     ) return this.local.evaluateFlavorInterpolated(request);
     const started = performance.now();
     const pool = await this.workers();
-    const modelBytes = request.models.rDiagonal.byteLength + request.models.rOffDiagonal.byteLength
-      + request.models.mu.byteLength + request.models.neighborCount.byteLength + request.models.neighborIndex.byteLength;
-    const memoryBoundWorkers = Math.max(1, Math.floor((192 * 1024 * 1024) / Math.max(1, modelBytes)));
-    const activeCount = Math.min(pool.length, distributionCount, memoryBoundWorkers);
+    const activeCount = Math.min(pool.length, distributionCount);
     request.onProgress?.(0, {
       message: `Starting ${activeCount.toLocaleString()} FLAVOR interpolation workers · ${distributionCount.toLocaleString()} shared Gamma tables`,
       current: 0,
@@ -389,6 +449,10 @@ export class ParallelWasmBackend {
       const categoryEnd = distributionEnd * alphaCount;
       const componentStart = request.operators.operatorOffsets[categoryStart]!;
       const componentEnd = request.operators.operatorOffsets[categoryEnd]!;
+      const compact = compactModelBank(
+        request.models,
+        request.operators.componentModels.slice(componentStart, componentEnd),
+      );
       const operatorOffsets = new Uint32Array(categoryEnd - categoryStart + 1);
       for (let operator = categoryStart; operator <= categoryEnd; operator += 1) {
         operatorOffsets[operator - categoryStart] = request.operators.operatorOffsets[operator]! - componentStart;
@@ -403,11 +467,11 @@ export class ParallelWasmBackend {
         tipStates: request.tipStates,
         siteCount: request.siteCount,
         grid,
-        models: request.models,
+        models: compact.models,
         operators: {
           operatorCount: categoryEnd - categoryStart,
           operatorOffsets,
-          componentModels: request.operators.componentModels.slice(componentStart, componentEnd),
+          componentModels: compact.componentModels,
           componentWeights: request.operators.componentWeights.slice(componentStart, componentEnd),
           operatorScales: request.operators.operatorScales.slice(categoryStart, categoryEnd),
           operatorsPerCategory: 1,
@@ -500,7 +564,7 @@ export class ParallelWasmBackend {
     const pool = await this.workers();
     const activeCount = Math.min(pool.length, Math.max(1, Math.ceil(request.siteCount / 32)));
     request.onProgress?.(0, {
-      message: `Starting ${activeCount.toLocaleString()} site-parallel Global-Gamma message workers`,
+      message: `Starting ${activeCount.toLocaleString()} site-parallel Glamma message workers`,
       current: 0,
       total: request.siteCount,
       indeterminate: true,

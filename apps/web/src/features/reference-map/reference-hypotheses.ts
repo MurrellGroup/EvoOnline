@@ -18,7 +18,7 @@ export const BAME_REFERENCE_HYPOTHESES: readonly ReferenceHypothesis[] = Object.
 ]);
 
 export const GLOBAL_GAMMA_REFERENCE_HYPOTHESES: readonly ReferenceHypothesis[] = Object.freeze([
-  { id: "capped-site-support", label: "Equal-prior support for uncapped site model", shortLabel: "Uncapped site", color: "#e64b50" },
+  { id: "capped-site-support", label: "Equal-prior support for full vs all-branches ω>1→1 null", shortLabel: "Full vs site null", color: "#e64b50" },
   { id: "maximum-branch-tail", label: "Maximum branch P(omega > 1) at site", shortLabel: "Max branch tail", color: "#d88916" },
 ]);
 

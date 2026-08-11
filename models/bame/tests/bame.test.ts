@@ -82,7 +82,7 @@ test("site-wise alpha Gamma categories retain an exact mean of one", () => {
   }
 });
 
-test("Global-Gamma messages integrate omega on branches inside each site-level alpha category", async () => {
+test("Glamma messages integrate omega on branches inside each site-level alpha category", async () => {
   const alignment = parseFasta(">a\nATGAAA\n>b\nATGAAG\n");
   const tree = parseNewick("(a:0.1,b:0.2);");
   const f3x4 = countF3x4(alignment);
@@ -275,8 +275,10 @@ test("FLAVOR Julia-grid interpolation is exact at table nodes and partitions who
   const f3x4 = countF3x4(alignment);
   const equilibrium = codonEquilibriumFromF3x4(f3x4);
   const atomicGrid: DifFUBARGrid = {
-    alpha: Float64Array.of(1), omega: Float64Array.of(0.2, 2.5), backgroundOmega: new Float64Array(0),
-    categories: Float64Array.of(1, 0.2, 1, 2.5), categoryCount: 2, parameterCount: 2, hasBackground: false,
+    // The third model is deliberately unused by the operators. Parallel
+    // interpolation must compact it away without changing model ids/results.
+    alpha: Float64Array.of(1), omega: Float64Array.of(0.2, 2.5, 7), backgroundOmega: new Float64Array(0),
+    categories: Float64Array.of(1, 0.2, 1, 2.5, 1, 7), categoryCount: 3, parameterCount: 2, hasBackground: false,
   };
   const models = buildModelBank(atomicGrid, tree, Float64Array.of(1, 1, 1, 1, 1, 1), f3x4);
   const first = models.gridModels[0]!;

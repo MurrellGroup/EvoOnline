@@ -220,11 +220,11 @@ export const flavorManifest: ModelManifest = {
 };
 
 export const globalGammaManifest: ModelManifest = {
-  id: "global-gamma",
+  id: "glamma",
   version: "0.1.0-exploratory",
-  title: "Global Gamma branch–site scan",
-  shortTitle: "Global Gamma",
-  description: "Exploratory global Gamma random-effects model with exact capped site/branch contrasts, activation evidence, and branch-by-site positive-tail posteriors.",
+  title: "Glamma",
+  shortTitle: "Glamma",
+  description: "Exploratory global Gamma branch–site random-effects model with exact capped site/branch contrasts, activation evidence, and branch-by-site positive-tail posteriors.",
   category: "selection",
   inputSlots: commonInputs,
   parameters: [
@@ -243,7 +243,7 @@ export const globalGammaManifest: ModelManifest = {
     {
       id: "omegaSlices",
       label: "Gamma omega slices",
-      description: "Mid-quantile categories used for the globally fitted branch–site omega distribution.",
+      description: "Threshold-split conditional-mean categories used for the globally fitted branch–site omega distribution.",
       type: "integer",
       default: 8,
       minimum: 4,
@@ -262,8 +262,8 @@ export const globalGammaManifest: ModelManifest = {
     },
     {
       id: "fitPreset",
-      label: "Global Gamma fit",
-      description: "Fast performs a broad coarse scan plus local refinement; thorough uses a denser starting grid and a second refinement.",
+      label: "Glamma fit",
+      description: "Fast uses 64 logarithmically spaced starting points plus two local refinements; thorough uses a dense 1,100-point starting grid.",
       type: "select",
       default: "fast",
       options: [
@@ -318,7 +318,7 @@ export const globalGammaManifest: ModelManifest = {
   ],
   runtimes: ["browser-wasm", "server-native"],
   outputKinds: ["site-posterior-table", "branch-test-table", "annotated-tree", "detected-site-set", "csv"],
-  citation: "Exploratory EvoOnline global-Gamma branch–site random-effects model",
+  citation: "Exploratory EvoOnline Glamma branch–site random-effects model",
 };
 
 export function validateBameWorkspace(workspace: PhyloWorkspaceSnapshot): ModelValidation {

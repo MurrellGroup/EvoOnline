@@ -243,7 +243,7 @@ export interface GlobalGammaAnalysisOptions {
 }
 
 export interface GlobalGammaAnalysisResult {
-  readonly method: "global-gamma";
+  readonly method: "glamma";
   readonly sites: readonly GlobalGammaSiteResult[];
   readonly branches: readonly GlobalGammaBranchResult[];
   readonly fittedModel: FittedModel;

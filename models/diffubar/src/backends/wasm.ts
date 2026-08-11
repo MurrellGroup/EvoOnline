@@ -567,11 +567,11 @@ export class WasmBackend {
       || request.alphaWeights.length !== alphaCount
       || request.neutralModel < 0
       || request.neutralModel >= request.models.modelCount
-    ) throw new RangeError("Global-Gamma message-kernel array dimensions are inconsistent.");
+    ) throw new RangeError("Glamma message-kernel array dimensions are inconsistent.");
     const omegaTotal = request.omegaWeights.reduce((sum, value) => sum + value, 0);
     const alphaTotal = request.alphaWeights.reduce((sum, value) => sum + value, 0);
     if (Math.abs(omegaTotal - 1) > 1e-10 || Math.abs(alphaTotal - 1) > 1e-10) {
-      throw new RangeError("Global-Gamma quadrature weights must each sum to one.");
+      throw new RangeError("Glamma quadrature weights must each sum to one.");
     }
     request.onProgress?.(0, {
       message: `${alphaCount} alpha rates × ${omegaCount} omega rates · ${edgeCount.toLocaleString()} exact local blankets`,
@@ -624,7 +624,7 @@ export class WasmBackend {
       const values = wasm.__getFloat64Array(resultPointer).slice();
       wasm.__unpin(resultPointer);
       const matrixSize = edgeCount * request.siteCount;
-      if (values.length !== request.siteCount + matrixSize * 2) throw new Error("Global-Gamma WASM kernel returned an invalid result length.");
+      if (values.length !== request.siteCount + matrixSize * 2) throw new Error("Glamma WASM kernel returned an invalid result length.");
       request.signal?.throwIfAborted();
       request.onProgress?.(1, {
         message: "Alternative, capped-edge, and positive-tail messages evaluated",

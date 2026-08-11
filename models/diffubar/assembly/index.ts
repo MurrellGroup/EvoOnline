@@ -896,7 +896,7 @@ function propagateForwardGlobalGamma(
 }
 
 /**
- * Global Gamma branch/site scan. Alpha is integrated as a site-level outer
+ * Glamma branch/site scan. Alpha is integrated as a site-level outer
  * mixture. Omega is independently integrated on each branch. A single upward
  * and downward pass per alpha rate yields every exact one-edge cap and every
  * positive-tail responsibility without branch-wise re-pruning.

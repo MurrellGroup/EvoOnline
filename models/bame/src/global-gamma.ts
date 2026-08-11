@@ -152,13 +152,13 @@ function stage(options: GlobalGammaAnalysisOptions, name: string, fraction: numb
 function coarseCandidates(preset: GlobalGammaFitPreset): readonly GammaCandidate[] {
   const omegaMeans = preset === "thorough"
     ? [0.08, 0.13, 0.21, 0.34, 0.55, 0.8, 1.1, 1.55, 2.3, 3.6, 6]
-    : [0.12, 0.25, 0.45, 0.7, 1, 1.6, 2.8, 5];
+    : [0.06, 0.25, 1, 4.5];
   const omegaShapes = preset === "thorough"
     ? [0.12, 0.2, 0.32, 0.5, 0.8, 1.25, 2, 3.2, 5, 8]
-    : [0.2, 0.4, 0.8, 1.6, 3.2, 6.4];
+    : [0.08, 0.32, 1.3, 5.2];
   const alphaShapes = preset === "thorough"
     ? [0.16, 0.25, 0.4, 0.63, 1, 1.6, 2.5, 4, 6.3, 10]
-    : [0.25, 0.5, 1, 2, 4, 8];
+    : [0.12, 0.5, 2, 8];
   const candidates: GammaCandidate[] = [];
   for (const omegaMean of omegaMeans) for (const omegaShape of omegaShapes) for (const alphaShape of alphaShapes) {
     candidates.push({ omegaMean, omegaShape, alphaShape });
@@ -484,7 +484,7 @@ function csvValue(value: number | null): string | number {
 
 export function globalGammaSitesToCsv(result: GlobalGammaAnalysisResult): string {
   const header = [
-    "Codon site", "All-branches capped log evidence", "All-branches capped evidence ratio", "Equal-prior conditional support",
+    "Codon site", "Full vs all-branches omega>1-to-1 null log evidence", "Full/null evidence ratio", "Equal-prior conditional support",
     "Expected positive branches", "Maximum branch posterior",
   ];
   const rows = result.sites.map((site) => [
@@ -496,7 +496,7 @@ export function globalGammaSitesToCsv(result: GlobalGammaAnalysisResult): string
 
 export function globalGammaBranchesToCsv(result: GlobalGammaAnalysisResult): string {
   const header = [
-    "Branch", "Name", "Parent", "Terminal", "Branch length", "Capped-edge log evidence", "Capped-edge evidence ratio",
+    "Branch", "Name", "Parent", "Terminal", "Branch length", "Full vs branch omega>1-to-1 null log evidence", "Full/null evidence ratio",
     "Activation log empirical BF", "Activation empirical BF", "Posterior mean activation", "Expected positive sites",
     "P(any positive site)", "Any-site log empirical BF", "Maximum site posterior",
   ];
@@ -520,7 +520,7 @@ export async function analyzeGlobalGamma(
   const tree = typeof newick === "string" ? parseNewick(newick) : cloneSingleClassTree(newick);
   options.signal?.throwIfAborted();
   const compiledMessages = compileMessageTree(tree);
-  if (compiledMessages.edgeNodes.length === 0) throw new DifFUBARError("NO_BRANCHES", "The Global-Gamma scan requires at least one phylogenetic branch.");
+  if (compiledMessages.edgeNodes.length === 0) throw new DifFUBARError("NO_BRANCHES", "Glamma requires at least one phylogenetic branch.");
 
   const omegaSliceCount = Math.max(4, Math.min(24, Math.round(options.omegaSlices ?? 8)));
   const alphaSliceCount = Math.max(3, Math.min(12, Math.round(options.alphaSlices ?? 4)));
@@ -540,8 +540,8 @@ export async function analyzeGlobalGamma(
   const runtimeStarted = performance.now();
   stage(options, "runtime-initialization", 0, {
     message: backend instanceof ParallelWasmBackend
-      ? `Compiling SIMD WASM and starting up to ${backend.workerCount.toLocaleString()} Gamma/message workers`
-      : "Compiling the f64 Gamma/message WASM runtime",
+      ? `Compiling SIMD WASM and starting up to ${backend.workerCount.toLocaleString()} Glamma workers`
+      : "Compiling the f64 Glamma WASM runtime",
     indeterminate: true,
   });
   await Promise.all([
@@ -549,7 +549,7 @@ export async function analyzeGlobalGamma(
     fitBackend.prepare({ categoryCount: 8, siteCount: alignment.codonSites }),
   ]);
   const runtimeMs = performance.now() - runtimeStarted;
-  stage(options, "runtime-initialization", 1, { message: "Global-Gamma runtime ready" });
+  stage(options, "runtime-initialization", 1, { message: "Glamma runtime ready" });
 
   const globalFitStarted = performance.now();
   let fittedModel: FittedModel;
@@ -573,30 +573,33 @@ export async function analyzeGlobalGamma(
   const tipStates = encodeCodonTips(alignment, tree);
 
   const gammaFitStarted = performance.now();
-  stage(options, "global-gamma-fit", 0, {
-    message: `Coarse global ML scan: ${coarse.length.toLocaleString()} Gamma(omega) × Gamma(alpha) parameter triples`,
+  stage(options, "glamma-fit", 0, {
+    message: `Coarse global ML scan: ${coarse.length.toLocaleString()} candidate (mean ω, shape ω, shape α) triples`,
     current: 0,
     total: coarse.length,
     indeterminate: true,
   });
   let fitted = await evaluateCandidates(
     coarse, omegaSliceCount, alphaSliceCount, tree, fittedModel, tipStates, alignment.codonSites, backend,
-    (fraction, detail) => stage(options, "global-gamma-fit", fraction * 0.72, {
+    (fraction, detail) => stage(options, "glamma-fit", fraction * 0.72, {
       ...detail,
-      message: detail?.message ?? "Evaluating coarse global Gamma likelihoods",
+      message: detail?.message ?? "Evaluating coarse Glamma likelihoods",
     }),
     options.signal,
   );
   let refinementCount = 0;
-  const refinementRounds = fitPreset === "thorough" ? 2 : 1;
+  const refinementRounds = 2;
   for (let round = 0; round < refinementRounds; round += 1) {
-    const candidates = refinementCandidates(fitted.candidate, round === 0 ? 0.42 : 0.18);
+    const radius = fitPreset === "thorough"
+      ? (round === 0 ? 0.42 : 0.18)
+      : (round === 0 ? 0.78 : 0.30);
+    const candidates = refinementCandidates(fitted.candidate, radius);
     refinementCount += candidates.length;
     const base = 0.72 + round * (0.28 / refinementRounds);
     const span = 0.28 / refinementRounds;
     const next = await evaluateCandidates(
       candidates, omegaSliceCount, alphaSliceCount, tree, fittedModel, tipStates, alignment.codonSites, backend,
-      (fraction, detail) => stage(options, "global-gamma-fit", base + fraction * span, {
+      (fraction, detail) => stage(options, "glamma-fit", base + fraction * span, {
         ...detail,
         message: `Refinement ${round + 1}/${refinementRounds} · ${detail?.message ?? "local Gamma likelihoods"}`,
       }),
@@ -606,7 +609,7 @@ export async function analyzeGlobalGamma(
   }
   const fit: GlobalGammaFit = { ...fitted.candidate, logLikelihood: fitted.logLikelihood };
   const gammaFitMs = performance.now() - gammaFitStarted;
-  stage(options, "global-gamma-fit", 1, {
+  stage(options, "glamma-fit", 1, {
     message: `Global ML fit: mean omega ${fit.omegaMean.toPrecision(4)} · omega shape ${fit.omegaShape.toPrecision(4)} · alpha shape ${fit.alphaShape.toPrecision(4)}`,
     current: coarse.length + refinementCount,
     total: coarse.length + refinementCount,
@@ -639,7 +642,7 @@ export async function analyzeGlobalGamma(
     alphaWeights,
     models,
     equilibrium: fittedModel.codonEquilibrium,
-    onProgress: (fraction, detail) => stage(options, "global-gamma-messages", fraction, detail),
+    onProgress: (fraction, detail) => stage(options, "glamma-messages", fraction, detail),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
   });
   const messagesMs = performance.now() - messagesStarted;
@@ -654,14 +657,14 @@ export async function analyzeGlobalGamma(
     models,
     operators: finalOperators(alphaValues, omegaModels, omegaWeights, positiveMask, neutralModel, true),
     equilibrium: fittedModel.codonEquilibrium,
-    onProgress: (fraction, detail) => stage(options, "global-gamma-capped-sites", fraction, detail),
+    onProgress: (fraction, detail) => stage(options, "glamma-capped-sites", fraction, detail),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
   });
   const cappedSiteLogLikelihoods = collapseAlpha(cappedLikelihood.logLikelihoods, alphaSliceCount, alignment.codonSites);
   const cappedMs = performance.now() - cappedStarted;
 
   const tabulationStarted = performance.now();
-  stage(options, "global-gamma-tabulation", 0, { message: "Integrating activation evidence and branch/site posterior responsibilities", indeterminate: true });
+  stage(options, "glamma-tabulation", 0, { message: "Integrating activation evidence and branch/site posterior responsibilities", indeterminate: true });
   const matrixSize = compiledMessages.edgeNodes.length * alignment.codonSites;
   const tailPosterior = new Float32Array(matrixSize);
   const localLogEvidence = new Float32Array(matrixSize);
@@ -742,14 +745,14 @@ export async function analyzeGlobalGamma(
     };
   });
   const tabulationMs = performance.now() - tabulationStarted;
-  stage(options, "global-gamma-tabulation", 1, {
+  stage(options, "glamma-tabulation", 1, {
     message: `${branches.length.toLocaleString()} branches × ${sites.length.toLocaleString()} codons tabulated`,
     current: matrixSize,
     total: matrixSize,
   });
-  stage(options, "complete", 1, { message: `Global-Gamma scan finished with ${messages.backend}` });
+  stage(options, "complete", 1, { message: `Glamma finished with ${messages.backend}` });
   return {
-    method: "global-gamma",
+    method: "glamma",
     sites,
     branches,
     fittedModel,

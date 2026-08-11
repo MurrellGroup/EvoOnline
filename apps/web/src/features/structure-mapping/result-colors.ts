@@ -1,4 +1,4 @@
-import type { BameRunResult, DifFubarRunResult, FubarRunResult } from "../../types.js";
+import type { BameRunResult, DifFubarRunResult, FubarRunResult, GlobalGammaRunResult } from "../../types.js";
 import type { StructureColorMode, StructureSiteDatum } from "./types.js";
 
 const RED = "#e74652";
@@ -33,6 +33,10 @@ function sequential(value: number, maximum: number): string {
 
 function maximumValue(sites: readonly StructureSiteDatum[], key: string): number {
   return Math.max(1, ...sites.map((site) => site.values[key] ?? 0).filter(Number.isFinite));
+}
+
+function maximumAbsoluteValue(sites: readonly StructureSiteDatum[], key: string): number {
+  return Math.max(1e-9, ...sites.map((site) => Math.abs(site.values[key] ?? 0)).filter(Number.isFinite));
 }
 
 export function buildFubarStructureSites(result: FubarRunResult, threshold: number, showPositive: boolean, showPurifying: boolean): readonly StructureSiteDatum[] {
@@ -241,4 +245,101 @@ export function bameStructureColorModes(sites: readonly StructureSiteDatum[]): r
       legend: [{ color: BLUE, label: "≤ −4" }, { color: "#f0f2f1", label: "0" }, { color: RED, label: "≥ +4" }],
     },
   ];
+}
+
+export function buildGlammaStructureSites(
+  result: GlobalGammaRunResult,
+  threshold: number,
+  selectedBranch: number | null,
+): readonly StructureSiteDatum[] {
+  const branchOffset = selectedBranch === null ? -1 : (selectedBranch - 1) * result.posterior.siteCount;
+  return result.sites.map((site, index) => {
+    const selectedBranchTail = branchOffset < 0 ? 0 : result.posterior.tailPosterior[branchOffset + index] ?? 0;
+    const selectedBranchLogEvidence = branchOffset < 0 ? 0 : result.posterior.localLogEvidence[branchOffset + index] ?? 0;
+    const detected = Math.max(site.conditionalSupport, site.maximumBranchPosterior) >= threshold;
+    return {
+      site: site.site,
+      detected,
+      direction: detected ? "positive" : "none",
+      values: {
+        conditionalSupport: site.conditionalSupport,
+        centeredConditionalSupport: (site.conditionalSupport - 0.5) * 2,
+        maximumBranchPosterior: site.maximumBranchPosterior,
+        expectedPositiveBranches: site.expectedPositiveBranches,
+        siteLogEvidence: site.cappedLogEvidence,
+        selectedBranchTail,
+        selectedBranchLogEvidence,
+      },
+    };
+  });
+}
+
+export function glammaStructureColorModes(
+  sites: readonly StructureSiteDatum[],
+  selectedBranchName?: string,
+): readonly StructureColorMode[] {
+  const maximumExpected = maximumValue(sites, "expectedPositiveBranches");
+  const siteEvidenceDomain = maximumAbsoluteValue(sites, "siteLogEvidence");
+  const branchEvidenceDomain = maximumAbsoluteValue(sites, "selectedBranchLogEvidence");
+  const modes: StructureColorMode[] = [
+    {
+      id: "glamma-detection",
+      label: "Detected / not detected",
+      description: "Detected when either full-vs-null site support or the maximum branch-tail posterior reaches the live threshold.",
+      color: (site) => site.detected ? RED : NEUTRAL,
+      valueLabel: (site) => site.detected ? "positive-selection signal" : "not detected",
+      legend: [{ color: RED, label: "detected" }, { color: NEUTRAL, label: "not detected" }],
+    },
+    {
+      id: "glamma-site-support",
+      label: "Full-vs-null site support",
+      description: "Equal-prior transform of the full/all-branches-null evidence ratio; 0.5 is neutral.",
+      color: (site) => diverging(site.values.centeredConditionalSupport ?? 0),
+      valueLabel: (site) => `support = ${(site.values.conditionalSupport ?? 0).toFixed(3)}`,
+      legend: [{ color: BLUE, label: "null" }, { color: "#f0f2f1", label: "0.5" }, { color: RED, label: "full" }],
+    },
+    {
+      id: "glamma-site-evidence",
+      label: "Full/null site log evidence",
+      description: "Natural-log evidence ratio for the full Gamma model versus replacing every branch's omega-above-one categories by one at this site.",
+      color: (site) => diverging(site.values.siteLogEvidence ?? 0, siteEvidenceDomain),
+      valueLabel: (site) => `log ER = ${(site.values.siteLogEvidence ?? 0).toFixed(3)}`,
+      legend: [{ color: BLUE, label: "null" }, { color: "#f0f2f1", label: "ER=1" }, { color: RED, label: "full" }],
+    },
+    {
+      id: "glamma-max-branch-tail",
+      label: "Maximum branch P(ω > 1)",
+      description: "Largest positive-tail posterior among branches at each codon.",
+      color: (site) => interpolateColor("#f1efef", RED, site.values.maximumBranchPosterior ?? 0),
+      valueLabel: (site) => `max branch posterior = ${(site.values.maximumBranchPosterior ?? 0).toFixed(3)}`,
+      legend: [{ color: "#f1efef", label: "0" }, { color: RED, label: "1" }],
+    },
+    {
+      id: "glamma-positive-branch-burden",
+      label: "Expected positive branches",
+      description: "Sum of branch-specific positive-tail posterior probabilities at each codon.",
+      color: (site) => sequential(site.values.expectedPositiveBranches ?? 0, maximumExpected),
+      valueLabel: (site) => `E[positive branches] = ${(site.values.expectedPositiveBranches ?? 0).toFixed(3)}`,
+      legend: [{ color: "#e9f2ef", label: "0" }, { color: "#075b55", label: maximumExpected.toFixed(2) }],
+    },
+  ];
+  if (selectedBranchName !== undefined) modes.push(
+    {
+      id: "glamma-selected-branch-tail",
+      label: `${selectedBranchName}: P(ω > 1)`,
+      description: "Positive-tail posterior for the branch selected in the Glamma tree.",
+      color: (site) => interpolateColor("#f1efef", RED, site.values.selectedBranchTail ?? 0),
+      valueLabel: (site) => `branch posterior = ${(site.values.selectedBranchTail ?? 0).toFixed(3)}`,
+      legend: [{ color: "#f1efef", label: "0" }, { color: RED, label: "1" }],
+    },
+    {
+      id: "glamma-selected-branch-evidence",
+      label: `${selectedBranchName}: local log evidence`,
+      description: "Full-versus-branch-null log evidence at each codon for the selected branch.",
+      color: (site) => diverging(site.values.selectedBranchLogEvidence ?? 0, branchEvidenceDomain),
+      valueLabel: (site) => `local log ER = ${(site.values.selectedBranchLogEvidence ?? 0).toFixed(3)}`,
+      legend: [{ color: BLUE, label: "branch null" }, { color: "#f0f2f1", label: "ER=1" }, { color: RED, label: "full" }],
+    },
+  );
+  return modes;
 }

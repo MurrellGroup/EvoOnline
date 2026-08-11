@@ -151,7 +151,7 @@ export interface FlavorRunResult {
 export type BameRunResult = FameRunResult | FlavorRunResult;
 
 export interface GlobalGammaRunResult {
-  readonly method: "global-gamma";
+  readonly method: "glamma";
   readonly sites: readonly GlobalGammaSiteResult[];
   readonly branches: readonly GlobalGammaBranchResult[];
   readonly fit: GlobalGammaFit;
@@ -185,7 +185,7 @@ export interface GlobalGammaRunResult {
 }
 
 export interface BameWorkerRunRequest extends WorkerRunRequest {
-  readonly method: "fame" | "flavor" | "global-gamma";
+  readonly method: "fame" | "flavor" | "glamma";
 }
 
 export type WorkerResponse =

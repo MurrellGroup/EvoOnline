@@ -59,7 +59,7 @@ test("lists models and completes a small DifFUBAR job", async () => {
   assert.ok(models.body.models.some((model: { id: string }) => model.id === "bsrel"));
   assert.ok(models.body.models.some((model: { id: string }) => model.id === "fame"));
   assert.ok(models.body.models.some((model: { id: string }) => model.id === "flavor"));
-  assert.ok(models.body.models.some((model: { id: string }) => model.id === "global-gamma"));
+  assert.ok(models.body.models.some((model: { id: string }) => model.id === "glamma"));
 
   const alignment = await readFile(new URL("../../../examples/diffubar-demo.fasta", import.meta.url), "utf8");
   const tree = await readFile(new URL("../../../examples/diffubar-demo.nwk", import.meta.url), "utf8");

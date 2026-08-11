@@ -104,7 +104,7 @@ test("BS-REL renders a fitted branch-length phylogram, branch metrics, and SVG e
   assert.match(markup, /cached two-sided local blanket/);
 });
 
-test("Global-Gamma results link exact capped evidence, activation evidence, sites, and tree posteriors", () => {
+test("Glamma results link full/null evidence, activation evidence, sites, and tree posteriors", () => {
   const branches: GlobalGammaRunResult["branches"] = [
     { branch: 1, nodeId: 1, nodeIndex: 1, name: "N", parentName: "Root", terminal: false, branchLength: 0.2, cappedLogEvidence: 3.1, cappedEvidenceRatio: 22.2, activationLogBayesFactor: 2.8, activationBayesFactor: 16.4, activationPosteriorMean: 0.34, expectedPositiveSites: 1.2, anySitePositivePosterior: 0.72, anySitePositiveLogBayesFactor: 1.8, maximumSitePosterior: 0.84 },
     { branch: 2, nodeId: 2, nodeIndex: 2, name: "a", parentName: "N", terminal: true, branchLength: 0.1, cappedLogEvidence: 0.2, cappedEvidenceRatio: 1.22, activationLogBayesFactor: 0.1, activationBayesFactor: 1.1, activationPosteriorMean: 0.11, expectedPositiveSites: 0.3, anySitePositivePosterior: 0.25, anySitePositiveLogBayesFactor: 0.1, maximumSitePosterior: 0.22 },
@@ -112,7 +112,7 @@ test("Global-Gamma results link exact capped evidence, activation evidence, site
     { branch: 4, nodeId: 4, nodeIndex: 4, name: "c", parentName: "Root", terminal: true, branchLength: 0.3, cappedLogEvidence: 1.1, cappedEvidenceRatio: 3, activationLogBayesFactor: 0.7, activationBayesFactor: 2, activationPosteriorMean: 0.17, expectedPositiveSites: 0.6, anySitePositivePosterior: 0.45, anySitePositiveLogBayesFactor: 0.5, maximumSitePosterior: 0.55 },
   ];
   const result: GlobalGammaRunResult = {
-    method: "global-gamma",
+    method: "glamma",
     sites: [
       { site: 1, cappedLogEvidence: 2.1, cappedEvidenceRatio: 8.17, conditionalSupport: 0.891, expectedPositiveBranches: 1.4, maximumBranchPosterior: 0.84 },
       { site: 2, cappedLogEvidence: -0.3, cappedEvidenceRatio: 0.74, conditionalSupport: 0.426, expectedPositiveBranches: 0.3, maximumBranchPosterior: 0.22 },
@@ -135,11 +135,13 @@ test("Global-Gamma results link exact capped evidence, activation evidence, site
     branchCsv: "Branch\n1\n",
   };
   const markup = renderToStaticMarkup(<GlobalGammaResultsView result={result} threshold={0.9} alignment=">a\nATGAAA\n>b\nATGAAG\n>c\nATGAAA\n" />);
-  assert.match(markup, /Global Gamma branch–site scan/);
+  assert.match(markup, /Glamma/);
+  assert.match(markup, /Full data range/);
+  assert.match(markup, /Map selection onto a protein structure/);
   assert.match(markup, /same site-wise α is used on every edge/);
   assert.match(markup, /each edge independently integrates/);
   assert.match(markup, /Activation empirical BF/);
-  assert.match(markup, /Exact capped-edge evidence/);
+  assert.match(markup, /Full vs branch-null evidence/);
   assert.match(markup, /Selected-site tail posterior/);
   assert.match(markup, /Codon alignment evidence track/);
   assert.ok((markup.match(/Export SVG/g) ?? []).length >= 2);

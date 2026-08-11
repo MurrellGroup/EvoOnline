@@ -45,11 +45,11 @@ function layoutTree(tree: ParsedTree, lengths: ReadonlyMap<number, number>) {
 function metricLabel(metric: Metric, site: number): string {
   return {
     activation: "log₁₀ activation empirical BF",
-    capped: "log₁₀ exact capped-edge evidence ratio",
+    capped: "log₁₀ full / branch ω>1→1 null evidence ratio",
     expected: "Expected positive-site count",
     any: "P(any positive site)",
     "site-tail": `P(ω > 1) at codon ${site}`,
-    "site-local": `Local cap log evidence at codon ${site}`,
+    "site-local": `Full / branch-null log evidence at codon ${site}`,
     length: "log₁₀ branch length",
   }[metric];
 }
@@ -89,7 +89,7 @@ export function GlobalGammaTreeFigure({
 }) {
   const titleId = useId();
   const svgRef = useRef<SVGSVGElement>(null);
-  const [title, setTitle] = useState("Global-Gamma branch evidence");
+  const [title, setTitle] = useState("Glamma branch evidence");
   const [metric, setMetric] = useState<Metric>("activation");
   const [showTipLabels, setShowTipLabels] = useState(true);
   const [showInternalLabels, setShowInternalLabels] = useState(false);
@@ -115,11 +115,11 @@ export function GlobalGammaTreeFigure({
     const diverging = metric === "activation" || metric === "capped" || metric === "site-local";
     if (diverging) {
       const absolute = values.map(Math.abs).sort((a, b) => a - b);
-      const robust = absolute[Math.min(absolute.length - 1, Math.floor(absolute.length * 0.95))] ?? 1;
-      return { minimum: -Math.max(1e-9, robust), maximum: Math.max(1e-9, robust), diverging };
+      const bound = absolute.at(-1) ?? 1;
+      return { minimum: -Math.max(1e-9, bound), maximum: Math.max(1e-9, bound), diverging };
     }
     const minimum = metric === "length" ? (values[0] ?? 0) : 0;
-    const maximum = values[Math.min(values.length - 1, Math.floor(values.length * 0.95))] ?? 1;
+    const maximum = values.at(-1) ?? 1;
     return { minimum, maximum: Math.max(minimum + 1e-9, maximum), diverging };
   }, [metric, result, selectedSite]);
 
@@ -149,7 +149,7 @@ export function GlobalGammaTreeFigure({
     <div className="tree-figure-controls bsrel-tree-controls">
       <label><span>Figure title</span><input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
       <label><span>Branch color</span><select value={metric} onChange={(event) => setMetric(event.target.value as Metric)}>
-        <option value="activation">Activation empirical BF</option><option value="capped">Exact capped-edge evidence</option>
+        <option value="activation">Activation empirical BF</option><option value="capped">Full vs branch-null evidence</option>
         <option value="expected">Expected positive sites</option><option value="any">P(any positive site)</option>
         <option value="site-tail">Selected-site tail posterior</option><option value="site-local">Selected-site local evidence</option><option value="length">Branch length</option>
       </select></label>

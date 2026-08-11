@@ -4,5 +4,22 @@ export { transformedGrid, createFameGrid, createFlavorGrid } from "./model/grids
 export { gaussLegendreUnit, buildFameBranchMixtures, buildFlavorBranchMixtures } from "./model/operators.js";
 export { postprocessFame, postprocessFameAllocations, postprocessFlavor, postprocessFlavorAllocations } from "./posterior.js";
 export { analyzeFame, analyzeFlavor, fameResultsToCsv, flavorResultsToCsv } from "./pipeline.js";
-export { analyzeGlobalGamma, globalGammaSitesToCsv, globalGammaBranchesToCsv } from "./global-gamma.js";
-export { fameManifest, flavorManifest, globalGammaManifest, famePlugin, flavorPlugin, globalGammaPlugin, validateBameWorkspace } from "./plugin.js";
+export {
+  analyzeGlobalGamma,
+  analyzeGlobalGamma as analyzeGlamma,
+  globalGammaSitesToCsv,
+  globalGammaSitesToCsv as glammaSitesToCsv,
+  globalGammaBranchesToCsv,
+  globalGammaBranchesToCsv as glammaBranchesToCsv,
+} from "./global-gamma.js";
+export {
+  fameManifest,
+  flavorManifest,
+  globalGammaManifest,
+  globalGammaManifest as glammaManifest,
+  famePlugin,
+  flavorPlugin,
+  globalGammaPlugin,
+  globalGammaPlugin as glammaPlugin,
+  validateBameWorkspace,
+} from "./plugin.js";

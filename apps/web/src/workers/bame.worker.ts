@@ -102,7 +102,7 @@ scope.onmessage = (event: MessageEvent<BameWorkerRunRequest>): void => {
           },
         });
         compact = {
-          method: "global-gamma",
+          method: "glamma",
           sites: result.sites,
           branches: result.branches,
           fit: result.fit,
