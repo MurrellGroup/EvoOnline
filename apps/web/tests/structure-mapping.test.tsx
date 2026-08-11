@@ -5,8 +5,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { filterFubarSites, FubarResultsView } from "../src/components/FubarResultsView.js";
 import { AMINO_ACID_GLYPHS } from "../src/features/structure-mapping/amino-acid-glyphs.js";
 import { layoutLogoSegments, ProfileChainAlignmentPanel, profileLetterColor, rawLogoLetters } from "../src/features/structure-mapping/ProfileChainAlignment.js";
-import { viewsForRepresentation } from "../src/features/structure-mapping/MolstarStructureViewer.js";
-import { updateChainMode } from "../src/features/structure-mapping/StructureMappingPanel.js";
+import { groupSurfaceViews, viewsForRepresentation } from "../src/features/structure-mapping/MolstarStructureViewer.js";
+import { effectiveRepresentations, normalizeSurfaceOpacity, updateChainMode } from "../src/features/structure-mapping/StructureMappingPanel.js";
 import { alignProfileToChain } from "../src/features/structure-mapping/profile-align.js";
 import { buildAminoAcidProfile } from "../src/features/structure-mapping/sequence-profile.js";
 import { parseMmcifChains, parsePdbChains } from "../src/features/structure-mapping/structure-parser.js";
@@ -76,6 +76,15 @@ test("chain checkboxes implement mapped, context, and hidden modes", () => {
   assert.equal(updateChainMode("mapped", "show", false), "hidden");
 });
 
+test("a global surface-opacity override leaves saved per-chain settings intact", () => {
+  const perChain = { cartoon: true, atoms: false, surface: true, surfaceOpacity: 0.35 } as const;
+  assert.equal(effectiveRepresentations(perChain, undefined), perChain);
+  assert.deepEqual(effectiveRepresentations(perChain, 0.8), { ...perChain, surfaceOpacity: 0.8 });
+  assert.equal(normalizeSurfaceOpacity(-0.2), 0);
+  assert.equal(normalizeSurfaceOpacity(1.4), 1);
+  assert.equal(normalizeSurfaceOpacity(0.333), 0.33);
+});
+
 test("profile alignment panels render every mapped chain with raw occupancy", () => {
   const profile = buildAminoAcidProfile(FASTA);
   const makeChain = (id: string, label: string) => ({
@@ -96,7 +105,7 @@ test("profile alignment panels render every mapped chain with raw occupancy", ()
     chain,
     alignment: alignProfileToChain(profile, chain),
     mode: "mapped",
-    representations: { cartoon: chain.label === "A", atoms: false, surface: chain.label === "B" },
+    representations: { cartoon: chain.label === "A", atoms: false, surface: chain.label === "B", surfaceOpacity: chain.label === "A" ? 0.35 : 0.8 },
   }));
   const colorMode: StructureColorMode = {
     id: "detected",
@@ -119,6 +128,10 @@ test("profile alignment panels render every mapped chain with raw occupancy", ()
   assert.match(markup, /<path d="M/);
   assert.deepEqual(viewsForRepresentation(views, "cartoon").map((view) => view.chain.label), ["A"]);
   assert.deepEqual(viewsForRepresentation(views, "surface").map((view) => view.chain.label), ["B"]);
+  const twoSurfaces = views.map((view) => ({ ...view, representations: { ...view.representations, surface: true } }));
+  assert.deepEqual(groupSurfaceViews(twoSurfaces).map((group) => [group.opacity, group.views.map((view) => view.chain.label)]), [[0.35, ["A"]], [0.8, ["B"]]]);
+  const sharedOpacity = twoSurfaces.map((view) => ({ ...view, representations: { ...view.representations, surfaceOpacity: 0.55 } }));
+  assert.deepEqual(groupSurfaceViews(sharedOpacity).map((group) => [group.opacity, group.views.map((view) => view.chain.label)]), [[0.55, ["A", "B"]]]);
 });
 
 test("PDB and mmCIF parsers retain coordinate residue identifiers", () => {

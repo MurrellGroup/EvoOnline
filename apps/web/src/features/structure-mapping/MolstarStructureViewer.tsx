@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { loadMolstar, type MolstarRuntime, type MolstarViewer } from "./molstar-loader.js";
-import type { StructureChain, StructureChainView, StructureColorMode, StructureFormat, StructureRepresentations, StructureResidue, StructureSiteDatum } from "./types.js";
+import type { StructureChain, StructureChainView, StructureColorMode, StructureFormat, StructureRepresentationKind, StructureResidue, StructureSiteDatum } from "./types.js";
 
 interface MolstarStructureViewerProps {
   readonly sourceText: string;
@@ -31,8 +31,26 @@ function chainSelectors(chainViews: readonly StructureChainView[]): Readonly<Rec
   return selectors.length === 1 ? selectors[0]! : selectors;
 }
 
-export function viewsForRepresentation(chainViews: readonly StructureChainView[], representation: keyof StructureRepresentations): readonly StructureChainView[] {
+export function viewsForRepresentation(chainViews: readonly StructureChainView[], representation: StructureRepresentationKind): readonly StructureChainView[] {
   return chainViews.filter((view) => view.representations[representation]);
+}
+
+export interface SurfaceViewGroup {
+  readonly opacity: number;
+  readonly views: readonly StructureChainView[];
+}
+
+export function groupSurfaceViews(chainViews: readonly StructureChainView[]): readonly SurfaceViewGroup[] {
+  const groups = new Map<number, StructureChainView[]>();
+  for (const view of viewsForRepresentation(chainViews, "surface")) {
+    const opacity = Math.round(Math.min(1, Math.max(0, view.representations.surfaceOpacity)) * 100) / 100;
+    const group = groups.get(opacity);
+    if (group === undefined) groups.set(opacity, [view]);
+    else group.push(view);
+  }
+  return [...groups.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([opacity, views]) => ({ opacity, views }));
 }
 
 function residueKeys(residue: StructureResidue): readonly string[] {
@@ -215,7 +233,7 @@ export function MolstarStructureViewer({
           .modelStructure({});
         const cartoonViews = viewsForRepresentation(chainViews, "cartoon");
         const atomViews = viewsForRepresentation(chainViews, "atoms");
-        const surfaceViews = viewsForRepresentation(chainViews, "surface");
+        const surfaceGroups = groupSurfaceViews(chainViews);
         if (cartoonViews.length > 0) {
           const representation = structure.component({ selector: chainSelectors(cartoonViews) }).representation({ type: "cartoon" });
           addColorLayers(representation, cartoonViews, sites, colorMode);
@@ -224,10 +242,10 @@ export function MolstarStructureViewer({
           const representation = structure.component({ selector: chainSelectors(atomViews) }).representation({ type: "ball_and_stick", ignore_hydrogens: true, size_factor: 0.55 });
           addColorLayers(representation, atomViews, sites, colorMode);
         }
-        if (surfaceViews.length > 0) {
-          const representation = structure.component({ selector: chainSelectors(surfaceViews) }).representation({ type: "surface", surface_type: "molecular", ignore_hydrogens: true, size_factor: 1 });
-          addColorLayers(representation, surfaceViews, sites, colorMode);
-          representation.opacity({ opacity: 0.68 });
+        for (const surfaceGroup of surfaceGroups) {
+          const representation = structure.component({ selector: chainSelectors(surfaceGroup.views) }).representation({ type: "surface", surface_type: "molecular", ignore_hydrogens: true, size_factor: 1 });
+          addColorLayers(representation, surfaceGroup.views, sites, colorMode);
+          representation.opacity({ opacity: surfaceGroup.opacity });
         }
         const keepCamera = lastSourceRef.current === sourceUrl;
         await viewer.loadMvsData(builder.getState(), "mvsj", { keepCamera, sanityChecks: false });

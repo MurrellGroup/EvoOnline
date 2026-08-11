@@ -48,11 +48,13 @@ export interface ProfileAlignment {
 }
 
 export type StructureChainMode = "mapped" | "context" | "hidden";
+export type StructureRepresentationKind = "cartoon" | "atoms" | "surface";
 
 export interface StructureRepresentations {
   readonly cartoon: boolean;
   readonly atoms: boolean;
   readonly surface: boolean;
+  readonly surfaceOpacity: number;
 }
 
 export interface StructureChainView {

@@ -11,6 +11,7 @@ import type {
   StructureFormat,
   StructureMappingWorkerRequest,
   StructureMappingWorkerResponse,
+  StructureRepresentationKind,
   StructureRepresentations,
   StructureSiteDatum,
 } from "./types.js";
@@ -28,7 +29,25 @@ interface StructureSource {
 }
 
 const MAX_STRUCTURE_BYTES = 50 * 1024 * 1024;
-const DEFAULT_REPRESENTATIONS: StructureRepresentations = Object.freeze({ cartoon: true, atoms: false, surface: false });
+const DEFAULT_REPRESENTATIONS: StructureRepresentations = Object.freeze({
+  cartoon: true,
+  atoms: false,
+  surface: false,
+  surfaceOpacity: 0.68,
+});
+
+export function normalizeSurfaceOpacity(value: number): number {
+  return Math.round(Math.min(1, Math.max(0, value)) * 100) / 100;
+}
+
+export function effectiveRepresentations(
+  representations: StructureRepresentations,
+  globalSurfaceOpacity: number | undefined,
+): StructureRepresentations {
+  return globalSurfaceOpacity === undefined
+    ? representations
+    : { ...representations, surfaceOpacity: normalizeSurfaceOpacity(globalSurfaceOpacity) };
+}
 
 function requestId(): string {
   return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
@@ -65,6 +84,7 @@ export function StructureMappingPanel({ alignmentText: inputAlignment, sites, co
   const [mapping, setMapping] = useState<Extract<StructureMappingWorkerResponse, { type: "result" }>['result']>();
   const [chainModes, setChainModes] = useState<Readonly<Record<string, StructureChainMode>>>({});
   const [chainRepresentations, setChainRepresentations] = useState<Readonly<Record<string, StructureRepresentations>>>({});
+  const [globalSurfaceOpacity, setGlobalSurfaceOpacity] = useState<number>();
   const [colorModeId, setColorModeId] = useState(colorModes[0]?.id ?? "");
   const [progress, setProgress] = useState<string>();
   const [progressCount, setProgressCount] = useState<string>();
@@ -76,9 +96,13 @@ export function StructureMappingPanel({ alignmentText: inputAlignment, sites, co
     return mapping.alignments.flatMap((alignment) => {
       const chain = mapping.chains.find((candidate) => candidate.id === alignment.chainId);
       const mode = chainModes[alignment.chainId] ?? "hidden";
-      return chain === undefined || mode === "hidden" ? [] : [{ chain, alignment, mode, representations: chainRepresentations[alignment.chainId] ?? DEFAULT_REPRESENTATIONS }];
+      const representations = effectiveRepresentations(
+        chainRepresentations[alignment.chainId] ?? DEFAULT_REPRESENTATIONS,
+        globalSurfaceOpacity,
+      );
+      return chain === undefined || mode === "hidden" ? [] : [{ chain, alignment, mode, representations }];
     });
-  }, [chainModes, chainRepresentations, mapping]);
+  }, [chainModes, chainRepresentations, globalSurfaceOpacity, mapping]);
   const mappedViews = useMemo(() => chainViews.filter((view) => view.mode === "mapped"), [chainViews]);
   const mappedAlignmentText = useMemo(() => mappedViews.map((view) => `CHAIN ${view.chain.label}\n${alignmentText(view.alignment)}`).join("\n"), [mappedViews]);
   const mappedSummary = useMemo(() => {
@@ -120,6 +144,7 @@ export function StructureMappingPanel({ alignmentText: inputAlignment, sites, co
         const bestChainId = message.result.alignments[0]?.chainId;
         setChainModes(bestChainId === undefined ? {} : { [bestChainId]: "mapped" });
         setChainRepresentations({});
+        setGlobalSurfaceOpacity(undefined);
         setProgress(undefined);
         setProgressCount("");
       } else {
@@ -137,6 +162,7 @@ export function StructureMappingPanel({ alignmentText: inputAlignment, sites, co
     setMapping(undefined);
     setChainModes({});
     setChainRepresentations({});
+    setGlobalSurfaceOpacity(undefined);
     setError(undefined);
     setProgress("Preparing structure mapping…");
     setProgressCount("");
@@ -211,10 +237,17 @@ export function StructureMappingPanel({ alignmentText: inputAlignment, sites, co
     }));
   };
 
-  const changeRepresentation = (chainId: string, representation: keyof StructureRepresentations, checked: boolean): void => {
+  const changeRepresentation = (chainId: string, representation: StructureRepresentationKind, checked: boolean): void => {
     setChainRepresentations((current) => {
       const existing = current[chainId] ?? DEFAULT_REPRESENTATIONS;
       return { ...current, [chainId]: { ...existing, [representation]: checked } };
+    });
+  };
+
+  const changeSurfaceOpacity = (chainId: string, opacity: number): void => {
+    setChainRepresentations((current) => {
+      const existing = current[chainId] ?? DEFAULT_REPRESENTATIONS;
+      return { ...current, [chainId]: { ...existing, surfaceOpacity: normalizeSurfaceOpacity(opacity) } };
     });
   };
 
@@ -275,21 +308,54 @@ export function StructureMappingPanel({ alignmentText: inputAlignment, sites, co
 
               <details className="structure-subpanel structure-chain-picker" open>
                 <summary><strong>Structure chains &amp; representations</strong><span>{mapping.chains.length} coordinate-bearing chain{mapping.chains.length === 1 ? "" : "s"}</span></summary>
-                <p><strong>Show</strong> keeps a chain as structural context. <strong>Map results</strong> also aligns and colors it; switching Map on automatically switches Show on.</p>
-                <div className="structure-chain-picker__labels" aria-hidden="true"><span>Chain &amp; alignment quality</span><span>Show</span><span>Map</span><span>Cartoon</span><span>Atoms</span><span>Surface</span><span>Mode</span></div>
+                <div className="structure-chain-picker__intro">
+                  <p><strong>Show</strong> keeps context. <strong>Map</strong> also colors results; enabling Map enables Show.</p>
+                  <div className={`structure-surface-override${globalSurfaceOpacity === undefined ? "" : " is-active"}`}>
+                    <strong>Global surface opacity</strong>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      value={globalSurfaceOpacity ?? DEFAULT_REPRESENTATIONS.surfaceOpacity}
+                      aria-label="Global surface opacity override"
+                      onChange={(event) => setGlobalSurfaceOpacity(normalizeSurfaceOpacity(Number(event.target.value)))}
+                    />
+                    <output>{percent(globalSurfaceOpacity ?? DEFAULT_REPRESENTATIONS.surfaceOpacity)}</output>
+                    <span>{globalSurfaceOpacity === undefined ? "Move to override all" : "Overrides every chain"}</span>
+                    {globalSurfaceOpacity !== undefined && <button type="button" onClick={() => setGlobalSurfaceOpacity(undefined)}>Use per-chain</button>}
+                  </div>
+                </div>
+                <div className="structure-chain-picker__labels" aria-hidden="true"><span>Chain &amp; alignment quality</span><span>Show</span><span>Map</span><span>Cartoon</span><span>Atoms</span><span>Surface / opacity</span><span>Mode</span></div>
                 <div className="structure-chain-picker__list">
                   {mapping.alignments.map((alignment) => {
                     const chain = mapping.chains.find((candidate) => candidate.id === alignment.chainId);
                     if (chain === undefined) return null;
                     const mode = chainModes[alignment.chainId] ?? "hidden";
                     const representations = chainRepresentations[alignment.chainId] ?? DEFAULT_REPRESENTATIONS;
+                    const effectiveOpacity = globalSurfaceOpacity ?? representations.surfaceOpacity;
                     return <div className="structure-chain-row" key={alignment.chainId}>
                       <div><strong>Chain {chain.label}</strong><span>{chain.residues.length.toLocaleString()} aa</span><span>{percent(alignment.identity)} identity</span><span>{percent(alignment.coverage)} coverage</span><span>score {alignment.score.toFixed(1)}</span></div>
                       <label title={`Show chain ${chain.label}`}><input type="checkbox" checked={mode !== "hidden"} onChange={(event) => changeChainMode(alignment.chainId, "show", event.target.checked)} /><span className="visually-hidden">Show chain {chain.label}</span></label>
                       <label title={`Map results to chain ${chain.label}`}><input type="checkbox" checked={mode === "mapped"} onChange={(event) => changeChainMode(alignment.chainId, "map", event.target.checked)} /><span className="visually-hidden">Map results to chain {chain.label}</span></label>
                       <label title={`Show chain ${chain.label} as cartoon`}><input type="checkbox" checked={representations.cartoon} onChange={(event) => changeRepresentation(alignment.chainId, "cartoon", event.target.checked)} /><span className="visually-hidden">Cartoon representation for chain {chain.label}</span></label>
                       <label title={`Show atoms for chain ${chain.label}`}><input type="checkbox" checked={representations.atoms} onChange={(event) => changeRepresentation(alignment.chainId, "atoms", event.target.checked)} /><span className="visually-hidden">Atom representation for chain {chain.label}</span></label>
-                      <label title={`Show surface for chain ${chain.label}`}><input type="checkbox" checked={representations.surface} onChange={(event) => changeRepresentation(alignment.chainId, "surface", event.target.checked)} /><span className="visually-hidden">Surface representation for chain {chain.label}</span></label>
+                      <span className={`structure-chain-surface-control${globalSurfaceOpacity === undefined ? "" : " is-overridden"}`}>
+                        <label title={`Show surface for chain ${chain.label}`}><input type="checkbox" checked={representations.surface} onChange={(event) => changeRepresentation(alignment.chainId, "surface", event.target.checked)} /><span className="visually-hidden">Surface representation for chain {chain.label}</span></label>
+                        <label className="structure-chain-opacity" title={globalSurfaceOpacity === undefined ? `Surface opacity for chain ${chain.label}` : "Disabled while the global surface-opacity override is active"}>
+                          <span className="visually-hidden">Surface opacity for chain {chain.label}</span>
+                          <input
+                            type="range"
+                            min={0}
+                            max={1}
+                            step={0.05}
+                            value={effectiveOpacity}
+                            disabled={globalSurfaceOpacity !== undefined}
+                            onChange={(event) => changeSurfaceOpacity(alignment.chainId, Number(event.target.value))}
+                          />
+                          <output>{percent(effectiveOpacity)}</output>
+                        </label>
+                      </span>
                       <span className={`structure-chain-mode structure-chain-mode--${mode}`}>{mode === "mapped" ? "Mapped" : mode === "context" ? "Context" : "Hidden"}</span>
                     </div>;
                   })}
