@@ -16,6 +16,7 @@
     "@phylo-workbench/model-diffubar": "*",
     "@phylo-workbench/model-fubar": "*",
     "@phylo-workbench/model-bsrel": "*",
+    "@phylo-workbench/model-bame": "*",
     "@phylo-workbench/model-sdk": "*"
   },
   "devDependencies": {

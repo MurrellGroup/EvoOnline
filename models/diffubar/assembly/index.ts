@@ -834,6 +834,401 @@ export function evaluateLikelihood(
 }
 
 /**
+ * Apply one convex mixture of atomic transition operators to a pruning slot.
+ * The source vector is copied once; every component then reuses the existing
+ * sparse-uniformization propagator before its weighted contribution is added.
+ */
+function propagateOperatorBlock(
+  values: Float64Array,
+  slot: i32,
+  blockCount: i32,
+  branchLength: f64,
+  operator: i32,
+  operatorOffsets: Uint32Array,
+  componentModels: Uint32Array,
+  componentWeights: Float64Array,
+  operatorScales: Float64Array,
+  stateCount: i32,
+  maxNeighbors: i32,
+  poissonTerms: i32,
+  maxLambdaPerStep: f64,
+  neighborCount: Uint32Array,
+  neighborIndex: Uint32Array,
+  rDiagonal: Float64Array,
+  rOffDiagonal: Float64Array,
+  mu: Float64Array,
+  source: Float64Array,
+  component: Float64Array,
+  mixed: Float64Array,
+  workA: Float64Array,
+  workB: Float64Array,
+  accumulator: Float64Array,
+): void {
+  const valueOffset = slot * stateCount * SITE_BLOCK;
+  for (let state = 0; state < stateCount; state += 1) {
+    const row = state * SITE_BLOCK;
+    const valueRow = valueOffset + row;
+    for (let site = 0; site < blockCount; site += 1) {
+      source[row + site] = values[valueRow + site];
+      mixed[row + site] = 0.0;
+    }
+  }
+  const start = <i32>operatorOffsets[operator];
+  const end = <i32>operatorOffsets[operator + 1];
+  const scaledLength = branchLength * operatorScales[operator];
+  for (let entry = start; entry < end; entry += 1) {
+    for (let state = 0; state < stateCount; state += 1) {
+      const row = state * SITE_BLOCK;
+      copyF64Range(component, row, source, row, blockCount);
+    }
+    propagateBlock(
+      component, 0, blockCount, scaledLength, <i32>componentModels[entry],
+      stateCount, maxNeighbors, poissonTerms, maxLambdaPerStep,
+      neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu,
+      workA, workB, accumulator,
+    );
+    const weight = componentWeights[entry];
+    for (let state = 0; state < stateCount; state += 1) {
+      const row = state * SITE_BLOCK;
+      for (let site = 0; site < blockCount; site += 1) mixed[row + site] += weight * component[row + site];
+    }
+  }
+  for (let state = 0; state < stateCount; state += 1) {
+    const row = state * SITE_BLOCK;
+    copyF64Range(values, valueOffset + row, mixed, row, blockCount);
+  }
+}
+
+/**
+ * Exact f64 pruning for FAME/FLAVOR branch-wise transition mixtures.  Several
+ * consecutive operators can be collapsed without materializing their much
+ * larger operator-by-site matrix.  collapseMode 0 performs a weighted
+ * log-sum-exp (true likelihood marginal); 1 reproduces the FAME draft's
+ * weighted arithmetic mean of log likelihoods.
+ */
+export function evaluateBranchMixtureLikelihood(
+  ops: Uint32Array,
+  edgeLengths: Float64Array,
+  tipStates: Uint8Array,
+  operatorOffsets: Uint32Array,
+  componentModels: Uint32Array,
+  componentWeights: Float64Array,
+  operatorScales: Float64Array,
+  collapseWeights: Float64Array,
+  neighborCount: Uint32Array,
+  neighborIndex: Uint32Array,
+  rDiagonal: Float64Array,
+  rOffDiagonal: Float64Array,
+  mu: Float64Array,
+  equilibrium: Float64Array,
+  siteCount: i32,
+  gridCount: i32,
+  operatorsPerCategory: i32,
+  collapseMode: i32,
+  stateCount: i32,
+  maxNeighbors: i32,
+  slotCount: i32,
+  rootSlot: i32,
+  poissonTerms: i32,
+  maxLambdaPerStep: f64,
+): Float64Array {
+  const result = new Float64Array(gridCount * siteCount);
+  const values = new Float64Array(slotCount * stateCount * SITE_BLOCK);
+  const scales = new Float64Array(slotCount * SITE_BLOCK);
+  const source = new Float64Array(stateCount * SITE_BLOCK);
+  const component = new Float64Array(stateCount * SITE_BLOCK);
+  const mixed = new Float64Array(stateCount * SITE_BLOCK);
+  const workA = new Float64Array(stateCount * SITE_BLOCK);
+  const workB = new Float64Array(stateCount * SITE_BLOCK);
+  const accumulator = new Float64Array(stateCount * SITE_BLOCK);
+  const siteSums = new Float64Array(SITE_BLOCK);
+  const collapseMaximum = new Float64Array(SITE_BLOCK);
+  const collapseSum = new Float64Array(SITE_BLOCK);
+  const opCount = ops.length >> 2;
+
+  for (let grid = 0; grid < gridCount; grid += 1) {
+    for (let blockStart = 0; blockStart < siteCount; blockStart += SITE_BLOCK) {
+      const blockCount = min<i32>(SITE_BLOCK, siteCount - blockStart);
+      for (let site = 0; site < blockCount; site += 1) {
+        collapseMaximum[site] = -Infinity;
+        collapseSum[site] = 0.0;
+      }
+      for (let member = 0; member < operatorsPerCategory; member += 1) {
+        const operator = grid * operatorsPerCategory + member;
+        for (let operation = 0; operation < opCount; operation += 1) {
+          const operationOffset = operation << 2;
+          const opcode = ops[operationOffset];
+          const a = <i32>ops[operationOffset + 1];
+          const b = <i32>ops[operationOffset + 2];
+          const payload = <i32>ops[operationOffset + 3];
+          if (opcode == LOAD_TIP) {
+            const valueOffset = a * stateCount * SITE_BLOCK;
+            for (let state = 0; state < stateCount; state += 1) {
+              const destinationOffset = valueOffset + state * SITE_BLOCK;
+              for (let site = 0; site < blockCount; site += 1) {
+                const observed = tipStates[payload * siteCount + blockStart + site];
+                let compatible = observed == 255 || state == observed;
+                if (observed != 255 && (observed & 128) != 0) compatible = ((<i32>(observed & 15)) & (1 << state)) != 0;
+                values[destinationOffset + site] = compatible ? 1.0 : 0.0;
+              }
+            }
+            const scaleOffset = a * SITE_BLOCK;
+            for (let site = 0; site < blockCount; site += 1) scales[scaleOffset + site] = 0.0;
+          } else if (opcode == TRANSFORM) {
+            // BAME grids are single-class; b remains part of the compiled ABI
+            // and is intentionally ignored here.
+            propagateOperatorBlock(
+              values, a, blockCount, edgeLengths[payload], operator,
+              operatorOffsets, componentModels, componentWeights, operatorScales,
+              stateCount, maxNeighbors, poissonTerms, maxLambdaPerStep,
+              neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu,
+              source, component, mixed, workA, workB, accumulator,
+            );
+          } else if (opcode == MULTIPLY_NORMALIZE) {
+            multiplyNormalizeBlock(values, scales, a, b, stateCount, blockCount, siteSums);
+          }
+        }
+        const rootOffset = rootSlot * stateCount * SITE_BLOCK;
+        sumRootBlock(values, equilibrium, rootOffset, stateCount, blockCount, siteSums);
+        const rootScaleOffset = rootSlot * SITE_BLOCK;
+        const evidenceWeight = collapseWeights[operator];
+        for (let site = 0; site < blockCount; site += 1) {
+          const rootSum = siteSums[site];
+          const logLikelihood = rootSum > 0.0 ? scales[rootScaleOffset + site] + Math.log(rootSum) : -Infinity;
+          if (collapseMode == 1) {
+            collapseSum[site] += evidenceWeight * logLikelihood;
+          } else if (evidenceWeight > 0.0 && isFinite(logLikelihood)) {
+            const weightedLogLikelihood = logLikelihood + Math.log(evidenceWeight);
+            const previousMaximum = collapseMaximum[site];
+            if (!isFinite(previousMaximum)) {
+              collapseMaximum[site] = weightedLogLikelihood;
+              collapseSum[site] = 1.0;
+            } else if (weightedLogLikelihood > previousMaximum) {
+              collapseSum[site] = collapseSum[site] * Math.exp(previousMaximum - weightedLogLikelihood) + 1.0;
+              collapseMaximum[site] = weightedLogLikelihood;
+            } else collapseSum[site] += Math.exp(weightedLogLikelihood - previousMaximum);
+          }
+        }
+      }
+      for (let site = 0; site < blockCount; site += 1) {
+        result[grid * siteCount + blockStart + site] = collapseMode == 1
+          ? collapseSum[site]
+          : collapseSum[site] > 0.0 ? collapseMaximum[site] + Math.log(collapseSum[site]) : -Infinity;
+      }
+    }
+  }
+  return result;
+}
+
+/** Build the dense transition mixture for one operator on every tree edge. */
+function buildDenseOperatorMatrices(
+  matrices: Float64Array,
+  operator: i32,
+  edgeLengths: Float64Array,
+  operatorOffsets: Uint32Array,
+  componentModels: Uint32Array,
+  componentWeights: Float64Array,
+  operatorScales: Float64Array,
+  stateCount: i32,
+  maxNeighbors: i32,
+  poissonTerms: i32,
+  maxLambdaPerStep: f64,
+  neighborCount: Uint32Array,
+  neighborIndex: Uint32Array,
+  rDiagonal: Float64Array,
+  rOffDiagonal: Float64Array,
+  mu: Float64Array,
+  matrixWork: Float64Array,
+  workA: Float64Array,
+  workB: Float64Array,
+  accumulator: Float64Array,
+): void {
+  matrices.fill(0.0);
+  const start = <i32>operatorOffsets[operator];
+  const end = <i32>operatorOffsets[operator + 1];
+  const matrixSize = stateCount * stateCount;
+  for (let edge = 0; edge < edgeLengths.length; edge += 1) {
+    const matrixOffset = edge * matrixSize;
+    const length = edgeLengths[edge] * operatorScales[operator];
+    for (let entry = start; entry < end; entry += 1) {
+      const weight = componentWeights[entry];
+      const model = <i32>componentModels[entry];
+      for (let columnStart = 0; columnStart < stateCount; columnStart += SITE_BLOCK) {
+        const blockCount = min<i32>(SITE_BLOCK, stateCount - columnStart);
+        for (let state = 0; state < stateCount; state += 1) {
+          const row = state * SITE_BLOCK;
+          for (let lane = 0; lane < blockCount; lane += 1) matrixWork[row + lane] = state == columnStart + lane ? 1.0 : 0.0;
+        }
+        propagateBlock(
+          matrixWork, 0, blockCount, length, model,
+          stateCount, maxNeighbors, poissonTerms, maxLambdaPerStep,
+          neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu,
+          workA, workB, accumulator,
+        );
+        for (let state = 0; state < stateCount; state += 1) {
+          const row = state * SITE_BLOCK;
+          const destination = matrixOffset + state * stateCount + columnStart;
+          for (let lane = 0; lane < blockCount; lane += 1) matrices[destination + lane] += weight * matrixWork[row + lane];
+        }
+      }
+    }
+  }
+}
+
+/** Apply one precomputed dense transition matrix to a state-by-site slot. */
+function propagateDenseBlock(
+  values: Float64Array,
+  slot: i32,
+  blockCount: i32,
+  edge: i32,
+  matrices: Float64Array,
+  source: Float64Array,
+  stateCount: i32,
+): void {
+  const valueOffset = slot * stateCount * SITE_BLOCK;
+  for (let state = 0; state < stateCount; state += 1) {
+    copyF64Range(source, state * SITE_BLOCK, values, valueOffset + state * SITE_BLOCK, blockCount);
+  }
+  const matrixOffset = edge * stateCount * stateCount;
+  for (let target = 0; target < stateCount; target += 1) {
+    const destination = valueOffset + target * SITE_BLOCK;
+    const matrixRow = matrixOffset + target * stateCount;
+    let site = 0;
+    for (; site + 1 < blockCount; site += 2) {
+      let total = f64x2.splat(0.0);
+      for (let from = 0; from < stateCount; from += 1) {
+        total = f64x2.add(total, f64x2.mul(f64x2.splat(matrices[matrixRow + from]), loadF64x2(source, from * SITE_BLOCK + site)));
+      }
+      storeF64x2(values, destination + site, total);
+    }
+    for (; site < blockCount; site += 1) {
+      let total = 0.0;
+      for (let from = 0; from < stateCount; from += 1) total += matrices[matrixRow + from] * source[from * SITE_BLOCK + site];
+      values[destination + site] = total;
+    }
+  }
+}
+
+/**
+ * Site-rich branch-mixture evaluator. It constructs one dense mixed P matrix
+ * per edge/operator, uses it for every site, then discards it. This converts
+ * FLAVOR's K component propagations per branch/site into K propagations of 61
+ * identity columns once plus one dense propagation per branch/site.
+ */
+export function evaluateBranchMixtureLikelihoodDense(
+  ops: Uint32Array,
+  edgeLengths: Float64Array,
+  tipStates: Uint8Array,
+  operatorOffsets: Uint32Array,
+  componentModels: Uint32Array,
+  componentWeights: Float64Array,
+  operatorScales: Float64Array,
+  collapseWeights: Float64Array,
+  neighborCount: Uint32Array,
+  neighborIndex: Uint32Array,
+  rDiagonal: Float64Array,
+  rOffDiagonal: Float64Array,
+  mu: Float64Array,
+  equilibrium: Float64Array,
+  siteCount: i32,
+  gridCount: i32,
+  operatorsPerCategory: i32,
+  collapseMode: i32,
+  stateCount: i32,
+  maxNeighbors: i32,
+  slotCount: i32,
+  rootSlot: i32,
+  poissonTerms: i32,
+  maxLambdaPerStep: f64,
+): Float64Array {
+  const result = new Float64Array(gridCount * siteCount);
+  const values = new Float64Array(slotCount * stateCount * SITE_BLOCK);
+  const scales = new Float64Array(slotCount * SITE_BLOCK);
+  const source = new Float64Array(stateCount * SITE_BLOCK);
+  const matrixWork = new Float64Array(stateCount * SITE_BLOCK);
+  const workA = new Float64Array(stateCount * SITE_BLOCK);
+  const workB = new Float64Array(stateCount * SITE_BLOCK);
+  const accumulator = new Float64Array(stateCount * SITE_BLOCK);
+  const siteSums = new Float64Array(SITE_BLOCK);
+  const matrices = new Float64Array(edgeLengths.length * stateCount * stateCount);
+  const collapseMaximum = new Float64Array(siteCount);
+  const collapseSum = new Float64Array(siteCount);
+  const opCount = ops.length >> 2;
+
+  for (let grid = 0; grid < gridCount; grid += 1) {
+    for (let site = 0; site < siteCount; site += 1) {
+      collapseMaximum[site] = -Infinity;
+      collapseSum[site] = 0.0;
+    }
+    for (let member = 0; member < operatorsPerCategory; member += 1) {
+      const operator = grid * operatorsPerCategory + member;
+      buildDenseOperatorMatrices(
+        matrices, operator, edgeLengths,
+        operatorOffsets, componentModels, componentWeights, operatorScales,
+        stateCount, maxNeighbors, poissonTerms, maxLambdaPerStep,
+        neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu,
+        matrixWork, workA, workB, accumulator,
+      );
+      for (let blockStart = 0; blockStart < siteCount; blockStart += SITE_BLOCK) {
+        const blockCount = min<i32>(SITE_BLOCK, siteCount - blockStart);
+        for (let operation = 0; operation < opCount; operation += 1) {
+          const operationOffset = operation << 2;
+          const opcode = ops[operationOffset];
+          const a = <i32>ops[operationOffset + 1];
+          const b = <i32>ops[operationOffset + 2];
+          const payload = <i32>ops[operationOffset + 3];
+          if (opcode == LOAD_TIP) {
+            const valueOffset = a * stateCount * SITE_BLOCK;
+            for (let state = 0; state < stateCount; state += 1) {
+              const destinationOffset = valueOffset + state * SITE_BLOCK;
+              for (let site = 0; site < blockCount; site += 1) {
+                const observed = tipStates[payload * siteCount + blockStart + site];
+                let compatible = observed == 255 || state == observed;
+                if (observed != 255 && (observed & 128) != 0) compatible = ((<i32>(observed & 15)) & (1 << state)) != 0;
+                values[destinationOffset + site] = compatible ? 1.0 : 0.0;
+              }
+            }
+            const scaleOffset = a * SITE_BLOCK;
+            for (let site = 0; site < blockCount; site += 1) scales[scaleOffset + site] = 0.0;
+          } else if (opcode == TRANSFORM) {
+            propagateDenseBlock(values, a, blockCount, payload, matrices, source, stateCount);
+          } else if (opcode == MULTIPLY_NORMALIZE) {
+            multiplyNormalizeBlock(values, scales, a, b, stateCount, blockCount, siteSums);
+          }
+        }
+        const rootOffset = rootSlot * stateCount * SITE_BLOCK;
+        sumRootBlock(values, equilibrium, rootOffset, stateCount, blockCount, siteSums);
+        const rootScaleOffset = rootSlot * SITE_BLOCK;
+        const evidenceWeight = collapseWeights[operator];
+        for (let site = 0; site < blockCount; site += 1) {
+          const outputSite = blockStart + site;
+          const rootSum = siteSums[site];
+          const logLikelihood = rootSum > 0.0 ? scales[rootScaleOffset + site] + Math.log(rootSum) : -Infinity;
+          if (collapseMode == 1) collapseSum[outputSite] += evidenceWeight * logLikelihood;
+          else if (evidenceWeight > 0.0 && isFinite(logLikelihood)) {
+            const weighted = logLikelihood + Math.log(evidenceWeight);
+            const previous = collapseMaximum[outputSite];
+            if (!isFinite(previous)) {
+              collapseMaximum[outputSite] = weighted;
+              collapseSum[outputSite] = 1.0;
+            } else if (weighted > previous) {
+              collapseSum[outputSite] = collapseSum[outputSite] * Math.exp(previous - weighted) + 1.0;
+              collapseMaximum[outputSite] = weighted;
+            } else collapseSum[outputSite] += Math.exp(weighted - previous);
+          }
+        }
+      }
+    }
+    for (let site = 0; site < siteCount; site += 1) {
+      result[grid * siteCount + site] = collapseMode == 1
+        ? collapseSum[site]
+        : collapseSum[site] > 0.0 ? collapseMaximum[site] + Math.log(collapseSum[site]) : -Infinity;
+    }
+  }
+  return result;
+}
+
+/**
  * f64 evaluator with pure edge-subtree caching.  Cached messages are computed
  * once per unique class model and site block, then reused over the Cartesian
  * grid.  Descriptor layout is documented by buildCacheTables in wasm.ts.

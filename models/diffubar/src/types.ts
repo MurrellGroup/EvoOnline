@@ -138,6 +138,45 @@ export interface LikelihoodResult {
   readonly precision: "f32" | "f64";
 }
 
+/** How several branch-mixture operators are collapsed into one reported grid category. */
+export type BranchMixtureCollapseMode = "log-mean-likelihood" | "mean-log-likelihood";
+
+/**
+ * Sparse description of dense branch transition mixtures.  An operator is a
+ * convex combination of atomic MG94 transition matrices.  All components in
+ * one operator share `operatorScales[operator]`, which multiplies the input
+ * branch length and therefore supplies the common synonymous-rate scale.
+ */
+export interface BranchMixtureOperators {
+  readonly operatorCount: number;
+  /** CSR offsets into componentModels/componentWeights; length operatorCount + 1. */
+  readonly operatorOffsets: Uint32Array;
+  readonly componentModels: Uint32Array;
+  readonly componentWeights: Float64Array;
+  readonly operatorScales: Float64Array;
+  /** Consecutive operators collapsed into each category in request.grid. */
+  readonly operatorsPerCategory: number;
+  /** Normalized quadrature/evidence weight for every operator. */
+  readonly collapseWeights: Float64Array;
+  readonly collapseMode: BranchMixtureCollapseMode;
+}
+
+/** Likelihood request for FAME/FLAVOR-style mixtures on every tree branch. */
+export interface BranchMixtureLikelihoodRequest {
+  readonly tree: CompiledTree;
+  readonly tipStates: Uint8Array;
+  readonly siteCount: number;
+  /** The reported/inferred categories, after any operator quadrature collapse. */
+  readonly grid: DifFUBARGrid;
+  readonly models: ModelBank;
+  readonly operators: BranchMixtureOperators;
+  readonly equilibrium: Float64Array;
+  readonly poissonTerms?: number;
+  readonly maxLambdaPerStep?: number;
+  readonly signal?: AbortSignal;
+  readonly onProgress?: (fraction: number, detail?: ProgressDetail) => void;
+}
+
 /**
  * Flat rooted-tree topology used by the BS-REL all-to-all message kernel.
  * Every non-root node owns exactly one edge (`edgeForNode`); children are

@@ -1,6 +1,6 @@
 # EvoOnline
 
-An extensible phylogenetic analysis workbench with a static browser application, a shared artifact/model SDK, an optional job API, and independently packaged model runners. DifFUBAR, regular FUBAR, and fixed-complexity BS-REL are currently registered.
+An extensible phylogenetic analysis workbench with a static browser application, a shared artifact/model SDK, an optional job API, and independently packaged model runners. DifFUBAR, regular FUBAR, fixed-complexity BS-REL, and the experimental FAME and FLAVOR branch-mixture models are currently registered.
 
 The browser workflow currently supports:
 
@@ -9,8 +9,8 @@ The browser workflow currently supports:
 3. Uploading a Newick/NEXUS tree or inferring one with bioWASM FastTree directly from the main workflow.
 4. Viewing a tree, and tagging G1/G2 foreground branches when DifFUBAR requires them, in **phylotagger**.
 5. Validating each method's alignment/tree/tip-name/tag requirements.
-6. Running DifFUBAR, FUBAR, or fixed three-rate BS-REL in a dedicated browser worker. Exact parallel WASM is the default; the site methods also retain selectable WebGPU.
-7. Choosing deterministic Dirichlet-EM (the regular-FUBAR default) or exact Gibbs inference for FUBAR.
+6. Running DifFUBAR, FUBAR, fixed three-rate BS-REL, FAME, or FLAVOR in a dedicated browser worker. Exact parallel WASM is the default; DifFUBAR and regular FUBAR also retain selectable WebGPU.
+7. Choosing deterministic Dirichlet-EM or exact Gibbs inference for FUBAR, FAME, and FLAVOR.
 8. Optionally deriving separate approximate-FEL likelihood-ratio tests from the already-computed FUBAR grid.
 9. Exploring model-owned, linked interactive SVG figures, editing publication labels, and exporting lossless SVG or CSV.
 10. Profile-aligning the translated codon alignment to an uploaded PDB/mmCIF structure or an RCSB PDB entry, then exploring residue-level selection calls in a simplified Mol* view.
@@ -31,6 +31,7 @@ models/
   diffubar/             Numerical core, WASM, WebGPU and model plugin
   fubar/                Regular FUBAR grid, inference and model plugin
   bsrel/                Fixed three-rate branch-wise test and message optimizer
+  bame/                 Experimental FAME/FLAVOR branch-mixture models
 docs/
   ARCHITECTURE.md
   ADDING_A_MODEL.md
@@ -65,7 +66,7 @@ npm test
 npm run build
 ```
 
-The DifFUBAR package retains its Julia/SciPy parity scripts, benchmark, WGSL validation, and exact WASM tests under `models/diffubar`. Regular FUBAR adds exact grid-transform, analytical Dirichlet-EM, Gibbs-allocation, posterior-product, ordinary-tree, exact-spline, known-optimum, and directional-LRT tests under `models/fubar`. BS-REL tests the all-to-all message identity directly: a local edge replacement must match a complete tree re-prune in f64, including in the site-parallel worker pool.
+The DifFUBAR package retains its Julia/SciPy parity scripts, benchmark, WGSL validation, and exact WASM tests under `models/diffubar`. Regular FUBAR adds exact grid-transform, analytical Dirichlet-EM, Gibbs-allocation, posterior-product, ordinary-tree, exact-spline, known-optimum, and directional-LRT tests under `models/fubar`. BS-REL tests the all-to-all message identity directly: a local edge replacement must match a complete tree re-prune in f64, including in the site-parallel worker pool. FAME/FLAVOR tests pin the development-branch grid dimensions, extreme Gamma quantiles, quadrature moments, sparse/dense kernel equivalence, and the exact latent branch-state expansion of a mixed transition operator.
 
 ## DifFUBAR figure studio
 
@@ -91,15 +92,23 @@ Each gradient pass performs one Felsenstein up-pass and one reversible down-pass
 
 Results include the three ω values and weights, mean ω, fitted branch length, LRT, raw p-value, and Holm p-value. The linked phylogram uses fitted branch lengths for geometry and can color edges by Holm evidence, LRT, positive ω, positive-class fraction, mean ω, or fitted length. Tip/internal labels, branch annotations, line widths, dimensions, and title are adjustable; selecting an edge links to the table and the complete live tree exports as SVG.
 
+## Experimental FAME and FLAVOR
+
+FAME and FLAVOR are pinned ports of the early-development [`MixtureModels`](https://github.com/MurrellGroup/CodonMolecularEvolution.jl/tree/MixtureModels) branch at commit `4c65c984b2e7ad121f5e28298de69bdc0dd427b7`. FAME assigns every branch a convex mixture of two MG94 transition operators, with ω₁ constrained to the purifying/neutral grid and ω₂ allowed above one. The recommended mode integrates the shared mixture weight in the likelihood domain with Gauss–Legendre quadrature. A separate **Julia draft compatibility** option exactly reproduces the source's arithmetic average of site log likelihoods over 20 weights; that formula is a geometric likelihood average, not ordinary likelihood marginalization.
+
+FLAVOR gives every branch an ω drawn from a mid-quantile discrete Gamma distribution and contrasts uncapped categories against distributions capped at ω=1. The browser default uses 12 Gamma slices. It preserves the source model's repeated capped outer categories, because removing them would change its learned category prior, while combining repeated ω=1 components exactly inside each transition operator. Both methods use Dirichlet-EM by default and offer exact Gibbs allocation sampling.
+
+The interactive defaults use transformed 512-category FAME and 896-category FLAVOR grids; the exact 3,375/6,720-category development grids remain selectable for source reproduction and are substantially slower. A category-parallel f64 WASM engine fuses branch mixtures without materializing operator-by-site intermediates. For site-rich alignments it streams one dense mixed transition matrix per edge/operator across all sites; smaller jobs stay in sparse uniformization. Result studios provide linked site evidence, empirical Bayes factors, paper-style parameter probability-mass lanes, editable/exportable posterior projections, and for FLAVOR a posterior-predictive branch-ω CDF. These methods remain explicitly labelled experimental.
+
 ## Selection-on-profile result maps
 
-Both model results include an optional selection-on-profile studio after the main posterior table. It works immediately with no reference: the translated raw-frequency amino-acid profile, selected hypothesis lanes, detection labels, controls, and SVG export use the original alignment codon numbers. A reference is genuinely optional. If supplied, one protein FASTA/plain sequence or coding-nucleotide reference is translated when necessary and globally aligned to the complete profile with expected BLOSUM62 scores and affine gaps in a dedicated worker. Removing it returns the same figure to alignment-numbering mode. Unlike the local structure-chain mapper, the global traceback retains profile-only and reference-only insertions, including terminal overhangs.
+The site-model results include an optional selection-on-profile studio after the main posterior table. It works immediately with no reference: the translated raw-frequency amino-acid profile, selected hypothesis lanes, detection labels, controls, and SVG export use the original alignment codon numbers. A reference is genuinely optional. If supplied, one protein FASTA/plain sequence or coding-nucleotide reference is translated when necessary and globally aligned to the complete profile with expected BLOSUM62 scores and affine gaps in a dedicated worker. Removing it returns the same figure to alignment-numbering mode. Unlike the local structure-chain mapper, the global traceback retains profile-only and reference-only insertions, including terminal overhangs.
 
 When present, the pure reference row is drawn above the raw-frequency amino-acid profile with the same normalized vector glyphs and all annotations switch to reference coordinates. DifFUBAR exposes independent lanes for P(ω·G1>ω·G2), P(ω·G2>ω·G1), P(ω·G1>1), and P(ω·G2>1); FUBAR exposes P(β>α) and P(α>β). Any combination can be shown. Every detection is labeled in a separate collision-free lane. In reference mode, profile insertions do not advance the reference number and instead receive spreadsheet-style suffixes (`76A`, `76B`, `76C`, …); reference-only residues remain visible as profile gaps. Threshold, codon window, reference start, horizontal scale, row heights, number size, ticks, guide lines, match highlighting, labels, and colors are editable, and the complete live figure exports directly to SVG.
 
 ## Structure mapping
 
-Both result renderers expose an optional, isolated structure-mapping panel. It translates every sequence at each aligned codon, builds an amino-acid frequency profile, and runs a BLOSUM62-scored affine-gap local profile alignment against every coordinate-bearing protein chain in a PDB or mmCIF file. Sequence-identical chains reuse one dynamic-programming pass. The highest-scoring chain is mapped by default, while every chain has independent **Show** and **Map results** checkboxes: mapped chains receive site colors, context chains remain visible but neutral, and hidden chains are omitted. This supports one alignment mapping to several chains while retaining unrelated subunits only when useful. Identity, coverage, score, full traceback alignments, and all alternatives remain visible for validation. Parsing and alignment run in a dedicated worker.
+The site-model result renderers expose an optional, isolated structure-mapping panel. It translates every sequence at each aligned codon, builds an amino-acid frequency profile, and runs a BLOSUM62-scored affine-gap local profile alignment against every coordinate-bearing protein chain in a PDB or mmCIF file. Sequence-identical chains reuse one dynamic-programming pass. The highest-scoring chain is mapped by default, while every chain has independent **Show** and **Map results** checkboxes: mapped chains receive site colors, context chains remain visible but neutral, and hidden chains are omitted. This supports one alignment mapping to several chains while retaining unrelated subunits only when useful. Identity, coverage, score, full traceback alignments, and all alternatives remain visible for validation. Parsing and alignment run in a dedicated worker.
 
 Every mapped chain also gets a compact profile-to-chain sequence view directly above Mol*. Its WebLogo-like stacks use raw amino-acid frequency across all input sequences—not information content or entropy normalization—so stack height equals non-gap, unambiguous occupancy and empty height represents missing sequence mass. The PDB chain is rendered with the same glyph grammar as a pure one-residue alignment. Normalized vector outlines make mixed and pure stacks occupy exactly the same vertical envelope; the optional difference highlighter fades profile residues matching the structure chain. Each complete local alignment uses native horizontal scrolling, while a horizontal-scale slider changes only residue width. Explicit traceback indices preserve chain insertions and profile gaps.
 

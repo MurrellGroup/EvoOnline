@@ -1,0 +1,196 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+import {
+  WasmBackend,
+  buildModelBank,
+  codonEquilibriumFromF3x4,
+  compileTree,
+  countF3x4,
+  encodeCodonTips,
+  parseFasta,
+  parseNewick,
+  parseTaggedNewick,
+  type BranchMixtureOperators,
+  type DifFUBARGrid,
+} from "@phylo-workbench/model-diffubar";
+import {
+  createFameGrid,
+  createFlavorGrid,
+  gammaQuantile,
+  gammaSlices,
+  gaussLegendreUnit,
+} from "../src/index.js";
+
+test("FAME and FLAVOR default grids exactly retain the MixtureModels branch dimensions", () => {
+  const fame = createFameGrid();
+  assert.deepEqual([fame.alphaValues.length, fame.omega1Values.length, fame.omega2Values.length], [15, 15, 15]);
+  assert.equal(fame.categoryCount, 3375);
+  assert.ok(Math.abs(fame.omega1Values.at(-1)! - 1) < 1e-14);
+  assert.ok(Math.abs(fame.alphaValues.at(-1)! - 8.933960537241305) < 1e-12);
+
+  const flavor = createFlavorGrid();
+  assert.deepEqual([flavor.muValues.length, flavor.shapeValues.length, flavor.alphaValues.length], [16, 14, 15]);
+  assert.equal(flavor.categoryCount, 6720);
+  assert.equal(flavor.capped.filter((value) => value === 0).length, 3360);
+  assert.equal(flavor.capped.filter((value) => value === 1).length, 3360);
+
+  const fastFame = createFameGrid("fast");
+  const fastFlavor = createFlavorGrid(12, "fast");
+  assert.equal(fastFame.categoryCount, 512);
+  assert.equal(fastFlavor.categoryCount, 896);
+});
+
+test("Gamma quantiles cover FLAVOR's extreme shape grid without underflow artifacts", () => {
+  const fixtures = [
+    [0.05, 0.025, 5.31566188991436e-33],
+    [0.05, 0.975, 0.5671737617538583],
+    [0.5, 0.025, 0.0004910345585876278],
+    [0.5, 0.975, 2.511943093657444],
+    [1, 0.5, 0.6931471805599455],
+    [5, 0.025, 1.6234863901184207],
+    [20, 0.975, 29.67085357158559],
+  ] as const;
+  for (const [shape, probability, expected] of fixtures) {
+    const actual = gammaQuantile(shape, probability);
+    assert.ok(Math.abs(actual - expected) <= Math.max(1e-45, Math.abs(expected) * 2e-12), `${shape}, ${probability}: ${actual}`);
+  }
+  const slices = gammaSlices(3, 0.05, 20);
+  assert.ok(slices[0]! > 0 && slices[0]! < 1e-30);
+  assert.ok(slices.every((value, index) => index === 0 || value > slices[index - 1]!));
+});
+
+test("Gauss-Legendre weight quadrature is normalized and integrates low-order polynomials", () => {
+  const rule = gaussLegendreUnit(8);
+  const total = rule.weights.reduce((sum, value) => sum + value, 0);
+  const first = rule.weights.reduce((sum, value, index) => sum + value * rule.nodes[index]!, 0);
+  const seventh = rule.weights.reduce((sum, value, index) => sum + value * rule.nodes[index]! ** 7, 0);
+  assert.ok(Math.abs(total - 1) < 1e-14);
+  assert.ok(Math.abs(first - 0.5) < 1e-14);
+  assert.ok(Math.abs(seventh - 0.125) < 1e-14);
+});
+
+test("fused branch-mixture collapse matches explicit atomic likelihood algebra", async () => {
+  const alignmentText = await readFile(new URL("../../../examples/diffubar-demo.fasta", import.meta.url), "utf8");
+  const taggedTree = await readFile(new URL("../../../examples/diffubar-demo.nwk", import.meta.url), "utf8");
+  const alignment = parseFasta(alignmentText);
+  const tree = parseNewick(taggedTree.replaceAll(/\{[^}]+\}/g, ""));
+  const f3x4 = countF3x4(alignment);
+  const equilibrium = codonEquilibriumFromF3x4(f3x4);
+  const grid: DifFUBARGrid = {
+    alpha: Float64Array.of(1), omega: Float64Array.of(0.25, 3), backgroundOmega: new Float64Array(0),
+    categories: Float64Array.of(1, 0.25, 1, 3), categoryCount: 2, parameterCount: 2, hasBackground: false,
+  };
+  const models = buildModelBank(grid, tree, Float64Array.of(1, 1, 1, 1, 1, 1), f3x4);
+  const compiled = compileTree(tree);
+  const tips = encodeCodonTips(alignment, tree);
+  const backend = new WasmBackend();
+  const atomic = await backend.evaluate({ tree: compiled, tipStates: tips, siteCount: alignment.codonSites, grid, models, equilibrium });
+
+  const collapsedGrid: DifFUBARGrid = {
+    alpha: Float64Array.of(1), omega: Float64Array.of(1), backgroundOmega: new Float64Array(0),
+    categories: Float64Array.of(1, 1), categoryCount: 1, parameterCount: 2, hasBackground: false,
+  };
+  const baseOperators = {
+    operatorCount: 2,
+    operatorOffsets: Uint32Array.of(0, 1, 2),
+    componentModels: Uint32Array.of(models.gridModels[0]!, models.gridModels[1]!),
+    componentWeights: Float64Array.of(1, 1),
+    operatorScales: Float64Array.of(1, 1),
+    operatorsPerCategory: 2,
+    collapseWeights: Float64Array.of(0.25, 0.75),
+  } as const;
+  const likelihoodOperators: BranchMixtureOperators = { ...baseOperators, collapseMode: "log-mean-likelihood" };
+  const marginalized = await backend.evaluateBranchMixture({ tree: compiled, tipStates: tips, siteCount: alignment.codonSites, grid: collapsedGrid, models, operators: likelihoodOperators, equilibrium });
+  const draftOperators: BranchMixtureOperators = { ...baseOperators, collapseMode: "mean-log-likelihood" };
+  const draft = await backend.evaluateBranchMixture({ tree: compiled, tipStates: tips, siteCount: alignment.codonSites, grid: collapsedGrid, models, operators: draftOperators, equilibrium });
+
+  // The runtime switches to a transition-matrix streaming kernel for site-rich
+  // alignments. Tile the demo sites past that threshold and require the dense
+  // path to reproduce every sparse-kernel likelihood exactly.
+  const repeats = 6;
+  const denseSiteCount = alignment.codonSites * repeats;
+  const denseTips = new Uint8Array(tree.tips.length * denseSiteCount);
+  for (let tip = 0; tip < tree.tips.length; tip += 1) {
+    for (let repeat = 0; repeat < repeats; repeat += 1) {
+      denseTips.set(
+        tips.subarray(tip * alignment.codonSites, (tip + 1) * alignment.codonSites),
+        tip * denseSiteCount + repeat * alignment.codonSites,
+      );
+    }
+  }
+  const dense = await backend.evaluateBranchMixture({
+    tree: compiled,
+    tipStates: denseTips,
+    siteCount: denseSiteCount,
+    grid: collapsedGrid,
+    models,
+    operators: likelihoodOperators,
+    equilibrium,
+  });
+
+  for (let site = 0; site < alignment.codonSites; site += 1) {
+    const left = atomic.logLikelihoods[site]!;
+    const right = atomic.logLikelihoods[alignment.codonSites + site]!;
+    const maximum = Math.max(left + Math.log(0.25), right + Math.log(0.75));
+    const expectedMarginal = maximum + Math.log(Math.exp(left + Math.log(0.25) - maximum) + Math.exp(right + Math.log(0.75) - maximum));
+    assert.ok(Math.abs(marginalized.logLikelihoods[site]! - expectedMarginal) < 2e-11);
+    assert.ok(Math.abs(draft.logLikelihoods[site]! - (0.25 * left + 0.75 * right)) < 2e-11);
+    for (let repeat = 0; repeat < repeats; repeat += 1) {
+      assert.ok(Math.abs(dense.logLikelihoods[repeat * alignment.codonSites + site]! - expectedMarginal) < 2e-11);
+    }
+  }
+});
+
+test("a mixed transition on every branch equals the explicit latent branch-state expansion", async () => {
+  const alignment = parseFasta(">a\nATGAAA\n>b\nATGAAG\n");
+  const tree = parseTaggedNewick("(a{G1}:0.11,b{G2}:0.17);");
+  const f3x4 = countF3x4(alignment);
+  const equilibrium = codonEquilibriumFromF3x4(f3x4);
+  const explicitGrid: DifFUBARGrid = {
+    alpha: Float64Array.of(1),
+    omega: Float64Array.of(0.25, 3),
+    backgroundOmega: new Float64Array(0),
+    categories: Float64Array.of(
+      1, 0.25, 0.25,
+      1, 0.25, 3,
+      1, 3, 0.25,
+      1, 3, 3,
+    ),
+    categoryCount: 4,
+    parameterCount: 3,
+    hasBackground: false,
+  };
+  const models = buildModelBank(explicitGrid, tree, Float64Array.of(1, 1, 1, 1, 1, 1), f3x4);
+  const compiled = compileTree(tree);
+  const tips = encodeCodonTips(alignment, tree);
+  const mixtureTree = parseNewick("(a:0.11,b:0.17);");
+  const mixtureCompiled = compileTree(mixtureTree);
+  const mixtureTips = encodeCodonTips(alignment, mixtureTree);
+  const backend = new WasmBackend();
+  const explicit = await backend.evaluate({ tree: compiled, tipStates: tips, siteCount: 2, grid: explicitGrid, models, equilibrium });
+  const collapsedGrid: DifFUBARGrid = {
+    alpha: Float64Array.of(1), omega: Float64Array.of(1), backgroundOmega: new Float64Array(0),
+    categories: Float64Array.of(1, 1, 1), categoryCount: 1, parameterCount: 3, hasBackground: false,
+  };
+  const firstModel = models.gridModels[0]!;
+  const secondModel = models.gridModels[3]!;
+  const operators: BranchMixtureOperators = {
+    operatorCount: 1,
+    operatorOffsets: Uint32Array.of(0, 2),
+    componentModels: Uint32Array.of(firstModel, secondModel),
+    componentWeights: Float64Array.of(0.3, 0.7),
+    operatorScales: Float64Array.of(1),
+    operatorsPerCategory: 1,
+    collapseWeights: Float64Array.of(1),
+    collapseMode: "log-mean-likelihood",
+  };
+  const mixed = await backend.evaluateBranchMixture({ tree: mixtureCompiled, tipStates: mixtureTips, siteCount: 2, grid: collapsedGrid, models, operators, equilibrium });
+  const assignmentWeights = [0.09, 0.21, 0.21, 0.49];
+  for (let site = 0; site < 2; site += 1) {
+    const terms = assignmentWeights.map((weight, category) => Math.log(weight) + explicit.logLikelihoods[category * 2 + site]!);
+    const maximum = Math.max(...terms);
+    const expected = maximum + Math.log(terms.reduce((sum, value) => sum + Math.exp(value - maximum), 0));
+    assert.ok(Math.abs(mixed.logLikelihoods[site]! - expected) < 3e-11);
+  }
+});

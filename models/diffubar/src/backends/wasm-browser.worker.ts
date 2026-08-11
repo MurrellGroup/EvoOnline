@@ -1,5 +1,5 @@
 import { WasmBackend } from "./wasm.js";
-import type { BsrelKernelRequest, LikelihoodRequest } from "../types.js";
+import type { BranchMixtureLikelihoodRequest, BsrelKernelRequest, LikelihoodRequest } from "../types.js";
 
 interface InitializeMessage {
   readonly type: "initialize";
@@ -8,8 +8,8 @@ interface InitializeMessage {
 
 interface RequestMessage {
   readonly id: number;
-  readonly kind?: "likelihood" | "bsrel";
-  readonly request: LikelihoodRequest | BsrelKernelRequest;
+  readonly kind?: "likelihood" | "branch-mixture" | "bsrel";
+  readonly request: LikelihoodRequest | BranchMixtureLikelihoodRequest | BsrelKernelRequest;
 }
 
 interface WorkerScope {
@@ -38,6 +38,12 @@ scope.onmessage = (event: MessageEvent<InitializeMessage | RequestMessage>) => {
         scope.postMessage(
           { id: requestMessage.id, objectives: result.objectives, elapsedMs: result.elapsedMs },
           [result.objectives.buffer as ArrayBuffer],
+        );
+      } else if (requestMessage.kind === "branch-mixture") {
+        const result = await backend.evaluateBranchMixture(requestMessage.request as BranchMixtureLikelihoodRequest);
+        scope.postMessage(
+          { id: requestMessage.id, logLikelihoods: result.logLikelihoods, elapsedMs: result.elapsedMs },
+          [result.logLikelihoods.buffer as ArrayBuffer],
         );
       } else {
         const result = await backend.evaluate(requestMessage.request as LikelihoodRequest);

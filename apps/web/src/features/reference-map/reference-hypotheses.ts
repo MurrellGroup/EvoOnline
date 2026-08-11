@@ -1,4 +1,4 @@
-import type { DifFubarRunResult, FubarRunResult } from "../../types.js";
+import type { BameRunResult, DifFubarRunResult, FubarRunResult } from "../../types.js";
 import type { ReferenceEvidenceSite, ReferenceHypothesis } from "./types.js";
 
 export const DIFFUBAR_REFERENCE_HYPOTHESES: readonly ReferenceHypothesis[] = Object.freeze([
@@ -11,6 +11,10 @@ export const DIFFUBAR_REFERENCE_HYPOTHESES: readonly ReferenceHypothesis[] = Obj
 export const FUBAR_REFERENCE_HYPOTHESES: readonly ReferenceHypothesis[] = Object.freeze([
   { id: "positive", label: "P(β > α)", shortLabel: "Positive", color: "#e64b50" },
   { id: "purifying", label: "P(α > β)", shortLabel: "Purifying", color: "#5148e5" },
+]);
+
+export const BAME_REFERENCE_HYPOTHESES: readonly ReferenceHypothesis[] = Object.freeze([
+  { id: "episodic-positive", label: "P(episodic ω > 1)", shortLabel: "Episodic +", color: "#e64b50" },
 ]);
 
 export function buildDifFubarReferenceEvidence(result: Pick<DifFubarRunResult, "sites">): readonly ReferenceEvidenceSite[] {
@@ -30,4 +34,8 @@ export function buildFubarReferenceEvidence(result: Pick<FubarRunResult, "sites"
     site: site.site,
     probabilities: { positive: site.pPositive, purifying: site.pPurifying },
   }));
+}
+
+export function buildBameReferenceEvidence(result: Pick<BameRunResult, "sites">): readonly ReferenceEvidenceSite[] {
+  return result.sites.map((site) => ({ site: site.site, probabilities: { "episodic-positive": site.pPositive } }));
 }

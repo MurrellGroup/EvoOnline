@@ -15,6 +15,8 @@ import { ApproximateFelResults, approximateFelCall } from "../src/components/App
 import { normalizeCommittedNumberDraft } from "../src/components/CommittedNumberInput.js";
 import { BsrelResultsView } from "../src/components/BsrelResultsView.js";
 import type { BsrelRunResult } from "../src/types.js";
+import { BameVisualizations } from "../src/components/BameVisualizations.js";
+import type { FameRunResult, FlavorRunResult } from "../src/types.js";
 
 test("deferred number fields accept replacement text and validate only when committed", () => {
   assert.equal(normalizeCommittedNumberDraft("", 17, 1, 100), 17);
@@ -138,6 +140,83 @@ test("FUBAR studio renders selection overview and site posterior products", () =
   assert.match(markup, /Posterior surface/);
   assert.match(markup, /Export SVG/);
   assert.match(markup, /mean α/);
+});
+
+test("FAME studio exposes linked evidence, mass lanes, posterior projection, and SVG export", () => {
+  const result: FameRunResult = {
+    method: "fame",
+    sites: [
+      { site: 1, pPositive: 0.97, bayesFactor: 18, meanAlpha: 0.5, meanOmega1: 0.2, meanOmega2: 2.4, detected: true },
+      { site: 2, pPositive: 0.1, bayesFactor: 0.2, meanAlpha: 1.2, meanOmega1: 0.4, meanOmega2: 0.7, detected: false },
+    ],
+    detectedSites: [1],
+    posterior: {
+      siteCount: 2,
+      alphaValues: Float64Array.of(0.1, 2),
+      omega1Values: Float64Array.of(0.1, 1),
+      omega2Values: Float64Array.of(0.1, 3),
+      surfaces: Float32Array.from({ length: 16 }, (_unused, index) => index % 8 === 7 ? 0.7 : 0.3 / 7),
+      alpha: Float32Array.of(0.7, 0.3, 0.2, 0.8),
+      omega1: Float32Array.of(0.8, 0.2, 0.6, 0.4),
+      omega2: Float32Array.of(0.1, 0.9, 0.8, 0.2),
+    },
+    positivePrior: 0.2,
+    backend: "wasm-parallel",
+    timings: { totalMs: 1000 },
+    diagnostics: {
+      taxa: 4, codonSites: 2, categories: 8, branchMixtureOperators: 32, atomicOmegaModels: 4,
+      treeRegisterNumber: 2, precision: "f64", inferenceMethod: "dirichlet-em", inferenceIterations: 10,
+      inferenceBurnin: 0, inferenceLogLikelihood: -8, modelDraftCommit: "4c65c984", numericalEngine: "fused-sparse-or-dense-uniformization",
+      weightIntegration: "likelihood-quadrature", weightPoints: 4, gridPreset: "fast",
+    },
+    tree: "((a:0.1,b:0.1):0.1,(c:0.1,d:0.1):0.1);",
+    csv: "Codon Sites\n1\n2\n",
+  };
+  const markup = renderToStaticMarkup(<BameVisualizations result={result} threshold={0.9} onThresholdChange={() => undefined} />);
+  assert.match(markup, /FAME figure studio/);
+  assert.match(markup, /Parameter posteriors/);
+  assert.match(markup, /Posterior projection/);
+  assert.match(markup, /Export SVG/);
+  assert.match(markup, /data-figure="bame-evidence-overview"/);
+});
+
+test("FLAVOR studio exposes capped-state projection controls and branch-omega CDF", () => {
+  const result: FlavorRunResult = {
+    method: "flavor",
+    sites: [{
+      site: 1, pPositive: 0.96, pUncapped: 0.98, bayesFactor: 22, meanAlpha: 0.6, meanOmega: 2.2,
+      meanShape: 1.4, meanOmegaStandardDeviation: 1.8, meanPositiveBranchFraction: 0.35, detected: true,
+    }],
+    detectedSites: [1],
+    posterior: {
+      siteCount: 1,
+      muValues: Float64Array.of(0.2, 3),
+      shapeValues: Float64Array.of(0.2, 2),
+      alphaValues: Float64Array.of(0.1, 2),
+      surfaces: Float32Array.from({ length: 16 }, (_unused, index) => index === 15 ? 0.7 : 0.3 / 15),
+      mu: Float32Array.of(0.2, 0.8),
+      shape: Float32Array.of(0.3, 0.7),
+      alpha: Float32Array.of(0.6, 0.4),
+      capState: Float32Array.of(0.98, 0.02),
+    },
+    positivePrior: 0.15,
+    backend: "wasm-parallel",
+    timings: { totalMs: 2000 },
+    diagnostics: {
+      taxa: 4, codonSites: 1, categories: 16, branchMixtureOperators: 16, atomicOmegaModels: 20,
+      treeRegisterNumber: 2, precision: "f64", inferenceMethod: "dirichlet-em", inferenceIterations: 12,
+      inferenceBurnin: 0, inferenceLogLikelihood: -4, modelDraftCommit: "4c65c984", numericalEngine: "fused-sparse-or-dense-uniformization",
+      gammaSlices: 12, cappedGridMultiplicityRetained: true, gridPreset: "fast",
+    },
+    tree: "((a:0.1,b:0.1):0.1,(c:0.1,d:0.1):0.1);",
+    csv: "Codon Sites\n1\n",
+  };
+  const markup = renderToStaticMarkup(<BameVisualizations result={result} threshold={0.9} onThresholdChange={() => undefined} />);
+  assert.match(markup, /FLAVOR figure studio/);
+  assert.match(markup, /Surface categories/);
+  assert.match(markup, /Uncapped only/);
+  assert.match(markup, /Branch-ω CDF/);
+  assert.match(markup, /Posterior projection/);
 });
 
 test("approximate FEL stays separate and renders conditional likelihood optima plus SVG export", () => {

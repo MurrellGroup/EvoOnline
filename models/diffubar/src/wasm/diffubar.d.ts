@@ -86,6 +86,64 @@ declare namespace __AdaptedExports {
    */
   export function evaluateLikelihood(ops: Uint32Array, edgeLengths: Float64Array, tipStates: Uint8Array, gridModels: Uint32Array, neighborCount: Uint32Array, neighborIndex: Uint32Array, rDiagonal: Float64Array, rOffDiagonal: Float64Array, mu: Float64Array, equilibrium: Float64Array, siteCount: number, gridCount: number, classCount: number, stateCount: number, maxNeighbors: number, slotCount: number, rootSlot: number, poissonTerms: number, maxLambdaPerStep: number): Float64Array;
   /**
+   * assembly/index/evaluateBranchMixtureLikelihood
+   * @param ops `~lib/typedarray/Uint32Array`
+   * @param edgeLengths `~lib/typedarray/Float64Array`
+   * @param tipStates `~lib/typedarray/Uint8Array`
+   * @param operatorOffsets `~lib/typedarray/Uint32Array`
+   * @param componentModels `~lib/typedarray/Uint32Array`
+   * @param componentWeights `~lib/typedarray/Float64Array`
+   * @param operatorScales `~lib/typedarray/Float64Array`
+   * @param collapseWeights `~lib/typedarray/Float64Array`
+   * @param neighborCount `~lib/typedarray/Uint32Array`
+   * @param neighborIndex `~lib/typedarray/Uint32Array`
+   * @param rDiagonal `~lib/typedarray/Float64Array`
+   * @param rOffDiagonal `~lib/typedarray/Float64Array`
+   * @param mu `~lib/typedarray/Float64Array`
+   * @param equilibrium `~lib/typedarray/Float64Array`
+   * @param siteCount `i32`
+   * @param gridCount `i32`
+   * @param operatorsPerCategory `i32`
+   * @param collapseMode `i32`
+   * @param stateCount `i32`
+   * @param maxNeighbors `i32`
+   * @param slotCount `i32`
+   * @param rootSlot `i32`
+   * @param poissonTerms `i32`
+   * @param maxLambdaPerStep `f64`
+   * @returns `~lib/typedarray/Float64Array`
+   */
+  export function evaluateBranchMixtureLikelihood(ops: Uint32Array, edgeLengths: Float64Array, tipStates: Uint8Array, operatorOffsets: Uint32Array, componentModels: Uint32Array, componentWeights: Float64Array, operatorScales: Float64Array, collapseWeights: Float64Array, neighborCount: Uint32Array, neighborIndex: Uint32Array, rDiagonal: Float64Array, rOffDiagonal: Float64Array, mu: Float64Array, equilibrium: Float64Array, siteCount: number, gridCount: number, operatorsPerCategory: number, collapseMode: number, stateCount: number, maxNeighbors: number, slotCount: number, rootSlot: number, poissonTerms: number, maxLambdaPerStep: number): Float64Array;
+  /**
+   * assembly/index/evaluateBranchMixtureLikelihoodDense
+   * @param ops `~lib/typedarray/Uint32Array`
+   * @param edgeLengths `~lib/typedarray/Float64Array`
+   * @param tipStates `~lib/typedarray/Uint8Array`
+   * @param operatorOffsets `~lib/typedarray/Uint32Array`
+   * @param componentModels `~lib/typedarray/Uint32Array`
+   * @param componentWeights `~lib/typedarray/Float64Array`
+   * @param operatorScales `~lib/typedarray/Float64Array`
+   * @param collapseWeights `~lib/typedarray/Float64Array`
+   * @param neighborCount `~lib/typedarray/Uint32Array`
+   * @param neighborIndex `~lib/typedarray/Uint32Array`
+   * @param rDiagonal `~lib/typedarray/Float64Array`
+   * @param rOffDiagonal `~lib/typedarray/Float64Array`
+   * @param mu `~lib/typedarray/Float64Array`
+   * @param equilibrium `~lib/typedarray/Float64Array`
+   * @param siteCount `i32`
+   * @param gridCount `i32`
+   * @param operatorsPerCategory `i32`
+   * @param collapseMode `i32`
+   * @param stateCount `i32`
+   * @param maxNeighbors `i32`
+   * @param slotCount `i32`
+   * @param rootSlot `i32`
+   * @param poissonTerms `i32`
+   * @param maxLambdaPerStep `f64`
+   * @returns `~lib/typedarray/Float64Array`
+   */
+  export function evaluateBranchMixtureLikelihoodDense(ops: Uint32Array, edgeLengths: Float64Array, tipStates: Uint8Array, operatorOffsets: Uint32Array, componentModels: Uint32Array, componentWeights: Float64Array, operatorScales: Float64Array, collapseWeights: Float64Array, neighborCount: Uint32Array, neighborIndex: Uint32Array, rDiagonal: Float64Array, rOffDiagonal: Float64Array, mu: Float64Array, equilibrium: Float64Array, siteCount: number, gridCount: number, operatorsPerCategory: number, collapseMode: number, stateCount: number, maxNeighbors: number, slotCount: number, rootSlot: number, poissonTerms: number, maxLambdaPerStep: number): Float64Array;
+  /**
    * assembly/index/evaluateLikelihoodCached
    * @param mainOps `~lib/typedarray/Uint32Array`
    * @param cacheOps `~lib/typedarray/Uint32Array`

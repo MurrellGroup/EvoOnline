@@ -22,6 +22,10 @@ alivibe loads Aioli/bioWASM for Kalign and FastTree. Those runtime packages reta
 
 `models/fubar` independently implements the fixed-grid and DirichletFUBAR behavior documented by [MurrellGroup/CodonMolecularEvolution.jl](https://github.com/MurrellGroup/CodonMolecularEvolution.jl), which is MIT licensed. It reuses this repository's own optimized MG94 kernels; no Julia runtime or HyPhy FUBAR code is bundled.
 
+## Experimental FAME and FLAVOR behavior
+
+`models/bame` independently ports the FAME and FLAVOR model definitions from the [MurrellGroup/CodonMolecularEvolution.jl `MixtureModels` branch](https://github.com/MurrellGroup/CodonMolecularEvolution.jl/tree/MixtureModels), pinned to commit `4c65c984b2e7ad121f5e28298de69bdc0dd427b7`. CodonMolecularEvolution.jl is MIT licensed. EvoOnline uses original TypeScript/AssemblyScript Gamma, quadrature, posterior, worker, visualization, and fused MG94 branch-mixture code; it bundles neither Julia nor the upstream plotting stack.
+
 ## BS-REL method and MolecularEvolution.jl message semantics
 
 `models/bsrel` is an independent TypeScript/AssemblyScript implementation of the fixed three-rate BS-REL method described by Kosakovsky Pond et al. (2011). It does not bundle HyPhy, aBS-REL, or any AIC-based adaptive model-selection code. Its root-to-tip outside-message organization follows the public `felsenstein_down!` semantics documented by [MurrellGroup/MolecularEvolution.jl](https://github.com/MurrellGroup/MolecularEvolution.jl), which is MIT licensed; the SIMD kernels and optimizer in this repository are original code.

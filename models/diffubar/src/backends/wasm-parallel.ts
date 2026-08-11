@@ -1,4 +1,5 @@
 import type {
+  BranchMixtureLikelihoodRequest,
   BsrelKernelRequest,
   BsrelKernelResult,
   LikelihoodRequest,
@@ -104,6 +105,27 @@ export class ParallelWasmBackend {
     });
   }
 
+  private callBranchMixture(worker: WorkerLike, request: BranchMixtureLikelihoodRequest): Promise<Float64Array> {
+    const id = this.nextMessageId++;
+    return new Promise((resolve, reject) => {
+      const receive = (message: WorkerMessage): void => {
+        if (message.id !== id) return;
+        cleanup();
+        if (message.error !== undefined) reject(new Error(message.error));
+        else if (message.logLikelihoods === undefined) reject(new Error("Parallel WASM worker returned no branch-mixture likelihood matrix."));
+        else resolve(message.logLikelihoods);
+      };
+      const receiveEvent = (event: MessageEvent<WorkerMessage>): void => receive(event.data);
+      const cleanup = (): void => {
+        worker.removeEventListener?.("message", receiveEvent);
+        worker.off?.("message", receive);
+      };
+      worker.addEventListener?.("message", receiveEvent);
+      worker.on?.("message", receive);
+      worker.postMessage({ id, kind: "branch-mixture", request });
+    });
+  }
+
   private callBsrel(worker: WorkerLike, request: BsrelKernelRequest): Promise<Float64Array> {
     const id = this.nextMessageId++;
     return new Promise((resolve, reject) => {
@@ -200,6 +222,92 @@ export class ParallelWasmBackend {
       elapsedMs: performance.now() - started,
       precision: "f64",
     };
+  }
+
+  async evaluateBranchMixture(request: BranchMixtureLikelihoodRequest): Promise<LikelihoodResult> {
+    request.signal?.throwIfAborted();
+    const operatorSites = request.operators.operatorCount * request.siteCount;
+    if (this.workerCount <= 1 || operatorSites < this.minimumCategorySites || request.siteCount < 2) {
+      return this.local.evaluateBranchMixture(request);
+    }
+    const started = performance.now();
+    const pool = await this.workers();
+    // Typed model arrays are cloned into each ordinary Web Worker on hosts
+    // without cross-origin isolation (including GitHub Pages). Bound aggregate
+    // copies so FLAVOR's atomic omega bank cannot exhaust browser memory.
+    const modelBytes = request.models.rDiagonal.byteLength + request.models.rOffDiagonal.byteLength
+      + request.models.mu.byteLength + request.models.neighborCount.byteLength + request.models.neighborIndex.byteLength;
+    const memoryBoundWorkers = Math.max(1, Math.floor((192 * 1024 * 1024) / Math.max(1, modelBytes)));
+    // Branch-mixture grids are far wider than ordinary FUBAR grids. Partition
+    // categories, not sites: every worker then fills the 16-site SIMD block and
+    // avoids repeating the entire operator grid for one or two demo sites.
+    const activeCount = Math.min(pool.length, request.grid.categoryCount, memoryBoundWorkers);
+    request.onProgress?.(0, {
+      message: `Starting ${activeCount.toLocaleString()} category-parallel branch-mixture workers · ${request.operators.operatorCount.toLocaleString()} operators`,
+      current: 0,
+      total: operatorSites,
+      indeterminate: true,
+    });
+    const jobs: Array<{ readonly start: number; readonly count: number; readonly operatorCount: number; readonly result: Promise<Float64Array> }> = [];
+    for (let index = 0; index < activeCount; index += 1) {
+      const start = Math.floor(index * request.grid.categoryCount / activeCount);
+      const end = Math.floor((index + 1) * request.grid.categoryCount / activeCount);
+      const count = end - start;
+      const operatorsPerCategory = request.operators.operatorsPerCategory;
+      const operatorStart = start * operatorsPerCategory;
+      const operatorEnd = end * operatorsPerCategory;
+      const componentStart = request.operators.operatorOffsets[operatorStart]!;
+      const componentEnd = request.operators.operatorOffsets[operatorEnd]!;
+      const operatorOffsets = new Uint32Array(operatorEnd - operatorStart + 1);
+      for (let operator = operatorStart; operator <= operatorEnd; operator += 1) {
+        operatorOffsets[operator - operatorStart] = request.operators.operatorOffsets[operator]! - componentStart;
+      }
+      const grid = {
+        ...request.grid,
+        categories: request.grid.categories.slice(start * request.grid.parameterCount, end * request.grid.parameterCount),
+        categoryCount: count,
+      };
+      const workerRequest: BranchMixtureLikelihoodRequest = {
+        tree: request.tree,
+        tipStates: request.tipStates,
+        siteCount: request.siteCount,
+        grid,
+        models: request.models,
+        operators: {
+          operatorCount: operatorEnd - operatorStart,
+          operatorOffsets,
+          componentModels: request.operators.componentModels.slice(componentStart, componentEnd),
+          componentWeights: request.operators.componentWeights.slice(componentStart, componentEnd),
+          operatorScales: request.operators.operatorScales.slice(operatorStart, operatorEnd),
+          operatorsPerCategory,
+          collapseWeights: request.operators.collapseWeights.slice(operatorStart, operatorEnd),
+          collapseMode: request.operators.collapseMode,
+        },
+        equilibrium: request.equilibrium,
+        ...(request.poissonTerms === undefined ? {} : { poissonTerms: request.poissonTerms }),
+        ...(request.maxLambdaPerStep === undefined ? {} : { maxLambdaPerStep: request.maxLambdaPerStep }),
+      };
+      jobs.push({ start, count, operatorCount: operatorEnd - operatorStart, result: this.callBranchMixture(pool[index]!, workerRequest) });
+    }
+    let completedOperators = 0;
+    const pieces = await Promise.all(jobs.map(async (job) => {
+      const piece = await job.result;
+      completedOperators += job.operatorCount;
+      request.onProgress?.(completedOperators / request.operators.operatorCount, {
+        message: `${completedOperators.toLocaleString()}/${request.operators.operatorCount.toLocaleString()} branch-mixture operators complete · all codon sites`,
+        current: completedOperators * request.siteCount,
+        total: operatorSites,
+      });
+      return piece;
+    }));
+    request.signal?.throwIfAborted();
+    const logLikelihoods = new Float64Array(request.grid.categoryCount * request.siteCount);
+    for (let job = 0; job < jobs.length; job += 1) {
+      const { start } = jobs[job]!;
+      const piece = pieces[job]!;
+      logLikelihoods.set(piece, start * request.siteCount);
+    }
+    return { logLikelihoods, backend: "wasm-parallel", elapsedMs: performance.now() - started, precision: "f64" };
   }
 
   async evaluateBsrel(request: BsrelKernelRequest): Promise<BsrelKernelResult> {

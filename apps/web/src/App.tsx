@@ -25,6 +25,8 @@ const stageLabels: Readonly<Record<string, string>> = {
   "global-fit": "Fitting the global codon model",
   "grid-preparation": "Building the rate grid",
   "conditional-likelihoods": "Evaluating conditional likelihoods",
+  "branch-mixture-preparation": "Building branch-mixture operators",
+  "branch-mixture-likelihoods": "Evaluating branch-mixture likelihoods",
   "approximate-fel": "Optimizing approximate FEL surfaces",
   "gibbs-sampler": "Sampling the posterior",
   "dirichlet-em": "Fitting the Dirichlet mixture",
@@ -364,7 +366,7 @@ export function App() {
             <h1>Build an analysis-ready phylogenetic workspace</h1>
             <p>{requiresForeground
               ? "Load a codon alignment, inspect or edit it, attach a phylogeny, tag two foreground groups, then run entirely in this browser."
-              : "Load a codon alignment, inspect or edit it, attach a phylogeny, then estimate positive and purifying selection entirely in this browser."}</p>
+              : `Load a codon alignment, inspect or edit it, attach a phylogeny, then run ${manifest.shortTitle} entirely in this browser.`}</p>
           </div>
           <div className="privacy-note"><span>Device-local</span>Your sequence data is not uploaded by the browser runner.</div>
         </section>
@@ -536,7 +538,7 @@ export function App() {
         <WidgetModal
           open={treeOpen}
           title={requiresForeground ? "Phylogeny viewer and branch tagger" : "Phylogeny viewer"}
-          description={requiresForeground ? "Select branches or clades and assign G1 and G2. DifFUBAR compares those two foreground classes." : "Inspect the phylogeny and branch lengths. FUBAR uses a single branch class, so tags are not required."}
+          description={requiresForeground ? "Select branches or clades and assign G1 and G2. DifFUBAR compares those two foreground classes." : `Inspect the phylogeny and branch lengths. ${manifest.shortTitle} uses an untagged tree, so tags are not required.`}
           source={`${import.meta.env.BASE_URL}widgets/phylotagger.html`}
           frameRef={treeFrame}
           applyLabel={requiresForeground ? "Apply tagged tree" : "Apply tree"}

@@ -2,6 +2,7 @@ import * as loader from "@assemblyscript/loader";
 import type {
   AlphaBetaSamplerOptions,
   AlphaBetaSamplerResult,
+  BranchMixtureLikelihoodRequest,
   BsrelKernelRequest,
   BsrelKernelResult,
   LikelihoodRequest,
@@ -20,6 +21,8 @@ type WasmExports = Record<string, any> & {
   Uint32Array_ID: WebAssembly.Global;
   Int32Array_ID: WebAssembly.Global;
   Float64Array_ID: WebAssembly.Global;
+  evaluateBranchMixtureLikelihoodDense(...args: number[]): number;
+  evaluateBranchMixtureLikelihood(...args: number[]): number;
   evaluateBsrelAllMessages(...args: number[]): number;
   evaluateLikelihood(...args: number[]): number;
   evaluateLikelihoodCached(...args: number[]): number;
@@ -263,6 +266,99 @@ export class WasmBackend {
         total: totalPairs,
       });
       request.signal?.throwIfAborted();
+      return { logLikelihoods, backend: "wasm", elapsedMs: performance.now() - started, precision: "f64" };
+    } finally {
+      pinned.release();
+      wasm.__collect();
+    }
+  }
+
+  /** Exact branch-wise transition mixtures used by FAME and FLAVOR. */
+  async evaluateBranchMixture(request: BranchMixtureLikelihoodRequest): Promise<LikelihoodResult> {
+    request.signal?.throwIfAborted();
+    const operators = request.operators;
+    const totalPairs = operators.operatorCount * request.siteCount;
+    if (request.tree.classCount !== 1) throw new RangeError("Branch-mixture likelihoods require an untagged single-class tree.");
+    if (
+      operators.operatorCount !== request.grid.categoryCount * operators.operatorsPerCategory
+      || operators.operatorOffsets.length !== operators.operatorCount + 1
+      || operators.operatorScales.length !== operators.operatorCount
+      || operators.collapseWeights.length !== operators.operatorCount
+      || operators.componentModels.length !== operators.componentWeights.length
+      || operators.operatorOffsets[operators.operatorCount] !== operators.componentModels.length
+    ) throw new RangeError("Branch-mixture operator dimensions are inconsistent.");
+    for (let operator = 0; operator < operators.operatorCount; operator += 1) {
+      const start = operators.operatorOffsets[operator]!;
+      const end = operators.operatorOffsets[operator + 1]!;
+      if (!(end > start) || !(operators.operatorScales[operator]! > 0)) {
+        throw new RangeError(`Branch-mixture operator ${operator + 1} is empty or has an invalid scale.`);
+      }
+      let componentTotal = 0;
+      for (let entry = start; entry < end; entry += 1) {
+        if (operators.componentModels[entry]! >= request.models.modelCount) throw new RangeError("Branch-mixture operator references an unknown atomic model.");
+        componentTotal += operators.componentWeights[entry]!;
+      }
+      if (Math.abs(componentTotal - 1) > 1e-10) throw new RangeError(`Branch-mixture operator ${operator + 1} weights do not sum to one.`);
+    }
+    for (let category = 0; category < request.grid.categoryCount; category += 1) {
+      let collapseTotal = 0;
+      const start = category * operators.operatorsPerCategory;
+      for (let member = 0; member < operators.operatorsPerCategory; member += 1) collapseTotal += operators.collapseWeights[start + member]!;
+      if (Math.abs(collapseTotal - 1) > 1e-10) throw new RangeError(`Branch-mixture category ${category + 1} evidence weights do not sum to one.`);
+    }
+    request.onProgress?.(0, {
+      message: `Fused branch-mixture kernel: ${operators.operatorCount.toLocaleString()} operators × ${request.siteCount.toLocaleString()} sites`,
+      current: 0,
+      total: totalPairs,
+      indeterminate: true,
+    });
+    const wasm = await this.instance();
+    const pinned = new PinnedArrays(wasm);
+    const u8 = globalValue(wasm.Uint8Array_ID);
+    const u32 = globalValue(wasm.Uint32Array_ID);
+    const f64 = globalValue(wasm.Float64Array_ID);
+    const started = performance.now();
+    try {
+      const poissonTerms = request.poissonTerms ?? 0;
+      if (!Number.isInteger(poissonTerms) || poissonTerms < 0) throw new RangeError("Poisson terms must be a non-negative integer.");
+      const maxLambdaPerStep = request.maxLambdaPerStep ?? (poissonTerms > 0 ? 2 : 64);
+      if (!(maxLambdaPerStep > 0) || !Number.isFinite(maxLambdaPerStep)) throw new RangeError("Maximum lambda per step must be finite and positive.");
+      // Dense streaming amortizes component exponentiation over every site.
+      // Below 64 sites, directly propagating the sparse components is cheaper.
+      const evaluator = request.siteCount >= 64
+        ? wasm.evaluateBranchMixtureLikelihoodDense
+        : wasm.evaluateBranchMixtureLikelihood;
+      const raw = evaluator(
+        pinned.add(u32, request.tree.ops),
+        pinned.add(f64, request.tree.edgeLengths),
+        pinned.add(u8, request.tipStates),
+        pinned.add(u32, operators.operatorOffsets),
+        pinned.add(u32, operators.componentModels),
+        pinned.add(f64, operators.componentWeights),
+        pinned.add(f64, operators.operatorScales),
+        pinned.add(f64, operators.collapseWeights),
+        pinned.add(u32, request.models.neighborCount),
+        pinned.add(u32, request.models.neighborIndex),
+        pinned.add(f64, request.models.rDiagonal),
+        pinned.add(f64, request.models.rOffDiagonal),
+        pinned.add(f64, request.models.mu),
+        pinned.add(f64, request.equilibrium),
+        request.siteCount,
+        request.grid.categoryCount,
+        operators.operatorsPerCategory,
+        operators.collapseMode === "mean-log-likelihood" ? 1 : 0,
+        request.models.stateCount,
+        request.models.maxNeighbors,
+        request.tree.slotCount,
+        request.tree.rootSlot,
+        poissonTerms,
+        maxLambdaPerStep,
+      );
+      const resultPointer = wasm.__pin(raw);
+      const logLikelihoods = wasm.__getFloat64Array(resultPointer).slice();
+      wasm.__unpin(resultPointer);
+      request.signal?.throwIfAborted();
+      request.onProgress?.(1, { message: "Branch-mixture likelihood grid evaluated", current: totalPairs, total: totalPairs });
       return { logLikelihoods, backend: "wasm", elapsedMs: performance.now() - started, precision: "f64" };
     } finally {
       pinned.release();

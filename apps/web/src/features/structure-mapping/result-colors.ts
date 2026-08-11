@@ -1,4 +1,4 @@
-import type { DifFubarRunResult, FubarRunResult } from "../../types.js";
+import type { BameRunResult, DifFubarRunResult, FubarRunResult } from "../../types.js";
 import type { StructureColorMode, StructureSiteDatum } from "./types.js";
 
 const RED = "#e74652";
@@ -180,6 +180,65 @@ export function difFubarStructureColorModes(sites: readonly StructureSiteDatum[]
       color: (site) => sequential(site.values.meanOmega2 ?? 0, maximumOmega2),
       valueLabel: (site) => `mean ω·G2 = ${(site.values.meanOmega2 ?? 0).toFixed(3)}`,
       legend: [{ color: "#e9f2ef", label: "low" }, { color: "#075b55", label: `high (${maximumOmega2.toFixed(2)})` }],
+    },
+  ];
+}
+
+export function buildBameStructureSites(result: BameRunResult, threshold: number): readonly StructureSiteDatum[] {
+  return result.sites.map((site) => {
+    const detected = site.pPositive > threshold;
+    const values: Record<string, number> = {
+      pPositive: site.pPositive,
+      logBayesFactor: Math.log10(Math.max(1e-12, Math.min(1e12, site.bayesFactor))),
+      meanAlpha: site.meanAlpha,
+    };
+    if (result.method === "fame" && "meanOmega1" in site) {
+      values.meanOmega1 = site.meanOmega1;
+      values.meanOmega2 = site.meanOmega2;
+      values.episodicContrast = Math.log2(Math.max(1e-8, site.meanOmega2) / Math.max(1e-8, site.meanOmega1));
+    } else if (result.method === "flavor" && "meanOmega" in site) {
+      values.meanOmega = site.meanOmega;
+      values.positiveBranchFraction = site.meanPositiveBranchFraction;
+      values.episodicContrast = Math.log2(Math.max(1e-8, site.meanOmega) / Math.max(1e-8, site.meanAlpha));
+    }
+    return { site: site.site, detected, direction: detected ? "positive" : "none", values };
+  });
+}
+
+export function bameStructureColorModes(sites: readonly StructureSiteDatum[]): readonly StructureColorMode[] {
+  const maximumPosterior = maximumValue(sites, "pPositive");
+  return [
+    {
+      id: "episodic-detection",
+      label: "Episodic selection call",
+      description: "Positive branch-mixture evidence at the current posterior threshold.",
+      color: (site) => site.detected ? RED : NEUTRAL,
+      valueLabel: (site) => site.detected ? "episodic positive" : "not detected",
+      legend: [{ color: RED, label: "episodic positive" }, { color: NEUTRAL, label: "not detected" }],
+    },
+    {
+      id: "positive-posterior",
+      label: "Positive posterior",
+      description: "Sequential coloring by posterior support for an omega-above-one branch mixture.",
+      color: (site) => interpolateColor("#f1efef", RED, (site.values.pPositive ?? 0) / maximumPosterior),
+      valueLabel: (site) => `posterior = ${(site.values.pPositive ?? 0).toFixed(3)}`,
+      legend: [{ color: "#f1efef", label: "0" }, { color: RED, label: maximumPosterior.toFixed(2) }],
+    },
+    {
+      id: "empirical-bayes-factor",
+      label: "log₁₀ empirical Bayes factor",
+      description: "Evidence ratio relative to the inferred global positive-category mass, clipped at 10¹².",
+      color: (site) => diverging(site.values.logBayesFactor ?? 0, 4),
+      valueLabel: (site) => `log₁₀ BF = ${(site.values.logBayesFactor ?? 0).toFixed(3)}`,
+      legend: [{ color: BLUE, label: "against" }, { color: "#f0f2f1", label: "BF=1" }, { color: RED, label: "for" }],
+    },
+    {
+      id: "episodic-effect",
+      label: "Posterior mean episodic contrast",
+      description: "FAME: log₂(ω₂/ω₁). FLAVOR: log₂(mean ω/α).",
+      color: (site) => diverging(site.values.episodicContrast ?? 0, 4),
+      valueLabel: (site) => `log₂ contrast = ${(site.values.episodicContrast ?? 0).toFixed(3)}`,
+      legend: [{ color: BLUE, label: "≤ −4" }, { color: "#f0f2f1", label: "0" }, { color: RED, label: "≥ +4" }],
     },
   ];
 }
