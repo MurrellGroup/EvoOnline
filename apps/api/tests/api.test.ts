@@ -77,7 +77,7 @@ test("lists models and completes a small DifFUBAR job", async () => {
   assert.equal(job.result.backend, "wasm");
 });
 
-test("completes a small untagged FUBAR job with both selection directions", async () => {
+test("completes a small untagged FUBAR job with separate optional FEL results", async () => {
   const alignment = await readFile(new URL("../../../examples/diffubar-demo.fasta", import.meta.url), "utf8");
   const taggedTree = await readFile(new URL("../../../examples/diffubar-demo.nwk", import.meta.url), "utf8");
   const tree = taggedTree.replaceAll(/\{[^}]+\}/g, "");
@@ -85,7 +85,7 @@ test("completes a small untagged FUBAR job with both selection directions", asyn
     modelId: "fubar",
     alignment: { name: "demo.fasta", text: alignment },
     tree: { name: "demo.nwk", text: tree },
-    parameters: { gridPoints: 4, iterations: 100, posteriorThreshold: 0.8 },
+    parameters: { gridPoints: 4, iterations: 100, posteriorThreshold: 0.8, approximateFel: true },
   });
   assert.equal(submitted.status, 202);
   let job = submitted.body;
@@ -98,6 +98,11 @@ test("completes a small untagged FUBAR job with both selection directions", asyn
   assert.ok(Array.isArray(job.result.positiveSites));
   assert.ok(Array.isArray(job.result.purifyingSites));
   assert.match(job.result.csv, /P\(beta > alpha\)/);
+  assert.equal(job.result.approximateFel.sites.length, 12);
+  assert.equal(job.result.approximateFel.gridSize, 4);
+  assert.equal(job.result.approximateFel.relativeLogLikelihoods.length, 12 * 16);
+  assert.match(job.result.approximateFel.csv, /FEL p-value \(positive\)/);
+  assert.doesNotMatch(job.result.csv, /FEL p-value/);
 
   const gibbsSubmitted = await requestJson("POST", "/v1/jobs", {
     modelId: "fubar",

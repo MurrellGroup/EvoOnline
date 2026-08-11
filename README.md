@@ -11,8 +11,9 @@ The browser workflow currently supports:
 5. Validating each method's alignment/tree/tip-name/tag requirements.
 6. Running DifFUBAR or FUBAR in a dedicated browser worker. Exact parallel WASM is the default and WebGPU remains selectable.
 7. Choosing deterministic Dirichlet-EM (the regular-FUBAR default) or exact Gibbs inference for FUBAR.
-8. Exploring model-owned, linked interactive SVG figures, editing publication labels, and exporting lossless SVG or CSV.
-9. Profile-aligning the translated codon alignment to an uploaded PDB/mmCIF structure or an RCSB PDB entry, then exploring residue-level selection calls in a simplified Mol* view.
+8. Optionally deriving separate approximate-FEL likelihood-ratio tests from the already-computed FUBAR grid.
+9. Exploring model-owned, linked interactive SVG figures, editing publication labels, and exporting lossless SVG or CSV.
+10. Profile-aligning the translated codon alignment to an uploaded PDB/mmCIF structure or an RCSB PDB entry, then exploring residue-level selection calls in a simplified Mol* view.
 
 Sequence and tree data remain device-local when using the browser executor.
 
@@ -63,7 +64,7 @@ npm test
 npm run build
 ```
 
-The DifFUBAR package retains its Julia/SciPy parity scripts, benchmark, WGSL validation, and exact WASM tests under `models/diffubar`. Regular FUBAR adds exact grid-transform, analytical Dirichlet-EM, Gibbs-allocation, posterior-product, and ordinary-tree tests under `models/fubar`.
+The DifFUBAR package retains its Julia/SciPy parity scripts, benchmark, WGSL validation, and exact WASM tests under `models/diffubar`. Regular FUBAR adds exact grid-transform, analytical Dirichlet-EM, Gibbs-allocation, posterior-product, ordinary-tree, exact-spline, known-optimum, and directional-LRT tests under `models/fubar`.
 
 ## DifFUBAR figure studio
 
@@ -78,6 +79,8 @@ For memory efficiency, the model collapses the sampler's temporary category-by-s
 Regular FUBAR shares DifFUBAR's fitted MG94 model and optimized likelihood kernels, but evaluates the exact CodonMolecularEvolution.jl 20 × 20 α–β grid on a single untagged branch class. Dirichlet-EM is deterministic and remains the default. The optional exact uncollapsed Gibbs sampler uses fused WASM rejection draws, a reproducible seed and configurable burn-in; retained category allocations are collapsed into the same site posterior surfaces and marginals.
 
 The result renderer highlights both positive selection, P(β > α), and purifying selection, P(α > β). Positive and purifying visibility checkboxes are enabled by default and jointly filter the table, overview, marginal rows, posterior-surface choices, and structural detection calls. The studio provides the codon overview, paper-style α/β posterior-mass lanes at detected sites, an interactive posterior surface for any linked site, editable labels, and direct SVG/CSV export.
+
+**Also calculate approximate FEL** is an opt-in FUBAR checkbox. It reuses each site's raw conditional likelihood grid before the Bayesian prior or mixture weights are applied. Max-shifted log likelihoods are interpolated in the uniform FUBAR grid-index coordinate by a nodal-exact local bicubic surface; a deterministic local-curvature audit reduces cubic tension only when needed. Multi-start optimization finds the unrestricted surface maximum and the maximum on α=β, then reports the χ²(1) LRT plus separate signed-root positive and purifying p-values. Its controls, table, CSV, thresholds, and conditional-likelihood SVG are contained in a visibly separate result panel, so enabling it does not add columns to or alter the FUBAR posterior result.
 
 ## Reference-coordinate result maps
 

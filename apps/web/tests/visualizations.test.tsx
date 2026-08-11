@@ -11,6 +11,7 @@ import type { DifFubarRunResult } from "../src/types.js";
 import { FubarVisualizations } from "../src/components/FubarVisualizations.js";
 import { PhylogramFigure } from "../src/components/PhylogramFigure.js";
 import type { FubarRunResult } from "../src/types.js";
+import { ApproximateFelResults, approximateFelCall } from "../src/components/ApproximateFelResults.js";
 
 test("DifFUBAR result studio renders a native SVG overview and export control", () => {
   const result: DifFubarRunResult = {
@@ -95,6 +96,53 @@ test("FUBAR studio renders selection overview and site posterior products", () =
   assert.match(markup, /Posterior surface/);
   assert.match(markup, /Export SVG/);
   assert.match(markup, /mean α/);
+});
+
+test("approximate FEL stays separate and renders conditional likelihood optima plus SVG export", () => {
+  const result = {
+    siteCount: 2,
+    gridSize: 3,
+    gridValues: Float64Array.of(0.01, 1, 8),
+    relativeLogLikelihoods: Float32Array.of(
+      -8, -5, -3, -6, -2, 0, -7, -3, -1,
+      -1, -3, -7, 0, -2, -6, -3, -5, -8,
+    ),
+    sites: [
+      {
+        site: 1, pValue: 0.02, pPositive: 0.01, pPurifying: 0.99, likelihoodRatio: 5.41,
+        gridLogLikelihoodMaximum: -100, logLikelihoodAlternative: -99.9, logLikelihoodNull: -102.605,
+        alphaAlternative: 0.7, betaAlternative: 2.4, alphaBetaNull: 1.1,
+        alphaCoordinate: 0.9, betaCoordinate: 1.35, nullCoordinate: 1.04,
+        direction: "positive", splineTension: 1,
+      },
+      {
+        site: 2, pValue: 0.03, pPositive: 0.985, pPurifying: 0.015, likelihoodRatio: 4.7,
+        gridLogLikelihoodMaximum: -80, logLikelihoodAlternative: -79.8, logLikelihoodNull: -82.15,
+        alphaAlternative: 2.8, betaAlternative: 0.6, alphaBetaNull: 1.2,
+        alphaCoordinate: 1.45, betaCoordinate: 0.8, nullCoordinate: 1.06,
+        direction: "purifying", splineTension: 1,
+      },
+    ],
+    diagnostics: {
+      interpolation: "exact-tensioned-bicubic-log-likelihood",
+      coordinateSystem: "uniform-fubar-grid-index",
+      maximumNodeError: 0,
+      minimumSplineTension: 1,
+      guardedSites: 0,
+    },
+  } as const;
+  assert.equal(approximateFelCall(result.sites[0], 0.05), "positive");
+  assert.equal(approximateFelCall(result.sites[1], 0.05), "purifying");
+  const markup = renderToStaticMarkup(<ApproximateFelResults result={result} />);
+  assert.match(markup, /Optional frequentist companion/);
+  assert.match(markup, /Separate from FUBAR/);
+  assert.match(markup, /No FUBAR prior enters these results/);
+  assert.match(markup, /data-figure="approximate-fel-surface"/);
+  assert.match(markup, /data-optimum="null"/);
+  assert.match(markup, /data-optimum="alternative"/);
+  assert.match(markup, /data-lrt-connector="true"/);
+  assert.match(markup, /Download FEL CSV/);
+  assert.match(markup, /Export SVG/);
 });
 
 test("posterior marginals render Julia-style alpha and omega probability-mass lanes", () => {

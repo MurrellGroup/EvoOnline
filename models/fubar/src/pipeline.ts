@@ -15,6 +15,7 @@ import {
   type TreeNode,
 } from "@phylo-workbench/model-diffubar";
 import { createFubarGrid } from "./model/grid.js";
+import { analyzeApproximateFel } from "./fel/approximate-fel.js";
 import { postprocessFubar, postprocessFubarAllocations } from "./posterior/postprocess.js";
 import type {
   FubarAnalysisOptions,
@@ -149,6 +150,19 @@ export async function analyzeFubar(
     ...(options.signal === undefined ? {} : { signal: options.signal }),
   });
   const gridMs = performance.now() - gridStarted;
+  const approximateFelStarted = performance.now();
+  if (options.approximateFel === true) options.onStage?.("approximate-fel", 0, {
+    message: `Fitting exact conditional log-likelihood splines for ${alignment.codonSites.toLocaleString()} sites`,
+    current: 0,
+    total: alignment.codonSites,
+  });
+  const approximateFel = options.approximateFel === true
+    ? analyzeApproximateFel(likelihood.logLikelihoods, grid, alignment.codonSites, {
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+      onProgress: (fraction, detail) => options.onStage?.("approximate-fel", fraction, detail),
+    })
+    : undefined;
+  const approximateFelMs = performance.now() - approximateFelStarted;
   const conditionals = normalizeConditionalLikelihoodsInPlace(
     likelihood.logLikelihoods,
     grid.categoryCount,
@@ -210,7 +224,7 @@ export async function analyzeFubar(
     total: alignment.codonSites,
   });
   options.onStage?.("complete", 1, {
-    message: `FUBAR finished with ${likelihood.backend} · ${inferenceMethod === "gibbs" ? "Gibbs" : "Dirichlet EM"}`,
+    message: `FUBAR finished with ${likelihood.backend} · ${inferenceMethod === "gibbs" ? "Gibbs" : "Dirichlet EM"}${approximateFel === undefined ? "" : " · approximate FEL"}`,
   });
 
   return {
@@ -220,11 +234,13 @@ export async function analyzeFubar(
     fittedModel,
     grid,
     posterior: postprocessed.posterior,
+    ...(approximateFel === undefined ? {} : { approximateFel }),
     theta,
     backend: likelihood.backend,
     timings: {
       fitMs,
       gridMs,
+      ...(approximateFel === undefined ? {} : { approximateFelMs }),
       inferenceMs,
       posteriorMs,
       totalMs: performance.now() - started,

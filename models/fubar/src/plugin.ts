@@ -17,7 +17,7 @@ import type { FubarAnalysisResult } from "./types.js";
 
 export const fubarManifest: ModelManifest = {
   id: "fubar",
-  version: "0.1.0",
+  version: "0.2.0",
   title: "Pervasive selection with FUBAR",
   shortTitle: "FUBAR",
   description: "Infer site-wise positive and purifying selection from a single branch-class codon model.",
@@ -61,6 +61,13 @@ export const fubarManifest: ModelManifest = {
       minimum: 8,
       maximum: 40,
       step: 1,
+    },
+    {
+      id: "approximateFel",
+      label: "Also calculate approximate FEL",
+      description: "Optional frequentist LRT from the same conditional likelihood grid. Its results stay separate from the FUBAR posterior.",
+      type: "boolean",
+      default: false,
     },
     {
       id: "inferenceMethod",
@@ -141,8 +148,8 @@ export const fubarManifest: ModelManifest = {
     },
   ],
   runtimes: ["browser-webgpu", "browser-wasm", "server-native"],
-  outputKinds: ["site-posterior-table", "posterior-surface", "detected-site-set", "csv"],
-  citation: "Murrell et al., FUBAR; implementation follows CodonMolecularEvolution.jl DirichletFUBAR",
+  outputKinds: ["site-posterior-table", "posterior-surface", "detected-site-set", "conditional-likelihood-surface", "csv"],
+  citation: "Murrell et al., FUBAR; implementation follows CodonMolecularEvolution.jl DirichletFUBAR and optional FIFEFUBAR",
 };
 
 export function validateFubarWorkspace(workspace: PhyloWorkspaceSnapshot): ModelValidation {

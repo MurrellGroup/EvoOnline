@@ -24,6 +24,7 @@ const stageLabels: Readonly<Record<string, string>> = {
   "global-fit": "Fitting the global codon model",
   "grid-preparation": "Building the rate grid",
   "conditional-likelihoods": "Evaluating conditional likelihoods",
+  "approximate-fel": "Optimizing approximate FEL surfaces",
   "gibbs-sampler": "Sampling the posterior",
   "dirichlet-em": "Fitting the Dirichlet mixture",
   tabulation: "Tabulating site posteriors",

@@ -26,6 +26,7 @@ scope.onmessage = (event: MessageEvent<WorkerRunRequest>): void => {
         seed: Number(parameters.seed ?? 1234),
         posteriorThreshold: threshold,
         fitMode: parameters.fitMode === "reference-compatible" ? "reference-compatible" : "empirical-fast",
+        approximateFel: parameters.approximateFel === true || parameters.approximateFel === "true",
         onStage: (stage, fraction, detail) => {
           const message: FubarWorkerResponse = {
             type: "progress",
@@ -42,6 +43,7 @@ scope.onmessage = (event: MessageEvent<WorkerRunRequest>): void => {
         positiveSites: result.positiveSites,
         purifyingSites: result.purifyingSites,
         posterior: result.posterior,
+        ...(result.approximateFel === undefined ? {} : { approximateFel: result.approximateFel }),
         backend: result.backend,
         timings: result.timings,
         diagnostics: result.diagnostics,
@@ -49,12 +51,16 @@ scope.onmessage = (event: MessageEvent<WorkerRunRequest>): void => {
         csv: fubarResultsToCsv(result, threshold),
       };
       const message: FubarWorkerResponse = { type: "result", id: request.id, result: compact };
-      scope.postMessage(message, [
+      const transfer = [
         result.posterior.gridValues.buffer,
         result.posterior.surfaces.buffer,
         result.posterior.alpha.buffer,
         result.posterior.beta.buffer,
-      ]);
+      ];
+      if (result.approximateFel !== undefined) {
+        transfer.push(result.approximateFel.gridValues.buffer, result.approximateFel.relativeLogLikelihoods.buffer);
+      }
+      scope.postMessage(message, transfer);
     } catch (error) {
       const message: FubarWorkerResponse = {
         type: "error",

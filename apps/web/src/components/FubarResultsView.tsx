@@ -5,6 +5,7 @@ import { StructureMappingPanel } from "../features/structure-mapping/StructureMa
 import { buildFubarStructureSites, fubarStructureColorModes } from "../features/structure-mapping/result-colors.js";
 import { ReferenceResultMap } from "../features/reference-map/ReferenceResultMap.js";
 import { buildFubarReferenceEvidence, FUBAR_REFERENCE_HYPOTHESES } from "../features/reference-map/reference-hypotheses.js";
+import { ApproximateFelResults } from "./ApproximateFelResults.js";
 
 function probability(value: number): string {
   return value.toFixed(value >= 0.995 ? 4 : 3);
@@ -81,6 +82,7 @@ export function FubarResultsView({ result, threshold, alignment }: { readonly re
           })}</tbody>
         </table>
       </div>
+      {result.approximateFel !== undefined && <ApproximateFelResults result={result.approximateFel} />}
       <ReferenceResultMap modelName="FUBAR" alignmentText={alignment} evidenceSites={referenceEvidence} hypotheses={FUBAR_REFERENCE_HYPOTHESES} initialThreshold={posteriorThreshold} />
       <StructureMappingPanel alignmentText={alignment} sites={structureSites} colorModes={structureColorModes} />
     </section>

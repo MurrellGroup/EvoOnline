@@ -1,5 +1,5 @@
 import type { PosteriorMarginals, ProgressDetail, SiteResult } from "@phylo-workbench/model-diffubar/browser-source";
-import type { FubarPosteriorProducts, FubarSiteResult } from "@phylo-workbench/model-fubar/browser-source";
+import type { ApproximateFelProducts, FubarPosteriorProducts, FubarSiteResult } from "@phylo-workbench/model-fubar/browser-source";
 
 export interface DifFubarRunResult {
   readonly sites: readonly SiteResult[];
@@ -31,6 +31,7 @@ export interface FubarRunResult {
   readonly positiveSites: readonly number[];
   readonly purifyingSites: readonly number[];
   readonly posterior: FubarPosteriorProducts;
+  readonly approximateFel?: ApproximateFelProducts;
   readonly backend: "webgpu" | "wasm" | "wasm-parallel";
   readonly timings: Readonly<Record<string, number>>;
   readonly diagnostics: {

@@ -4,6 +4,12 @@ const GRID_DIVISOR = 6.578947368421053;
 const GRID_SHIFT = 1.502;
 const GRID_OFFSET = 0.0423174293933042;
 
+/** Map a zero-based, potentially fractional FUBAR grid coordinate to a rate. */
+export function fubarRateAtGridCoordinate(coordinate: number): number {
+  if (!Number.isFinite(coordinate)) throw new RangeError("FUBAR grid coordinates must be finite.");
+  return 10 ** ((coordinate + 1) / GRID_DIVISOR - GRID_SHIFT) - GRID_OFFSET;
+}
+
 /** Exact default transform and alpha-major/beta-minor ordering from FUBAR_grid. */
 export function createFubarGrid(gridPoints = 20): FubarGrid {
   if (!Number.isInteger(gridPoints) || gridPoints < 2 || gridPoints > 64) {
@@ -11,7 +17,7 @@ export function createFubarGrid(gridPoints = 20): FubarGrid {
   }
   const values = new Float64Array(gridPoints);
   for (let index = 0; index < gridPoints; index += 1) {
-    values[index] = 10 ** ((index + 1) / GRID_DIVISOR - GRID_SHIFT) - GRID_OFFSET;
+    values[index] = fubarRateAtGridCoordinate(index);
   }
   const categoryCount = gridPoints * gridPoints;
   const categories = new Float64Array(categoryCount * 2);

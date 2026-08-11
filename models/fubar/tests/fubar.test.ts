@@ -3,6 +3,8 @@ import test from "node:test";
 import { createAlignmentArtifact, createTreeArtifact } from "@phylo-workbench/domain";
 import { WasmBackend, parseNewick } from "@phylo-workbench/model-diffubar";
 import { createFubarGrid } from "../src/model/grid.js";
+import { analyzeApproximateFel, approximateFelResultsToCsv } from "../src/fel/approximate-fel.js";
+import { ExactBicubicLogLikelihoodSpline } from "../src/fel/exact-bicubic.js";
 import { postprocessFubar, postprocessFubarAllocations } from "../src/posterior/postprocess.js";
 import { fubarPlugin } from "../src/plugin.js";
 
@@ -18,6 +20,84 @@ test("FUBAR grid matches the CodonMolecularEvolution 20-point transform and orde
   assert.equal(grid.betaIndex[20], 0);
   // Shared engine stores omega=beta/alpha, so alpha*omega recovers beta.
   assert.ok(Math.abs(grid.categories[2 * 19]! * grid.categories[2 * 19 + 1]! - grid.values[19]!) < 1e-12);
+});
+
+test("approximate FEL spline is nodal-exact and reproduces a quadratic log-likelihood surface", () => {
+  const size = 8;
+  const values = new Float64Array(size * size);
+  const expected = (alpha: number, beta: number): number => (
+    3 + 0.7 * alpha - 0.11 * alpha * alpha - 0.5 * beta - 0.08 * beta * beta + 0.13 * alpha * beta
+  );
+  for (let alpha = 0; alpha < size; alpha += 1) {
+    for (let beta = 0; beta < size; beta += 1) values[alpha * size + beta] = expected(alpha, beta);
+  }
+  const spline = new ExactBicubicLogLikelihoodSpline(values, size);
+  assert.equal(spline.audit.tension, 1);
+  assert.ok(spline.audit.maximumNodeError <= 1e-13);
+  for (const [alpha, beta] of [[0.2, 0.3], [2.75, 4.4], [6.8, 0.6], [1.1, 6.7]] as const) {
+    assert.ok(Math.abs(spline.evaluate(alpha, beta) - expected(alpha, beta)) < 2e-12);
+  }
+});
+
+test("approximate FEL recovers global and alpha=beta optima with directional p-values", () => {
+  const size = 20;
+  const grid = createFubarGrid(size);
+  const siteCount = 3;
+  const logs = new Float64Array(grid.categoryCount * siteCount);
+  const surfaces = [
+    { alpha: 6.4, beta: 12.2, sigmaAlpha: 1.7, sigmaBeta: 2.1 },
+    { alpha: 13.1, beta: 5.7, sigmaAlpha: 2.3, sigmaBeta: 1.5 },
+    { alpha: 9.25, beta: 9.25, sigmaAlpha: 1.8, sigmaBeta: 1.8 },
+  ] as const;
+  for (let alpha = 0; alpha < size; alpha += 1) {
+    for (let beta = 0; beta < size; beta += 1) {
+      const category = alpha * size + beta;
+      for (let site = 0; site < siteCount; site += 1) {
+        const target = surfaces[site]!;
+        logs[category * siteCount + site] = -(
+          (alpha - target.alpha) ** 2 / (2 * target.sigmaAlpha ** 2)
+          + (beta - target.beta) ** 2 / (2 * target.sigmaBeta ** 2)
+        );
+      }
+    }
+  }
+  const updates: number[] = [];
+  const result = analyzeApproximateFel(logs, grid, siteCount, {
+    onProgress: (_fraction, detail) => updates.push(detail?.current ?? 0),
+  });
+  const positive = result.sites[0]!;
+  const purifying = result.sites[1]!;
+  const neutral = result.sites[2]!;
+  assert.ok(Math.abs(positive.alphaCoordinate - surfaces[0]!.alpha) < 1e-8);
+  assert.ok(Math.abs(positive.betaCoordinate - surfaces[0]!.beta) < 1e-8);
+  const positiveTarget = surfaces[0]!;
+  const alphaWeight = 1 / positiveTarget.sigmaAlpha ** 2;
+  const betaWeight = 1 / positiveTarget.sigmaBeta ** 2;
+  const expectedNullCoordinate = (positiveTarget.alpha * alphaWeight + positiveTarget.beta * betaWeight) / (alphaWeight + betaWeight);
+  const expectedNullLogLikelihood = -(
+    (expectedNullCoordinate - positiveTarget.alpha) ** 2 / (2 * positiveTarget.sigmaAlpha ** 2)
+    + (expectedNullCoordinate - positiveTarget.beta) ** 2 / (2 * positiveTarget.sigmaBeta ** 2)
+  );
+  assert.ok(Math.abs(positive.nullCoordinate - expectedNullCoordinate) < 1e-8);
+  assert.ok(Math.abs(positive.likelihoodRatio + 2 * expectedNullLogLikelihood) < 1e-8);
+  assert.ok(Math.abs(positive.pValue - 0.0318190571) < 1e-7);
+  assert.equal(positive.direction, "positive");
+  assert.ok(positive.pPositive < positive.pValue);
+  assert.ok(positive.pPurifying > 0.5);
+  assert.ok(Math.abs(purifying.alphaCoordinate - surfaces[1]!.alpha) < 1e-8);
+  assert.ok(Math.abs(purifying.betaCoordinate - surfaces[1]!.beta) < 1e-8);
+  assert.equal(purifying.direction, "purifying");
+  assert.ok(purifying.pPurifying < purifying.pValue);
+  assert.ok(purifying.pPositive > 0.5);
+  assert.equal(neutral.direction, "none");
+  assert.ok(neutral.likelihoodRatio < 1e-10);
+  assert.equal(neutral.pValue, 1);
+  assert.deepEqual(updates, [1, 2, 3]);
+  assert.equal(result.relativeLogLikelihoods.length, siteCount * grid.categoryCount);
+  assert.ok(result.diagnostics.maximumNodeError <= 1e-12);
+  const csv = approximateFelResultsToCsv(result);
+  assert.match(csv, /FEL p-value \(positive\)/);
+  assert.match(csv, /positive_selected/);
 });
 
 test("fused Dirichlet EM recovers analytical pseudocount weights", async () => {
@@ -98,6 +178,7 @@ test("FUBAR plugin accepts an ordinary untagged tree and defaults to parallel WA
   assert.equal(fubarPlugin.defaultParameters().backend, "wasm-parallel");
   assert.equal(fubarPlugin.defaultParameters().gridPoints, 20);
   assert.equal(fubarPlugin.defaultParameters().inferenceMethod, "dirichlet-em");
+  assert.equal(fubarPlugin.defaultParameters().approximateFel, false);
   assert.deepEqual(fubarPlugin.validate({ alignment, tree }), { ready: true, issues: [] });
   assert.equal(parseNewick(newick).classCount, 1);
 });

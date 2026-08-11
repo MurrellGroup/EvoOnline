@@ -9,6 +9,7 @@ import {
 import type { ModelManifest, ModelValidation, ParameterValues } from "@phylo-workbench/model-sdk";
 import {
   analyzeFubar,
+  approximateFelResultsToCsv,
   fubarManifest,
   fubarResultsToCsv,
   validateFubarWorkspace,
@@ -54,6 +55,15 @@ function serialiseDifFubarResult(result: AnalysisResult) {
 }
 
 function serialiseFubarResult(result: FubarAnalysisResult, threshold: number) {
+  const approximateFel = result.approximateFel === undefined ? undefined : {
+    siteCount: result.approximateFel.siteCount,
+    gridSize: result.approximateFel.gridSize,
+    gridValues: [...result.approximateFel.gridValues],
+    relativeLogLikelihoods: [...result.approximateFel.relativeLogLikelihoods],
+    sites: result.approximateFel.sites,
+    diagnostics: result.approximateFel.diagnostics,
+    csv: approximateFelResultsToCsv(result.approximateFel),
+  };
   return {
     sites: result.sites,
     positiveSites: result.positiveSites,
@@ -72,6 +82,7 @@ function serialiseFubarResult(result: FubarAnalysisResult, threshold: number) {
     gridValues: [...result.grid.values],
     theta: [...result.theta],
     csv: fubarResultsToCsv(result, threshold),
+    ...(approximateFel === undefined ? {} : { approximateFel }),
   };
 }
 
@@ -115,6 +126,7 @@ export const serverModelRegistry: readonly ServerModelRegistration[] = [
         seed: numberParameter(parameters, "seed", 1234),
         posteriorThreshold,
         fitMode: parameters.fitMode === "reference-compatible" ? "reference-compatible" : "empirical-fast",
+        approximateFel: parameters.approximateFel === true || parameters.approximateFel === "true",
         signal,
         onStage: onProgress,
       });
