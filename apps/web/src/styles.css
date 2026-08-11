@@ -442,6 +442,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .run-progress__heading span { color: #59716b; font-variant-numeric: tabular-nums; }
 .run-progress__bar { position: relative; height: 8px; overflow: hidden; background: #d7e3dd; border-radius: 999px; }
 .run-progress__bar > span { display: block; height: 100%; background: var(--teal); border-radius: inherit; transition: width 180ms ease-out; }
+.run-progress__bar:not(.is-indeterminate)::after { content: ""; position: absolute; inset: 0; width: 22%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.72), transparent); animation: run-progress-glint 1.35s linear infinite; }
 .run-progress__bar.is-indeterminate > span { width: 34%; background: linear-gradient(90deg, #5aa396, var(--teal), #5aa396); animation: run-progress-sweep 1.15s ease-in-out infinite; }
 .run-progress__detail { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; color: #657771; font-size: 9px; line-height: 1.35; }
 .run-progress__detail span:not(:first-child) { color: #355a53; font-variant-numeric: tabular-nums; font-weight: 750; }
@@ -451,8 +452,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
   55% { transform: translateX(195%); }
   100% { transform: translateX(195%); }
 }
+@keyframes run-progress-glint {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(560%); }
+}
 @media (prefers-reduced-motion: reduce) {
   .run-progress__bar.is-indeterminate > span { animation-duration: 2.8s; }
+  .run-progress__bar:not(.is-indeterminate)::after { animation-duration: 3.8s; }
 }
 
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
@@ -557,7 +563,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .reference-map { margin-top: 28px; padding-top: 24px; border-top: 1px solid #dfe5e0; }
 .reference-map__heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
 .reference-map__heading h3 { margin: 0; color: var(--ink); font-family: Georgia, serif; font-size: 22px; font-weight: 400; }
-.reference-map__heading p:last-child { max-width: 720px; margin: 6px 0 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.reference-map__heading h3 + p { max-width: 720px; margin: 6px 0 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.reference-map-mode { display: inline-flex; margin-top: 7px; padding: 4px 7px; color: #17665c; background: #eaf5f1; border: 1px solid #cfe5dd; border-radius: 999px; font-size: 7px; font-weight: 800; letter-spacing: 0.02em; }
 .reference-map__heading .button { flex: 0 0 auto; }
 .reference-map__body { margin-top: 12px; }
 .reference-map-panel { margin: 5px 0 0; overflow: hidden; background: #fff; border: 1px solid #dfe5e0; border-radius: 7px; }
@@ -577,6 +584,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .reference-map-upload small, .reference-map-source__body > label small { color: #7d8986; font-size: 7px; line-height: 1.3; }
 .reference-map-source__body > label > span { color: #536762; font-size: 7px; font-weight: 800; text-transform: uppercase; }
 .reference-map-source select { min-height: 28px; padding: 4px 6px; color: #2a3d39; background: #fff; border: 1px solid #cbd5cf; border-radius: 4px; font-size: 8px; }
+.reference-map-remove { align-self: flex-start; min-height: 24px; margin-top: 1px; padding: 3px 7px; font-size: 7px; }
 .reference-map-progress { display: flex; align-items: center; gap: 8px; margin-top: 6px; padding: 8px 10px; color: #34504a; background: #eff7f3; border-radius: 6px; }
 .reference-map-progress > span { width: 14px; height: 14px; border: 2px solid #bed7cf; border-top-color: var(--teal); border-radius: 50%; animation: structure-spin 0.75s linear infinite; }
 .reference-map-progress strong { font-size: 8px; }

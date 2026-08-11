@@ -21,6 +21,7 @@ type Notice = { readonly tone: "error" | "info" | "success"; readonly text: stri
 
 const stageLabels: Readonly<Record<string, string>> = {
   initialization: "Preparing inputs",
+  "runtime-initialization": "Compiling the compute runtime",
   "global-fit": "Fitting the global codon model",
   "grid-preparation": "Building the rate grid",
   "conditional-likelihoods": "Evaluating conditional likelihoods",
@@ -37,6 +38,14 @@ function progressMetric(value: number): string {
   if (magnitude >= 100_000) return value.toExponential(4);
   if (magnitude >= 1_000) return value.toFixed(2);
   return value.toFixed(4);
+}
+
+function elapsedLabel(milliseconds: number): string {
+  if (milliseconds < 10_000) return `${(milliseconds / 1000).toFixed(1)} s`;
+  if (milliseconds < 60_000) return `${Math.round(milliseconds / 1000)} s`;
+  const minutes = Math.floor(milliseconds / 60_000);
+  const seconds = Math.floor((milliseconds % 60_000) / 1000);
+  return `${minutes}m ${seconds.toString().padStart(2, "0")}s`;
 }
 
 async function readTextFile(file: File): Promise<string> {
@@ -109,7 +118,17 @@ export function App() {
   const [notice, setNotice] = useState<Notice>();
   const [runState, setRunState] = useState<"idle" | "running">("idle");
   const [progress, setProgress] = useState<RunProgress>({ stage: "", fraction: 0 });
+  const runStartedAt = useRef(0);
+  const [elapsedMs, setElapsedMs] = useState(0);
   const [result, setResult] = useState<unknown>();
+
+  useEffect(() => {
+    if (runState !== "running") return;
+    const update = (): void => setElapsedMs(performance.now() - runStartedAt.current);
+    update();
+    const timer = window.setInterval(update, 250);
+    return () => window.clearInterval(timer);
+  }, [runState]);
 
   useEffect(() => {
     const next = {
@@ -273,6 +292,8 @@ export function App() {
 
   const runAnalysis = async (): Promise<void> => {
     if (alignment === undefined || tree === undefined || !validation.ready) return;
+    runStartedAt.current = performance.now();
+    setElapsedMs(0);
     setRunState("running");
     setResult(undefined);
     setProgress({ stage: "initialization", fraction: 0, message: requiresForeground ? "Parsing alignment and tagged tree" : "Parsing alignment and phylogeny", indeterminate: true });
@@ -473,18 +494,17 @@ export function App() {
             <div className="run-progress" role="status">
               <div className="run-progress__heading">
                 <strong>{stageLabels[progress.stage] ?? progress.stage}</strong>
-                <span>{progress.indeterminate ? "Working" : `${Math.round(progress.fraction * 100)}%`}</span>
+                <span>{progress.indeterminate ? `${progress.fraction > 0 ? `phase ${Math.round(progress.fraction * 100)}% · ` : ""}active` : `phase ${Math.round(progress.fraction * 100)}%`}</span>
               </div>
               <div className={`run-progress__bar ${progress.indeterminate ? "is-indeterminate" : ""}`} aria-hidden="true">
                 <span style={progress.indeterminate ? undefined : { width: `${Math.max(0, Math.min(100, progress.fraction * 100))}%` }} />
               </div>
-              {(progress.message !== undefined || progress.current !== undefined || progress.metricValue !== undefined) && (
-                <div className="run-progress__detail">
-                  {progress.message !== undefined && <span>{progress.message}</span>}
-                  {progress.current !== undefined && progress.total !== undefined && <span>{progress.current.toLocaleString()} / {progress.total.toLocaleString()}</span>}
-                  {progress.metricValue !== undefined && <span>{progress.metricLabel ?? "value"} {progressMetric(progress.metricValue)}</span>}
-                </div>
-              )}
+              <div className="run-progress__detail">
+                {progress.message !== undefined && <span>{progress.message}</span>}
+                {progress.current !== undefined && progress.total !== undefined && <span>{progress.current.toLocaleString()} / {progress.total.toLocaleString()}</span>}
+                {progress.metricValue !== undefined && <span>{progress.metricLabel ?? "value"} {progressMetric(progress.metricValue)}</span>}
+                <span>elapsed {elapsedLabel(elapsedMs)}</span>
+              </div>
               <button type="button" className="button button--quiet" onClick={cancelAnalysis}>Cancel</button>
             </div>
           ) : (

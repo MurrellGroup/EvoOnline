@@ -1,8 +1,9 @@
 import React, { useId, type CSSProperties, type RefObject } from "react";
 import { aminoAcidColor, layoutLogoSegments, LogoGlyph, profileLetterColor, rawLogoLetters } from "../structure-mapping/ProfileChainAlignment.js";
 import { AMINO_ACIDS } from "../structure-mapping/sequence-profile.js";
-import { buildReferenceDetectionMarks, buildReferenceMapColumns } from "./reference-numbering.js";
+import { buildAlignmentMapColumns, buildReferenceDetectionMarks, buildReferenceMapColumns } from "./reference-numbering.js";
 import type { ReferenceAlignmentResult, ReferenceEvidenceSite, ReferenceHypothesis, ReferenceMapColumn } from "./types.js";
+import type { AminoAcidProfile } from "../structure-mapping/types.js";
 
 const FONT = '"DejaVu Sans", Arial, Helvetica, sans-serif';
 
@@ -27,7 +28,8 @@ export interface ReferenceMapFigureSettings {
 }
 
 interface ReferenceMapFigureProps {
-  readonly result: ReferenceAlignmentResult;
+  readonly profile: AminoAcidProfile;
+  readonly referenceResult?: ReferenceAlignmentResult;
   readonly evidenceSites: readonly ReferenceEvidenceSite[];
   readonly hypotheses: readonly ReferenceHypothesis[];
   readonly selectedHypothesisIds: ReadonlySet<string>;
@@ -68,7 +70,8 @@ function UnknownResidueGlyph({ aminoAcid, x, y, width, height }: { readonly amin
 }
 
 export function ReferenceMapFigure({
-  result,
+  profile,
+  referenceResult,
   evidenceSites,
   hypotheses,
   selectedHypothesisIds,
@@ -77,7 +80,10 @@ export function ReferenceMapFigure({
 }: ReferenceMapFigureProps) {
   const titleId = useId();
   const descriptionId = useId();
-  const allColumns = buildReferenceMapColumns(result.alignment, settings.referenceStart);
+  const hasReference = referenceResult !== undefined;
+  const allColumns = referenceResult === undefined
+    ? buildAlignmentMapColumns(profile.columns.length)
+    : buildReferenceMapColumns(referenceResult.alignment, settings.referenceStart);
   const columns = visibleColumnSlice(allColumns, settings.startSite, settings.endSite);
   const selectedHypotheses = hypotheses.filter((hypothesis) => selectedHypothesisIds.has(hypothesis.id));
   const marks = buildReferenceDetectionMarks(columns, evidenceSites, selectedHypothesisIds, settings.threshold);
@@ -92,22 +98,25 @@ export function ReferenceMapFigure({
   const titleTop = 24;
   const laneTop = 56;
   const referenceTop = laneTop + selectedHypotheses.length * laneHeight + 12;
-  const profileTop = referenceTop + settings.referenceHeight + 6;
+  const profileTop = referenceTop + (hasReference ? settings.referenceHeight + 6 : 0);
   const axisTop = profileTop + settings.logoHeight + 7;
   const height = axisTop + 28;
   const plotWidth = columns.length * settings.columnWidth;
   const width = Math.max(720, left + plotWidth + right);
   const detectedAlignmentColumns = new Set(marks.map((mark) => mark.alignmentIndex));
-  const firstReferenceIndex = columns.findIndex((column) => column.referenceIndex >= 0);
+  const firstReferenceIndex = columns.findIndex((column) => column.referenceNumber !== undefined);
   let lastReferenceIndex = -1;
   for (let index = columns.length - 1; index >= 0; index -= 1) {
-    if (columns[index]!.referenceIndex >= 0) { lastReferenceIndex = index; break; }
+    if (columns[index]!.referenceNumber !== undefined) { lastReferenceIndex = index; break; }
   }
-  const referenceCoverage = result.alignment.mappedResidues / Math.max(1, result.reference.sequence.length);
+  const referenceCoverage = referenceResult === undefined
+    ? undefined
+    : referenceResult.alignment.mappedResidues / Math.max(1, referenceResult.reference.sequence.length);
 
   return (
     <svg
       ref={svgRef}
+      xmlns="http://www.w3.org/2000/svg"
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
@@ -115,13 +124,18 @@ export function ReferenceMapFigure({
       aria-labelledby={`${titleId} ${descriptionId}`}
       style={svgStyle()}
       data-reference-map="true"
+      data-coordinate-mode={hasReference ? "reference" : "alignment"}
     >
       <title id={titleId}>{settings.title}</title>
-      <desc id={descriptionId}>A globally aligned amino-acid reference above a raw-frequency amino-acid profile. Selected posterior hypotheses are annotated in separate, non-overlapping lanes using reference coordinates; profile insertions receive letter suffixes.</desc>
+      <desc id={descriptionId}>{hasReference
+        ? "A globally aligned amino-acid reference above a raw-frequency amino-acid profile. Selected posterior hypotheses are annotated in separate, non-overlapping lanes using reference coordinates; profile insertions receive letter suffixes."
+        : "A raw-frequency amino-acid alignment profile with selected posterior hypotheses in separate, non-overlapping lanes using alignment codon coordinates."}</desc>
       <rect width={width} height={height} fill="#ffffff" />
       <text x="18" y={titleTop} fill="#172321" fontSize="16" fontWeight="750">{settings.title}</text>
       <text x="18" y={titleTop + 17} fill="#70807c" fontSize="8.5">
-        {`${result.reference.name} · ${percent(result.alignment.identity)} identity · ${percent(result.alignment.coverage)} profile coverage · ${percent(referenceCoverage)} reference coverage · posterior > ${settings.threshold.toFixed(3)}`}
+        {referenceResult === undefined
+          ? `${profile.sequenceCount.toLocaleString()} sequences · ${profile.columns.length.toLocaleString()} codons · alignment numbering · posterior > ${settings.threshold.toFixed(3)}`
+          : `${referenceResult.reference.name} · ${percent(referenceResult.alignment.identity)} identity · ${percent(referenceResult.alignment.coverage)} profile coverage · ${percent(referenceCoverage!)} reference coverage · posterior > ${settings.threshold.toFixed(3)}`}
       </text>
 
       {settings.showGridlines && [...detectedAlignmentColumns].map((alignmentIndex) => {
@@ -146,7 +160,9 @@ export function ReferenceMapFigure({
             const x = left + (visibleIndex + 0.5) * settings.columnWidth;
             const evidenceFraction = Math.max(0, Math.min(1, (mark.probability - settings.threshold) / Math.max(1e-8, 1 - settings.threshold)));
             return <g key={`${hypothesis.id}-${mark.site}`} data-detection-site={mark.site} data-coordinate={mark.coordinateLabel}>
-              <title>{`${hypothesis.label} at codon ${mark.site} → reference ${mark.coordinateLabel}: posterior ${mark.probability.toFixed(5)}`}</title>
+              <title>{hasReference
+                ? `${hypothesis.label} at codon ${mark.site} → reference ${mark.coordinateLabel}: posterior ${mark.probability.toFixed(5)}`
+                : `${hypothesis.label} at alignment codon ${mark.coordinateLabel}: posterior ${mark.probability.toFixed(5)}`}</title>
               <line x1={x} x2={x} y1={baseline} y2={baseline - 5 - evidenceFraction * 3} stroke={color} strokeWidth="1.5" />
               <circle cx={x} cy={baseline} r={2.1 + evidenceFraction * 1.1} fill={color} stroke="#ffffff" strokeWidth="0.8" />
               {settings.showDetectionLabels && <text
@@ -162,30 +178,32 @@ export function ReferenceMapFigure({
         </g>;
       })}
 
-      <text x={left - 12} y={referenceTop + settings.referenceHeight * 0.61} textAnchor="end" fill="#465b55" fontSize="8" fontWeight="800">{settings.referenceLabel}</text>
+      {hasReference && <text x={left - 12} y={referenceTop + settings.referenceHeight * 0.61} textAnchor="end" fill="#465b55" fontSize="8" fontWeight="800">{settings.referenceLabel}</text>}
       <text x={left - 12} y={profileTop + settings.logoHeight * 0.58} textAnchor="end" fill="#465b55" fontSize="8" fontWeight="800">{settings.profileLabel}</text>
-      <rect x={left} y={referenceTop} width={plotWidth} height={settings.referenceHeight} fill="#f7f9f8" />
+      {hasReference && <rect x={left} y={referenceTop} width={plotWidth} height={settings.referenceHeight} fill="#f7f9f8" />}
       <rect x={left} y={profileTop} width={plotWidth} height={settings.logoHeight} fill="#fbfcfb" />
       <line x1={left} x2={left + plotWidth} y1={profileTop - 3} y2={profileTop - 3} stroke="#c7d0cc" strokeWidth="0.8" />
 
       {columns.map((column, visibleIndex) => {
         const x = left + visibleIndex * settings.columnWidth + 1;
         const glyphWidth = Math.max(2, settings.columnWidth - 2);
-        const referenceAminoAcid = column.referenceIndex < 0 ? undefined : result.reference.sequence[column.referenceIndex];
-        const profileColumn = column.profileIndex < 0 ? undefined : result.profile.columns[column.profileIndex];
-        const letters = profileColumn === undefined ? [] : rawLogoLetters(profileColumn, result.profile.sequenceCount);
+        const referenceAminoAcid = referenceResult === undefined || column.referenceIndex < 0 ? undefined : referenceResult.reference.sequence[column.referenceIndex];
+        const profileColumn = column.profileIndex < 0 ? undefined : profile.columns[column.profileIndex];
+        const letters = profileColumn === undefined ? [] : rawLogoLetters(profileColumn, profile.sequenceCount);
         const segments = layoutLogoSegments(letters, profileTop, settings.logoHeight);
-        const occupancy = profileColumn === undefined ? 0 : profileColumn.validCount / result.profile.sequenceCount;
-        const columnTitle = profileColumn === undefined
-          ? `Reference ${column.coordinateLabel} ${referenceAminoAcid}; insertion in reference relative to the alignment profile.`
-          : referenceAminoAcid === undefined
-            ? `Codon ${profileColumn.site}; insertion ${column.coordinateLabel} relative to the reference; ${percent(occupancy)} profile occupancy.`
-            : `Codon ${profileColumn.site} ↔ reference ${column.coordinateLabel} ${referenceAminoAcid}; ${percent(occupancy)} profile occupancy.`;
+        const occupancy = profileColumn === undefined ? 0 : profileColumn.validCount / profile.sequenceCount;
+        const columnTitle = referenceResult === undefined
+          ? `Alignment codon ${profileColumn?.site ?? column.coordinateLabel}; ${percent(occupancy)} profile occupancy.`
+          : profileColumn === undefined
+            ? `Reference ${column.coordinateLabel} ${referenceAminoAcid}; insertion in reference relative to the alignment profile.`
+            : referenceAminoAcid === undefined
+              ? `Codon ${profileColumn.site}; insertion ${column.coordinateLabel} relative to the reference; ${percent(occupancy)} profile occupancy.`
+              : `Codon ${profileColumn.site} ↔ reference ${column.coordinateLabel} ${referenceAminoAcid}; ${percent(occupancy)} profile occupancy.`;
         return <g key={column.alignmentIndex} data-profile-site={column.profileSite ?? "gap"} data-reference-coordinate={column.coordinateLabel} data-occupancy={occupancy.toFixed(6)}>
           <title>{columnTitle}</title>
-          {referenceAminoAcid === undefined
+          {hasReference && (referenceAminoAcid === undefined
             ? <><rect x={x} y={referenceTop} width={glyphWidth} height={settings.referenceHeight} fill="#fff8ea" stroke="#dbb568" strokeDasharray="2 2" /><text x={x + glyphWidth / 2} y={referenceTop + settings.referenceHeight * 0.68} textAnchor="middle" fill="#b68a35" fontSize="10" fontWeight="800">–</text></>
-            : <UnknownResidueGlyph aminoAcid={referenceAminoAcid} x={x} y={referenceTop} width={glyphWidth} height={settings.referenceHeight} />}
+            : <UnknownResidueGlyph aminoAcid={referenceAminoAcid} x={x} y={referenceTop} width={glyphWidth} height={settings.referenceHeight} />)}
           {profileColumn === undefined
             ? <><rect x={x} y={profileTop} width={glyphWidth} height={settings.logoHeight} fill="#f2f5f3" stroke="#cbd5d0" strokeDasharray="2 2" /><text x={x + glyphWidth / 2} y={profileTop + settings.logoHeight * 0.62} textAnchor="middle" fill="#9aa6a2" fontSize="11" fontWeight="800">–</text></>
             : segments.map((segment) => <LogoGlyph
@@ -195,9 +213,9 @@ export function ReferenceMapFigure({
               y={segment.y}
               width={glyphWidth}
               height={segment.height}
-              color={profileLetterColor(segment.aminoAcid, referenceAminoAcid, settings.highlightDifferences)}
+              color={profileLetterColor(segment.aminoAcid, referenceAminoAcid, hasReference && settings.highlightDifferences)}
             />)}
-          {referenceAminoAcid === undefined && <rect x={x} y={referenceTop - 2} width={glyphWidth} height="2" fill="#d59c2c" />}
+          {hasReference && referenceAminoAcid === undefined && <rect x={x} y={referenceTop - 2} width={glyphWidth} height="2" fill="#d59c2c" />}
         </g>;
       })}
 
@@ -212,8 +230,8 @@ export function ReferenceMapFigure({
           <text x={x} y={axisTop + 13} textAnchor="middle" fill="#687873" fontSize="7" fontVariant="tabular-nums">{column.referenceNumber}</text>
         </g>;
       })}
-      <text x={left - 12} y={axisTop + 13} textAnchor="end" fill="#7b8985" fontSize="7" fontWeight="750">Reference coordinate</text>
-      {selectedHypotheses.length === 0 && <text x={left} y={laneTop + 4} fill="#84928e" fontSize="8">No hypothesis lanes selected; reference and profile alignment remain visible.</text>}
+      <text x={left - 12} y={axisTop + 13} textAnchor="end" fill="#7b8985" fontSize="7" fontWeight="750">{hasReference ? "Reference coordinate" : "Alignment codon"}</text>
+      {selectedHypotheses.length === 0 && <text x={left} y={laneTop + 4} fill="#84928e" fontSize="8">No hypothesis lanes selected; {hasReference ? "reference and profile alignment" : "the alignment profile"} remains visible.</text>}
       {columns.length === 0 && <text x={left} y={profileTop + 20} fill="#84928e" fontSize="9">No profile columns fall inside the selected codon window.</text>}
     </svg>
   );

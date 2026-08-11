@@ -83,6 +83,7 @@ describe("WASM backend", () => {
       assert.equal(parallel.backend, "wasm-parallel");
       assert.deepEqual(parallel.logLikelihoods, serial.logLikelihoods);
       assert.ok(progress.some((update) => update.detail?.indeterminate === true));
+      assert.equal(progress[1]?.detail?.indeterminate, true, "the worker pool must remain visibly active while its first fused block runs");
       assert.ok(progress.some((update) => update.fraction > 0 && update.fraction < 1));
       assert.equal(progress.at(-1)?.detail?.current, alignment.codonSites * grid.categoryCount);
       assert.match(progress.at(-1)?.detail?.message ?? "", /site blocks complete/);

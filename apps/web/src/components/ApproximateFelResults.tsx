@@ -6,6 +6,7 @@ import {
   type ApproximateFelSiteResult,
 } from "@phylo-workbench/model-fubar/browser-source";
 import { downloadSvg } from "../lib/svg-export.js";
+import { CommittedNumberInput } from "./CommittedNumberInput.js";
 
 const RED = "#ff4b4f";
 const BLUE = "#4f46f5";
@@ -190,7 +191,7 @@ function ConditionalLikelihoodFigure({
   );
 }
 
-export function ApproximateFelResults({ result }: { readonly result: ApproximateFelProducts }) {
+export function ApproximateFelResults({ result, elapsedMs }: { readonly result: ApproximateFelProducts; readonly elapsedMs?: number }) {
   const initial = result.sites.reduce((best, site) => site.pValue < best.pValue ? site : best, result.sites[0]!);
   const [threshold, setThreshold] = useState(0.05);
   const [showPositive, setShowPositive] = useState(true);
@@ -227,6 +228,7 @@ export function ApproximateFelResults({ result }: { readonly result: Approximate
         <div><span>Purifying at p &lt; {threshold.toFixed(3)}</span><strong className="purifying-text">{purifyingCount}</strong></div>
         <div><span>Exact-node error</span><strong>{result.diagnostics.maximumNodeError.toExponential(1)}</strong></div>
         <div><span>Guarded surfaces</span><strong>{result.diagnostics.guardedSites} / {result.siteCount}</strong></div>
+        {elapsedMs !== undefined && <div><span>FEL compute time</span><strong>{(elapsedMs / 1000).toFixed(2)} s</strong></div>}
       </div>
       <div className="selection-visibility" role="group" aria-label="Approximate FEL directions shown">
         <div><strong>Explore FEL directions</strong><span>Independent one-sided signed-root LRT p-values.</span></div>
@@ -235,7 +237,7 @@ export function ApproximateFelResults({ result }: { readonly result: Approximate
       </div>
       <div className="figure-controls approximate-fel__controls">
         <label className="figure-control figure-control--threshold"><span>FEL p threshold <strong>{threshold.toFixed(3)}</strong></span><input type="range" min="0.001" max="0.2" step="0.001" value={threshold} onChange={(event) => setThreshold(Number(event.target.value))} /></label>
-        <label className="figure-control"><span>Surface codon</span><input type="number" min="1" max={result.siteCount} value={selected.site} onChange={(event) => setSelectedSite(clamp(Number(event.target.value), 1, result.siteCount))} /></label>
+        <label className="figure-control"><span>Surface codon</span><CommittedNumberInput min={1} max={result.siteCount} value={selected.site} onCommit={setSelectedSite} /></label>
         <label className="figure-control"><span>Color scale</span><select value={scale} onChange={(event) => setScale(event.target.value === "likelihood" ? "likelihood" : "log")}><option value="log">Relative log L</option><option value="likelihood">Relative likelihood</option></select></label>
         <label className="figure-control"><span>Log-L window <strong>{logWindow}</strong></span><input type="range" min="2" max="50" step="1" value={logWindow} onChange={(event) => setLogWindow(Number(event.target.value))} /></label>
         <label className="figure-control"><span>SVG resolution</span><select value={resolution} onChange={(event) => setResolution(Number(event.target.value))}>{[32, 48, 64].map((value) => <option key={value} value={value}>{value} × {value}</option>)}</select></label>

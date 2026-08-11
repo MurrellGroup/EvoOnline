@@ -13,6 +13,7 @@ import type { PosteriorMarginals, SiteResult } from "@phylo-workbench/model-diff
 import { downloadSvg } from "../lib/svg-export.js";
 import type { DifFubarRunResult } from "../types.js";
 import { PhylogramFigure } from "./PhylogramFigure.js";
+import { CommittedNumberInput } from "./CommittedNumberInput.js";
 
 const RED = "#ff4b4f";
 const BLUE = "#4f46f5";
@@ -637,11 +638,11 @@ export function DifFubarVisualizations({
         </label>
         <label className="figure-control">
           <span>First codon</span>
-          <input type="number" min="1" max={endSite} value={startSite} onChange={(event) => setStartSite(clamp(Number(event.target.value), 1, endSite))} />
+          <CommittedNumberInput min={1} max={endSite} value={startSite} onCommit={setStartSite} />
         </label>
         <label className="figure-control">
           <span>Last codon</span>
-          <input type="number" min={startSite} max={result.sites.length} value={endSite} onChange={(event) => setEndSite(clamp(Number(event.target.value), startSite, result.sites.length))} />
+          <CommittedNumberInput min={startSite} max={result.sites.length} value={endSite} onCommit={setEndSite} />
         </label>
         <label className="figure-control">
           <span>Maximum rows</span>

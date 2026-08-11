@@ -109,6 +109,12 @@ export interface ProgressDetail {
   readonly indeterminate?: boolean;
 }
 
+/** Workload hint used to initialize the backend that will actually run it. */
+export interface RuntimeWorkload {
+  readonly categoryCount: number;
+  readonly siteCount: number;
+}
+
 export interface LikelihoodRequest {
   readonly tree: CompiledTree;
   readonly tipStates: Uint8Array;

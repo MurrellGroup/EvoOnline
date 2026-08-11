@@ -12,6 +12,14 @@ import { FubarVisualizations } from "../src/components/FubarVisualizations.js";
 import { PhylogramFigure } from "../src/components/PhylogramFigure.js";
 import type { FubarRunResult } from "../src/types.js";
 import { ApproximateFelResults, approximateFelCall } from "../src/components/ApproximateFelResults.js";
+import { normalizeCommittedNumberDraft } from "../src/components/CommittedNumberInput.js";
+
+test("deferred number fields accept replacement text and validate only when committed", () => {
+  assert.equal(normalizeCommittedNumberDraft("", 17, 1, 100), 17);
+  assert.equal(normalizeCommittedNumberDraft("42", 17, 1, 100), 42);
+  assert.equal(normalizeCommittedNumberDraft("999", 17, 1, 100), 100);
+  assert.equal(normalizeCommittedNumberDraft("4.9", 17, 1, 100), 4);
+});
 
 test("DifFUBAR result studio renders a native SVG overview and export control", () => {
   const result: DifFubarRunResult = {
@@ -133,7 +141,7 @@ test("approximate FEL stays separate and renders conditional likelihood optima p
   } as const;
   assert.equal(approximateFelCall(result.sites[0], 0.05), "positive");
   assert.equal(approximateFelCall(result.sites[1], 0.05), "purifying");
-  const markup = renderToStaticMarkup(<ApproximateFelResults result={result} />);
+  const markup = renderToStaticMarkup(<ApproximateFelResults result={result} elapsedMs={640} />);
   assert.match(markup, /Optional frequentist companion/);
   assert.match(markup, /Separate from FUBAR/);
   assert.match(markup, /No FUBAR prior enters these results/);
@@ -143,6 +151,7 @@ test("approximate FEL stays separate and renders conditional likelihood optima p
   assert.match(markup, /data-lrt-connector="true"/);
   assert.match(markup, /Download FEL CSV/);
   assert.match(markup, /Export SVG/);
+  assert.match(markup, /FEL compute time/);
 });
 
 test("posterior marginals render Julia-style alpha and omega probability-mass lanes", () => {

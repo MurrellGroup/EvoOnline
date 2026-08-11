@@ -34,6 +34,40 @@ function chooseBackend(kind: AnalysisOptions["backend"], minimumParallelWork: nu
   return new ParallelWasmBackend(undefined, minimumParallelWork);
 }
 
+function runtimeDescription(backend: EvaluationBackend): string {
+  if (backend instanceof ParallelWasmBackend) {
+    return `Compiling WASM once and starting ${backend.workerCount.toLocaleString()} likelihood workers`;
+  }
+  if (backend instanceof WebGPUBackend) return "Requesting the GPU and compiling the WGSL likelihood pipeline";
+  return "Fetching, compiling, and instantiating the WASM compute engine";
+}
+
+async function prepareComputeRuntime(
+  backends: readonly EvaluationBackend[],
+  categoryCount: number,
+  siteCount: number,
+  onStage: AnalysisOptions["onStage"],
+): Promise<number> {
+  const started = performance.now();
+  const unique = [...new Set(backends)];
+  for (let index = 0; index < unique.length; index += 1) {
+    const backend = unique[index]!;
+    onStage?.("runtime-initialization", index / unique.length, {
+      message: runtimeDescription(backend),
+      current: index,
+      total: unique.length,
+      indeterminate: true,
+    });
+    await backend.prepare({ categoryCount, siteCount });
+    onStage?.("runtime-initialization", (index + 1) / unique.length, {
+      message: `${backend.kind === "wasm-parallel" ? "Parallel WASM worker pool" : backend.kind === "webgpu" ? "WebGPU pipeline" : "WASM engine"} ready`,
+      current: index + 1,
+      total: unique.length,
+    });
+  }
+  return performance.now() - started;
+}
+
 function rescaleTree(tree: ParsedTree, scale: number): void {
   for (const node of tree.nodes) node.branchLength *= scale;
 }
@@ -86,6 +120,13 @@ export async function analyzeDifFUBAR(
   const minimumParallelWork = grid.categoryCount * alignment.codonSites >= 150_000 ? 0 : 150_000;
   let backend = chooseBackend(requestedBackend, minimumParallelWork);
   let fitBackend: EvaluationBackend = backend instanceof WebGPUBackend ? new WasmBackend() : backend;
+  const samplerBackend = fitBackend instanceof WasmBackend ? fitBackend : new WasmBackend();
+  const runtimeMs = await prepareComputeRuntime(
+    [fitBackend, backend, samplerBackend],
+    grid.categoryCount,
+    alignment.codonSites,
+    options.onStage,
+  );
   const initialCompiled = compileTree(tree);
   const fitStarted = performance.now();
   let fittedModel: FittedModel;
@@ -168,7 +209,7 @@ export async function analyzeDifFUBAR(
   const conditionals = normalizeConditionalLikelihoodsInPlace(likelihood.logLikelihoods, grid.categoryCount, alignment.codonSites);
 
   const samplerStarted = performance.now();
-  const sampler = await new WasmBackend().sample(
+  const sampler = await samplerBackend.sample(
     conditionals,
     grid.categories,
     grid.categoryCount,
@@ -210,6 +251,7 @@ export async function analyzeDifFUBAR(
     ...(posteriorMarginals === undefined ? {} : { posteriorMarginals }),
     backend: likelihood.backend,
     timings: {
+      runtimeMs,
       fitMs,
       gridMs,
       samplerMs,

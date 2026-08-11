@@ -9,6 +9,7 @@ import {
   type ModelBank,
   type ParsedTree,
   type ProgressDetail,
+  type RuntimeWorkload,
 } from "../types.js";
 import {
   buildModelBank,
@@ -19,6 +20,8 @@ import {
 } from "../model/genetic-code.js";
 
 export interface EvaluationBackend {
+  readonly kind: "wasm" | "wasm-parallel" | "webgpu";
+  prepare(workload?: RuntimeWorkload): Promise<void>;
   evaluate(request: LikelihoodRequest): Promise<LikelihoodResult>;
 }
 

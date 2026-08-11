@@ -9,6 +9,7 @@ import type {
   SamplerOptions,
   SamplerResult,
   SiteResult,
+  RuntimeWorkload,
 } from "../types.js";
 
 type WasmExports = Record<string, any> & {
@@ -160,6 +161,11 @@ export class WasmBackend {
 
   private instance(): Promise<WasmExports> {
     return this.instancePromise ?? getDefaultInstance();
+  }
+
+  /** Fetch, compile, and instantiate before a long-running analysis stage. */
+  async prepare(_workload?: RuntimeWorkload): Promise<void> {
+    await this.instance();
   }
 
   async evaluate(request: LikelihoodRequest): Promise<LikelihoodResult> {

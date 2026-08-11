@@ -1,4 +1,4 @@
-import { DifFUBARError, type LikelihoodRequest, type LikelihoodResult } from "../types.js";
+import { DifFUBARError, type LikelihoodRequest, type LikelihoodResult, type RuntimeWorkload } from "../types.js";
 import { GPU_MAX_SLOTS, likelihoodShader } from "./likelihood.wgsl.js";
 
 function toF32Bits(values: ArrayLike<number>): Uint32Array {
@@ -131,6 +131,12 @@ export class WebGPUBackend {
       return pipeline;
     })();
     return this.pipelinePromise;
+  }
+
+  /** Request the adapter and compile/validate WGSL before likelihood work. */
+  async prepare(_workload?: RuntimeWorkload): Promise<void> {
+    const device = await this.device();
+    await this.pipeline(device);
   }
 
   async evaluate(request: LikelihoodRequest): Promise<LikelihoodResult> {

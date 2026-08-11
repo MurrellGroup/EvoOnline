@@ -233,6 +233,7 @@ export function analyzeApproximateFel(
   let maximumNodeError = 0;
   let minimumSplineTension = 1;
   let guardedSites = 0;
+  const progressStride = Math.max(1, Math.ceil(siteCount / 64));
 
   for (let site = 0; site < siteCount; site += 1) {
     options.signal?.throwIfAborted();
@@ -289,13 +290,15 @@ export function analyzeApproximateFel(
     maximumNodeError = Math.max(maximumNodeError, spline.audit.maximumNodeError);
     minimumSplineTension = Math.min(minimumSplineTension, spline.audit.tension);
     if (spline.audit.tension < 1 - 1e-10) guardedSites += 1;
-    options.onProgress?.((site + 1) / siteCount, {
-      message: `Optimized conditional likelihood surface ${site + 1} of ${siteCount}`,
-      current: site + 1,
-      total: siteCount,
-      metricLabel: "site LRT",
-      metricValue: likelihoodRatio,
-    });
+    if ((site + 1) % progressStride === 0 || site + 1 === siteCount) {
+      options.onProgress?.((site + 1) / siteCount, {
+        message: `Optimized conditional likelihood surface ${site + 1} of ${siteCount}`,
+        current: site + 1,
+        total: siteCount,
+        metricLabel: "site LRT",
+        metricValue: likelihoodRatio,
+      });
+    }
   }
 
   return {

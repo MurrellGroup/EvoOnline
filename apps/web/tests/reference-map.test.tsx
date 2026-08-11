@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { ReferenceMapFigure, type ReferenceMapFigureSettings } from "../src/features/reference-map/ReferenceMapFigure.js";
 import { alignProfileToReference } from "../src/features/reference-map/reference-align.js";
 import { buildDifFubarReferenceEvidence, buildFubarReferenceEvidence, DIFFUBAR_REFERENCE_HYPOTHESES, FUBAR_REFERENCE_HYPOTHESES } from "../src/features/reference-map/reference-hypotheses.js";
-import { buildReferenceDetectionMarks, buildReferenceMapColumns, insertionSuffix } from "../src/features/reference-map/reference-numbering.js";
+import { buildAlignmentMapColumns, buildReferenceDetectionMarks, buildReferenceMapColumns, insertionSuffix } from "../src/features/reference-map/reference-numbering.js";
 import { parseReferenceSequence } from "../src/features/reference-map/reference-sequence.js";
 import type { ReferenceAlignmentResult, ReferenceHypothesis } from "../src/features/reference-map/types.js";
 import { buildAminoAcidProfile } from "../src/features/structure-mapping/sequence-profile.js";
@@ -68,6 +68,12 @@ test("reference numbering assigns alphabetic insertion suffixes without advancin
   assert.deepEqual(marks.map((mark) => [mark.hypothesisId, mark.coordinateLabel]), [["first", "76C"], ["second", "76C"]]);
 });
 
+test("alignment-only mode uses ordinary codon coordinates without requiring a reference", () => {
+  const columns = buildAlignmentMapColumns(4);
+  assert.deepEqual(columns.map((column) => column.coordinateLabel), ["1", "2", "3", "4"]);
+  assert.deepEqual(columns.map((column) => column.profileSite), [1, 2, 3, 4]);
+});
+
 test("model adapters expose every posterior hypothesis as independently selectable evidence", () => {
   assert.deepEqual(DIFFUBAR_REFERENCE_HYPOTHESES.map((hypothesis) => hypothesis.id), ["omega1-greater", "omega2-greater", "omega1-positive", "omega2-positive"]);
   assert.deepEqual(FUBAR_REFERENCE_HYPOTHESES.map((hypothesis) => hypothesis.id), ["positive", "purifying"]);
@@ -108,7 +114,8 @@ test("reference figure places the pure reference above the profile and separates
     hypothesisLabels: { first: "First", second: "Second" },
   };
   const markup = renderToStaticMarkup(<ReferenceMapFigure
-    result={result}
+    profile={profile}
+    referenceResult={result}
     evidenceSites={[{ site: 4, probabilities: { first: 0.99, second: 0.98 } }]}
     hypotheses={hypotheses}
     selectedHypothesisIds={new Set(["first", "second"])}
@@ -120,4 +127,41 @@ test("reference figure places the pure reference above the profile and separates
   assert.match(markup, /rotate\(-90\)/);
   assert.match(markup, /data-reference-map="true"/);
   assert.equal(markup.includes("foreignObject"), false);
+});
+
+test("selection profile figure renders fully without a reference and labels alignment codons", () => {
+  const profile = buildAminoAcidProfile(PROFILE_FASTA);
+  const hypotheses: readonly ReferenceHypothesis[] = [
+    { id: "first", label: "P(first)", shortLabel: "First", color: "#e64b50" },
+  ];
+  const settings: ReferenceMapFigureSettings = {
+    title: "Alignment selection map",
+    referenceLabel: "Reference",
+    profileLabel: "AA profile",
+    referenceStart: 1,
+    startSite: 1,
+    endSite: profile.columns.length,
+    threshold: 0.95,
+    columnWidth: 16,
+    logoHeight: 54,
+    referenceHeight: 28,
+    numberFontSize: 8,
+    tickInterval: 10,
+    showDetectionLabels: true,
+    showGridlines: true,
+    highlightDifferences: false,
+    hypothesisColors: { first: "#e64b50" },
+    hypothesisLabels: { first: "First" },
+  };
+  const markup = renderToStaticMarkup(<ReferenceMapFigure
+    profile={profile}
+    evidenceSites={[{ site: 3, probabilities: { first: 0.99 } }]}
+    hypotheses={hypotheses}
+    selectedHypothesisIds={new Set(["first"])}
+    settings={settings}
+  />);
+  assert.match(markup, /data-coordinate-mode="alignment"/);
+  assert.match(markup, /data-coordinate="3"/);
+  assert.match(markup, />Alignment codon<\/text>/);
+  assert.equal(markup.includes(">Reference</text>"), false);
 });

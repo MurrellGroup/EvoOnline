@@ -22,6 +22,10 @@ scope.onmessage = (event: MessageEvent<InitializeMessage | RequestMessage>) => {
   const message = event.data;
   if ("type" in message && message.type === "initialize") {
     backend = new WasmBackend(message.wasmModule);
+    void backend.prepare().then(() => scope.postMessage({ type: "ready" })).catch((error) => scope.postMessage({
+      type: "ready",
+      error: error instanceof Error ? error.stack ?? error.message : String(error),
+    }));
     return;
   }
   const requestMessage = message as RequestMessage;

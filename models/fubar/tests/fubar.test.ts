@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createAlignmentArtifact, createTreeArtifact } from "@phylo-workbench/domain";
-import { WasmBackend, parseNewick } from "@phylo-workbench/model-diffubar";
+import { WasmBackend, codonEquilibriumFromF3x4, countF3x4, parseFasta, parseNewick, type ProgressDetail } from "@phylo-workbench/model-diffubar";
 import { createFubarGrid } from "../src/model/grid.js";
 import { analyzeApproximateFel, approximateFelResultsToCsv } from "../src/fel/approximate-fel.js";
 import { ExactBicubicLogLikelihoodSpline } from "../src/fel/exact-bicubic.js";
 import { postprocessFubar, postprocessFubarAllocations } from "../src/posterior/postprocess.js";
 import { fubarPlugin } from "../src/plugin.js";
+import { analyzeFubar } from "../src/pipeline.js";
 
 test("FUBAR grid matches the CodonMolecularEvolution 20-point transform and ordering", () => {
   const grid = createFubarGrid();
@@ -129,6 +130,34 @@ test("Dirichlet EM publishes real batched iteration and likelihood progress", as
   assert.ok(updates.some((update) => update.current === 64 && Number.isFinite(update.metricValue)));
   assert.ok(updates.some((update) => update.current === 128 && Number.isFinite(update.metricValue)));
   assert.equal(updates.at(-1)?.current, 130);
+});
+
+test("FUBAR reports runtime compilation separately and keeps fused likelihood work visibly active", async () => {
+  const fasta = ">a\nAAACCC\n>b\nAAAGGG\n";
+  const alignment = parseFasta(fasta);
+  const f3x4 = countF3x4(alignment);
+  const updates: Array<{ readonly stage: string; readonly fraction: number; readonly detail?: ProgressDetail }> = [];
+  await analyzeFubar(fasta, "(a:0.1,b:0.1);", {
+    backend: "wasm",
+    gridPoints: 2,
+    iterations: 4,
+    fittedModel: {
+      gtrRates: Float64Array.of(1, 1, 1, 1, 1, 1),
+      f3x4,
+      codonEquilibrium: codonEquilibriumFromF3x4(f3x4),
+      globalAlpha: 1,
+      globalBeta: 1,
+      logLikelihood: 0,
+      fitKind: "provided",
+    },
+    onStage: (stage, fraction, detail) => updates.push({ stage, fraction, ...(detail === undefined ? {} : { detail }) }),
+  });
+  const runtime = updates.filter((update) => update.stage === "runtime-initialization");
+  assert.ok(runtime.length >= 2);
+  assert.match(runtime[0]!.detail?.message ?? "", /compil/i);
+  assert.equal(runtime.at(-1)?.fraction, 1);
+  assert.ok(updates.some((update) => update.stage === "conditional-likelihoods" && update.detail?.indeterminate === true));
+  assert.ok(updates.some((update) => update.stage === "dirichlet-em" && update.detail?.current !== undefined));
 });
 
 test("site postprocessing distinguishes positive and purifying selection and retains surfaces", () => {

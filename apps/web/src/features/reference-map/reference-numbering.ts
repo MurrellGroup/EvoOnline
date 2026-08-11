@@ -44,6 +44,19 @@ export function buildReferenceMapColumns(alignment: ProfileAlignment, referenceS
   });
 }
 
+/** Identity columns used when the user does not supply a reference. */
+export function buildAlignmentMapColumns(siteCount: number): readonly ReferenceMapColumn[] {
+  if (!Number.isInteger(siteCount) || siteCount < 0) throw new Error("Alignment site count must be a non-negative integer.");
+  return Array.from({ length: siteCount }, (_unused, index) => ({
+    alignmentIndex: index,
+    profileIndex: index,
+    profileSite: index + 1,
+    referenceIndex: -1,
+    referenceNumber: index + 1,
+    coordinateLabel: String(index + 1),
+  }));
+}
+
 export function buildReferenceDetectionMarks(
   columns: readonly ReferenceMapColumn[],
   evidenceSites: readonly ReferenceEvidenceSite[],

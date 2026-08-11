@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { CommittedNumberInput } from "../../components/CommittedNumberInput.js";
 import { downloadSvg } from "../../lib/svg-export.js";
+import { buildAminoAcidProfile } from "../structure-mapping/sequence-profile.js";
+import type { AminoAcidProfile } from "../structure-mapping/types.js";
 import { ReferenceMapFigure, type ReferenceMapFigureSettings } from "./ReferenceMapFigure.js";
 import type {
   ReferenceAlignmentResult,
@@ -42,6 +45,13 @@ export function ReferenceResultMap({ modelName, alignmentText, evidenceSites, hy
   const workerRef = useRef<Worker | undefined>(undefined);
   const activeRequestRef = useRef<string | undefined>(undefined);
   const svgRef = useRef<SVGSVGElement>(null);
+  const profileBuild = useMemo<{ readonly profile?: AminoAcidProfile; readonly error?: string }>(() => {
+    try {
+      return { profile: buildAminoAcidProfile(alignmentText) };
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) };
+    }
+  }, [alignmentText]);
   const [open, setOpen] = useState(false);
   const [source, setSource] = useState<ReferenceSource>();
   const [referenceKind, setReferenceKind] = useState<ReferenceSequenceKind>("auto");
@@ -61,7 +71,7 @@ export function ReferenceResultMap({ modelName, alignmentText, evidenceSites, hy
   const [showDetectionLabels, setShowDetectionLabels] = useState(true);
   const [showGridlines, setShowGridlines] = useState(true);
   const [highlightDifferences, setHighlightDifferences] = useState(false);
-  const [title, setTitle] = useState(`${modelName} selection on reference coordinates`);
+  const [title, setTitle] = useState(`${modelName} selection on the AA alignment profile`);
   const [referenceLabel, setReferenceLabel] = useState("Reference");
   const [profileLabel, setProfileLabel] = useState("AA alignment profile");
   const [hypothesisColors, setHypothesisColors] = useState<Readonly<Record<string, string>>>(() => Object.fromEntries(hypotheses.map((hypothesis) => [hypothesis.id, hypothesis.color])));
@@ -81,8 +91,6 @@ export function ReferenceResultMap({ modelName, alignmentText, evidenceSites, hy
         setAlignmentResult(message.result);
         setReferenceLabel(message.result.reference.name);
         setTitle(`${modelName} selection mapped to ${message.result.reference.name}`);
-        setStartSite(1);
-        setEndSite(message.result.profile.columns.length);
         setProgress(undefined);
       } else {
         setError(message.error);
@@ -100,7 +108,7 @@ export function ReferenceResultMap({ modelName, alignmentText, evidenceSites, hy
     workerRef.current = undefined;
     setAlignmentResult(undefined);
     setError(undefined);
-    setProgress("Preparing reference alignment…");
+    setProgress("Preparing optional reference alignment…");
     const request: ReferenceAlignmentWorkerRequest = {
       type: "align",
       id,
@@ -129,7 +137,22 @@ export function ReferenceResultMap({ modelName, alignmentText, evidenceSites, hy
     }
   };
 
-  const maximumSite = alignmentResult?.profile.columns.length ?? Math.max(1, evidenceSites.length);
+  const clearReference = (): void => {
+    activeRequestRef.current = undefined;
+    workerRef.current?.terminate();
+    workerRef.current = undefined;
+    setSource(undefined);
+    setAlignmentResult(undefined);
+    setProgress(undefined);
+    setError(undefined);
+    setHighlightDifferences(false);
+    setReferenceLabel("Reference");
+    setTitle(`${modelName} selection on the AA alignment profile`);
+  };
+
+  const profile = alignmentResult?.profile ?? profileBuild.profile;
+  const maximumSite = Math.max(1, profile?.columns.length ?? evidenceSites.length);
+  const hasReference = alignmentResult !== undefined;
   const settings = useMemo<ReferenceMapFigureSettings>(() => ({
     title,
     referenceLabel,
@@ -145,10 +168,10 @@ export function ReferenceResultMap({ modelName, alignmentText, evidenceSites, hy
     tickInterval,
     showDetectionLabels,
     showGridlines,
-    highlightDifferences,
+    highlightDifferences: hasReference && highlightDifferences,
     hypothesisColors,
     hypothesisLabels,
-  }), [columnWidth, endSite, highlightDifferences, hypothesisColors, hypothesisLabels, logoHeight, maximumSite, numberFontSize, profileLabel, referenceHeight, referenceLabel, referenceStart, showDetectionLabels, showGridlines, startSite, threshold, tickInterval, title]);
+  }), [columnWidth, endSite, hasReference, highlightDifferences, hypothesisColors, hypothesisLabels, logoHeight, maximumSite, numberFontSize, profileLabel, referenceHeight, referenceLabel, referenceStart, showDetectionLabels, showGridlines, startSite, threshold, tickInterval, title]);
 
   const selectedDetections = useMemo(() => evidenceSites.reduce((total, site) => total + hypotheses.reduce((count, hypothesis) => count + (selectedHypothesisIds.has(hypothesis.id) && (site.probabilities[hypothesis.id] ?? 0) > threshold ? 1 : 0), 0), 0), [evidenceSites, hypotheses, selectedHypothesisIds, threshold]);
 
@@ -165,44 +188,52 @@ export function ReferenceResultMap({ modelName, alignmentText, evidenceSites, hy
     <section className={`reference-map${open ? " is-open" : ""}`} aria-labelledby="reference-map-heading">
       <div className="reference-map__heading">
         <div>
-          <p className="eyebrow">Optional reference-coordinate figure</p>
-          <h3 id="reference-map-heading">Align selection results to a reference sequence</h3>
-          <p>Upload one protein or coding-nucleotide reference to create a publication-ready reference/profile map with insertion-aware coordinates and independent hypothesis lanes.</p>
+          <p className="eyebrow">Optional selection-on-profile visualization</p>
+          <h3 id="reference-map-heading">Map selection results onto the AA alignment profile</h3>
+          <p>Works immediately without a reference using alignment codon numbering. Optionally add a protein or coding reference to show its sequence and switch to insertion-aware reference coordinates.</p>
+          <span className="reference-map-mode">Reference optional · alignment mode is complete on its own</span>
         </div>
-        <button type="button" className="button button--secondary" onClick={() => setOpen((current) => !current)}>{open ? "Close reference map" : "Open reference map"}</button>
+        <button type="button" className="button button--secondary" onClick={() => setOpen((current) => !current)}>{open ? "Close selection map" : "Open selection map"}</button>
       </div>
 
       {open && <div className="reference-map__body">
         <details className="reference-map-panel reference-map-source" open>
-          <summary><strong>Reference sequence</strong><span>{source?.name ?? "Single-sequence FASTA or plain sequence"}</span></summary>
+          <summary><strong>Optional reference sequence</strong><span>{hasReference ? `${alignmentResult.reference.name} · reference numbering active` : "None · alignment numbering active"}</span></summary>
           <div className="reference-map-source__body">
             <label className="reference-map-upload">
               <input type="file" accept=".fa,.fasta,.faa,.fas,.fna,.ffn,.txt,text/plain" onChange={(event) => void uploadReference(event)} />
-              <span>{source === undefined ? "Upload reference" : "Replace reference"}</span>
-              <small>Protein or coding nucleotide · processed locally · 10 MiB maximum</small>
+              <span>{source === undefined ? "Add optional reference" : "Replace reference"}</span>
+              <small>The figure below already works without this · processed locally · 10 MiB maximum</small>
             </label>
-            <label><span>Interpret sequence as</span><select value={referenceKind} onChange={(event) => {
+            <label><span>Reference interpretation</span><select value={referenceKind} onChange={(event) => {
               const kind = event.target.value as ReferenceSequenceKind;
               setReferenceKind(kind);
               if (source !== undefined) alignSource(source, kind);
-            }}><option value="auto">Auto-detect</option><option value="protein">Protein</option><option value="nucleotide">Coding nucleotide</option></select><small>Override auto-detection for nucleotide-like protein sequences.</small></label>
+            }}><option value="auto">Auto-detect</option><option value="protein">Protein</option><option value="nucleotide">Coding nucleotide</option></select><small>{hasReference ? "Reference numbering and row are active." : "Alignment codon numbering remains active until a reference is added."}</small>{source !== undefined && <button type="button" className="button button--quiet reference-map-remove" onClick={clearReference}>Remove reference</button>}</label>
           </div>
         </details>
 
         {progress !== undefined && <div className="reference-map-progress" role="status"><span /><strong>{progress}</strong></div>}
-        {error !== undefined && <div className="reference-map-error" role="alert">{error}</div>}
+        {(error ?? profileBuild.error) !== undefined && <div className="reference-map-error" role="alert">{error ?? profileBuild.error}</div>}
 
-        {alignmentResult !== undefined && <>
+        {profile !== undefined && <>
           <details className="reference-map-panel reference-map-summary" open>
-            <summary><strong>Alignment summary</strong><span>Global affine-gap profile alignment</span></summary>
-            <div>
+            <summary><strong>{hasReference ? "Reference alignment summary" : "Alignment profile summary"}</strong><span>{hasReference ? "Global affine-gap profile alignment · reference coordinates" : "No reference · alignment codon coordinates"}</span></summary>
+            <div>{alignmentResult === undefined ? <>
+              <span><small>Coordinate mode</small><strong>Alignment codons</strong></span>
+              <span><small>Input sequences</small><strong>{profile.sequenceCount.toLocaleString()}</strong></span>
+              <span><small>Profile codons</small><strong>{profile.columns.length.toLocaleString()}</strong></span>
+              <span><small>Reference</small><strong>Not supplied</strong></span>
+              <span><small>Hypotheses</small><strong>{hypotheses.length.toLocaleString()}</strong></span>
+              <span><small>Annotations</small><strong>{selectedDetections.toLocaleString()}</strong></span>
+            </> : <>
               <span><small>Reference</small><strong>{alignmentResult.reference.name}</strong></span>
               <span><small>Input</small><strong>{alignmentResult.reference.kind === "nucleotide" ? `${alignmentResult.reference.sourceLength.toLocaleString()} nt → ` : ""}{alignmentResult.reference.sequence.length.toLocaleString()} aa</strong></span>
               <span><small>Identity</small><strong>{percent(alignmentResult.alignment.identity)}</strong></span>
               <span><small>Profile coverage</small><strong>{percent(alignmentResult.alignment.coverage)}</strong></span>
               <span><small>Alignment columns</small><strong>{alignmentResult.alignment.profileIndices.length.toLocaleString()}</strong></span>
               <span><small>Score / mapped</small><strong>{alignmentResult.alignment.scorePerMappedResidue.toFixed(2)}</strong></span>
-            </div>
+            </>}</div>
           </details>
 
           <details className="reference-map-panel reference-map-hypotheses" open>
@@ -218,18 +249,18 @@ export function ReferenceResultMap({ modelName, alignmentText, evidenceSites, hy
             <summary><strong>Figure settings</strong><span>Coordinates, window, geometry, and annotations</span></summary>
             <div className="reference-map-settings__grid">
               <label className="reference-map-setting--wide"><span>Posterior threshold <strong>{threshold.toFixed(3)}</strong></span><input type="range" min={0.5} max={0.999} step={0.001} value={threshold} onChange={(event) => setThreshold(Number(event.target.value))} /></label>
-              <label><span>Reference starts at</span><input type="number" step={1} value={referenceStart} onChange={(event) => setReferenceStart(Number(event.target.value))} /></label>
-              <label><span>Codon window</span><span className="reference-map-window"><input aria-label="First codon shown" type="number" min={1} max={maximumSite} value={startSite} onChange={(event) => setStartSite(Number(event.target.value))} /><b>–</b><input aria-label="Last codon shown" type="number" min={1} max={maximumSite} value={endSite} onChange={(event) => setEndSite(Number(event.target.value))} /></span></label>
+              {hasReference && <label><span>Reference starts at</span><CommittedNumberInput step={1} value={referenceStart} onCommit={setReferenceStart} /></label>}
+              <label><span>Codon window</span><span className="reference-map-window"><CommittedNumberInput aria-label="First codon shown" min={1} max={maximumSite} value={startSite} onCommit={setStartSite} /><b>–</b><CommittedNumberInput aria-label="Last codon shown" min={1} max={maximumSite} value={endSite} onCommit={setEndSite} /></span></label>
               <label><span>Horizontal scale <strong>{columnWidth}px</strong></span><input type="range" min={14} max={36} step={1} value={columnWidth} onChange={(event) => setColumnWidth(Number(event.target.value))} /></label>
               <label><span>Profile height <strong>{logoHeight}px</strong></span><input type="range" min={36} max={84} step={2} value={logoHeight} onChange={(event) => setLogoHeight(Number(event.target.value))} /></label>
-              <label><span>Reference height <strong>{referenceHeight}px</strong></span><input type="range" min={18} max={44} step={1} value={referenceHeight} onChange={(event) => setReferenceHeight(Number(event.target.value))} /></label>
+              {hasReference && <label><span>Reference height <strong>{referenceHeight}px</strong></span><input type="range" min={18} max={44} step={1} value={referenceHeight} onChange={(event) => setReferenceHeight(Number(event.target.value))} /></label>}
               <label><span>Detection label size <strong>{numberFontSize}px</strong></span><input type="range" min={6} max={10} step={0.5} value={numberFontSize} onChange={(event) => setNumberFontSize(Number(event.target.value))} /></label>
               <label><span>Coordinate ticks</span><select value={tickInterval} onChange={(event) => setTickInterval(Number(event.target.value))}><option value={5}>Every 5</option><option value={10}>Every 10</option><option value={20}>Every 20</option><option value={50}>Every 50</option></select></label>
             </div>
             <div className="reference-map-settings__toggles">
               <label className="toggle"><input type="checkbox" checked={showDetectionLabels} onChange={(event) => setShowDetectionLabels(event.target.checked)} /><span>Detection numbers</span></label>
               <label className="toggle"><input type="checkbox" checked={showGridlines} onChange={(event) => setShowGridlines(event.target.checked)} /><span>Detection guides</span></label>
-              <label className="toggle"><input type="checkbox" checked={highlightDifferences} onChange={(event) => setHighlightDifferences(event.target.checked)} /><span>Fade reference matches</span></label>
+              {hasReference && <label className="toggle"><input type="checkbox" checked={highlightDifferences} onChange={(event) => setHighlightDifferences(event.target.checked)} /><span>Fade reference matches</span></label>}
             </div>
           </details>
 
@@ -237,17 +268,19 @@ export function ReferenceResultMap({ modelName, alignmentText, evidenceSites, hy
             <summary><strong>Labels &amp; colors</strong><span>All edits are retained in SVG export</span></summary>
             <div className="reference-map-labels__grid">
               <label className="reference-map-label--wide"><span>Figure title</span><input value={title} onChange={(event) => setTitle(event.target.value)} /></label>
-              <label><span>Reference row</span><input value={referenceLabel} onChange={(event) => setReferenceLabel(event.target.value)} /></label>
+              {hasReference && <label><span>Reference row</span><input value={referenceLabel} onChange={(event) => setReferenceLabel(event.target.value)} /></label>}
               <label><span>Profile row</span><input value={profileLabel} onChange={(event) => setProfileLabel(event.target.value)} /></label>
               {hypotheses.map((hypothesis) => <label key={hypothesis.id}><span>{hypothesis.label}</span><span className="reference-map-label-color"><input value={hypothesisLabels[hypothesis.id] ?? hypothesis.shortLabel} onChange={(event) => setHypothesisLabels((current) => ({ ...current, [hypothesis.id]: event.target.value }))} /><input type="color" value={hypothesisColors[hypothesis.id] ?? hypothesis.color} aria-label={`Color for ${hypothesis.label}`} onChange={(event) => setHypothesisColors((current) => ({ ...current, [hypothesis.id]: event.target.value }))} /></span></label>)}
             </div>
           </details>
 
           <article className="reference-map-figure-card">
-            <div className="reference-map-figure-card__heading"><div><strong>{title}</strong><span>Reference residues are pure glyphs above raw-frequency profile stacks. Each selected hypothesis occupies its own collision-free annotation lane.</span></div><button type="button" className="button button--secondary button--svg" onClick={() => svgRef.current !== null && downloadSvg(svgRef.current, title)}>Export SVG</button></div>
-            <div className="reference-map-figure-scroll" tabIndex={0} aria-label="Scrollable reference-coordinate selection figure"><ReferenceMapFigure result={alignmentResult} evidenceSites={evidenceSites} hypotheses={hypotheses} selectedHypothesisIds={selectedHypothesisIds} settings={settings} svgRef={svgRef} /></div>
+            <div className="reference-map-figure-card__heading"><div><strong>{title}</strong><span>{hasReference ? "Reference residues appear above raw-frequency profile stacks; annotations use reference numbering." : "Raw-frequency AA profile with selection annotations using alignment codon numbering; no reference is required."}</span></div><button type="button" className="button button--secondary button--svg" onClick={() => svgRef.current !== null && downloadSvg(svgRef.current, title)}>Export SVG</button></div>
+            <div className="reference-map-figure-scroll" tabIndex={0} aria-label="Scrollable selection-on-profile figure"><ReferenceMapFigure profile={profile} {...(alignmentResult === undefined ? {} : { referenceResult: alignmentResult })} evidenceSites={evidenceSites} hypotheses={hypotheses} selectedHypothesisIds={selectedHypothesisIds} settings={settings} svgRef={svgRef} /></div>
           </article>
-          <p className="reference-map-note">Coordinates advance only when a reference residue is consumed. Alignment-only insertions are suffixed alphabetically after the preceding reference coordinate: the third insertion after residue 76 is <strong>76C</strong>. Reference-only insertions remain visible as gaps in the profile row.</p>
+          {hasReference
+            ? <p className="reference-map-note">Coordinates advance only when a reference residue is consumed. Alignment-only insertions are suffixed alphabetically after the preceding reference coordinate: the third insertion after residue 76 is <strong>76C</strong>. Reference-only insertions remain visible as gaps in the profile row.</p>
+            : <p className="reference-map-note">No reference is active. Detection labels and axis ticks use the original alignment codon positions. Add a reference above only when reference-aware numbering and a reference sequence row are useful.</p>}
         </>}
       </div>}
     </section>

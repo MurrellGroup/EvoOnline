@@ -1,8 +1,9 @@
-import type { LikelihoodRequest, LikelihoodResult } from "../types.js";
+import type { LikelihoodRequest, LikelihoodResult, RuntimeWorkload } from "../types.js";
 import { WasmBackend, compileWasmModule } from "./wasm.js";
 
 interface WorkerMessage {
-  readonly id: number;
+  readonly id?: number;
+  readonly type?: "ready";
   readonly logLikelihoods?: Float64Array;
   readonly error?: string;
 }
@@ -32,7 +33,16 @@ async function createWorker(wasmModule: WebAssembly.Module): Promise<WorkerLike>
     return worker;
   }
   const worker = new Worker(new URL("./wasm-browser.worker.js", import.meta.url), { type: "module" });
-  worker.postMessage({ type: "initialize", wasmModule });
+  await new Promise<void>((resolve, reject) => {
+    const ready = (event: MessageEvent<WorkerMessage>): void => {
+      if (event.data.type !== "ready") return;
+      worker.removeEventListener("message", ready);
+      if (event.data.error !== undefined) reject(new Error(event.data.error));
+      else resolve();
+    };
+    worker.addEventListener("message", ready);
+    worker.postMessage({ type: "initialize", wasmModule });
+  });
   return worker;
 }
 
@@ -53,6 +63,17 @@ export class ParallelWasmBackend {
       Promise.all(Array.from({ length: this.workerCount }, () => createWorker(wasmModule))),
     );
     return this.workersPromise;
+  }
+
+  /** Compile once and fully initialize either the local engine or worker pool. */
+  async prepare(workload?: RuntimeWorkload): Promise<void> {
+    const categorySites = workload === undefined ? Infinity : workload.categoryCount * workload.siteCount;
+    const siteCount = workload?.siteCount ?? 2;
+    if (this.workerCount <= 1 || categorySites < this.minimumCategorySites || siteCount < 2) {
+      await this.local.prepare(workload);
+      return;
+    }
+    await this.workers();
   }
 
   private call(worker: WorkerLike, request: LikelihoodRequest): Promise<Float64Array> {
@@ -96,6 +117,7 @@ export class ParallelWasmBackend {
       message: `0/${request.siteCount.toLocaleString()} site blocks complete · ${categoryCount.toLocaleString()} categories per site`,
       current: 0,
       total: categorySites,
+      indeterminate: true,
     });
     const jobs: Array<{ readonly start: number; readonly count: number; readonly result: Promise<Float64Array> }> = [];
     for (let index = 0; index < activeCount; index += 1) {

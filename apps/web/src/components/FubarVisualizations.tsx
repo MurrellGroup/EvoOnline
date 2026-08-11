@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type R
 import type { FubarSiteResult } from "@phylo-workbench/model-fubar/browser-source";
 import type { FubarRunResult } from "../types.js";
 import { downloadSvg } from "../lib/svg-export.js";
+import { CommittedNumberInput } from "./CommittedNumberInput.js";
 
 const RED = "#ff4b4f";
 const BLUE = "#4f46f5";
@@ -346,7 +347,7 @@ export function FubarVisualizations({ result, threshold, onThresholdChange, show
       </div>
       <div className="figure-controls">
         <label className="figure-control figure-control--threshold"><span>Posterior threshold <strong>{threshold.toFixed(3)}</strong></span><input type="range" min="0.5" max="0.999" step="0.001" value={threshold} onChange={(event) => onThresholdChange(Number(event.target.value))} /></label>
-        <label className="figure-control"><span>Surface codon</span><input type="number" min="1" max={result.sites.length} value={selected.site} onChange={(event) => setSelectedSite(clamp(Number(event.target.value), 1, result.sites.length))} /></label>
+        <label className="figure-control"><span>Surface codon</span><CommittedNumberInput min={1} max={result.sites.length} value={selected.site} onCommit={setSelectedSite} /></label>
         <label className="figure-control"><span>Maximum rows</span><select value={rowLimit} onChange={(event) => setRowLimit(Number(event.target.value))}>{[25, 50, 100, 250, 500].map((value) => <option key={value} value={value}>{value}</option>)}</select></label>
         <div className="figure-control figure-control--summary"><span>Shown positive / purifying</span><strong>{showPositive ? detected.filter((site) => site.pPositive > threshold).length : 0} / {showPurifying ? detected.filter((site) => site.pPurifying > threshold).length : 0}</strong></div>
       </div>
