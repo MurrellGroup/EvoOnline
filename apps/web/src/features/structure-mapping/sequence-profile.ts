@@ -15,6 +15,10 @@ const UNIVERSAL_CODE: Readonly<Record<string, string>> = Object.freeze({
   GAT: "D", GAC: "D", GAA: "E", GAG: "E", GGT: "G", GGC: "G", GGA: "G", GGG: "G",
 });
 
+export function translateCodon(codon: string): string | undefined {
+  return UNIVERSAL_CODE[codon.toUpperCase().replaceAll("U", "T")];
+}
+
 function parseAlignedFasta(text: string): readonly string[] {
   const sequences: string[] = [];
   let chunks: string[] | undefined;
@@ -44,7 +48,7 @@ export function buildAminoAcidProfile(alignmentText: string): AminoAcidProfile {
     const counts = new Uint32Array(AMINO_ACIDS.length);
     let validCount = 0;
     for (const sequence of sequences) {
-      const aminoAcid = UNIVERSAL_CODE[sequence.slice(offset, offset + 3)];
+      const aminoAcid = translateCodon(sequence.slice(offset, offset + 3));
       const index = aminoAcid === undefined || aminoAcid === "*" ? undefined : AMINO_ACID_INDEX.get(aminoAcid);
       if (index === undefined) continue;
       counts[index] = counts[index]! + 1;

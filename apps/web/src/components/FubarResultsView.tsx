@@ -3,6 +3,8 @@ import type { FubarRunResult } from "../types.js";
 import { FubarVisualizations } from "./FubarVisualizations.js";
 import { StructureMappingPanel } from "../features/structure-mapping/StructureMappingPanel.js";
 import { buildFubarStructureSites, fubarStructureColorModes } from "../features/structure-mapping/result-colors.js";
+import { ReferenceResultMap } from "../features/reference-map/ReferenceResultMap.js";
+import { buildFubarReferenceEvidence, FUBAR_REFERENCE_HYPOTHESES } from "../features/reference-map/reference-hypotheses.js";
 
 function probability(value: number): string {
   return value.toFixed(value >= 0.995 ? 4 : 3);
@@ -40,6 +42,7 @@ export function FubarResultsView({ result, threshold, alignment }: { readonly re
   const visible = useMemo(() => filtered.slice(0, 500), [filtered]);
   const structureSites = useMemo(() => buildFubarStructureSites(result, posteriorThreshold, showPositive, showPurifying), [posteriorThreshold, result, showPositive, showPurifying]);
   const structureColorModes = useMemo(() => fubarStructureColorModes(structureSites), [structureSites]);
+  const referenceEvidence = useMemo(() => buildFubarReferenceEvidence(result), [result]);
 
   return (
     <section className="results" aria-labelledby="fubar-results-heading">
@@ -78,6 +81,7 @@ export function FubarResultsView({ result, threshold, alignment }: { readonly re
           })}</tbody>
         </table>
       </div>
+      <ReferenceResultMap modelName="FUBAR" alignmentText={alignment} evidenceSites={referenceEvidence} hypotheses={FUBAR_REFERENCE_HYPOTHESES} initialThreshold={posteriorThreshold} />
       <StructureMappingPanel alignmentText={alignment} sites={structureSites} colorModes={structureColorModes} />
     </section>
   );

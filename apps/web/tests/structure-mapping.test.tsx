@@ -199,6 +199,7 @@ test("FUBAR results expose positive and purifying visibility controls by default
   assert.match(markup, /Purifying selection/);
   assert.equal((markup.match(/type="checkbox" checked=""/g) ?? []).length >= 2, true);
   assert.match(markup, /Map selection onto a protein structure/);
+  assert.match(markup, /Align selection results to a reference sequence/);
   assert.deepEqual(filterFubarSites(result.sites, new Set([1]), new Set([2]), false, true, false).map((site) => site.site), [1]);
   assert.deepEqual(filterFubarSites(result.sites, new Set([1]), new Set([2]), false, false, true).map((site) => site.site), [2]);
   assert.deepEqual(filterFubarSites(result.sites, new Set([1]), new Set([2]), false, true, true).map((site) => site.site), [1, 2]);

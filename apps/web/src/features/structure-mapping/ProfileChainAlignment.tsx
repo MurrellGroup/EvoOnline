@@ -25,6 +25,10 @@ const AMINO_COLORS: Readonly<Record<string, string>> = Object.freeze({
   F: "#6d5a93", W: "#6d5a93", P: "#ad6a38", G: "#8a9793",
 });
 
+export function aminoAcidColor(aminoAcid: string): string {
+  return AMINO_COLORS[aminoAcid] ?? "#667a75";
+}
+
 export interface LogoLetter {
   readonly aminoAcid: string;
   /** Raw fraction of all input sequences, including gaps and ambiguous codons in the denominator. */
@@ -58,7 +62,7 @@ export function layoutLogoSegments(letters: readonly LogoLetter[], top: number, 
 }
 
 export function profileLetterColor(aminoAcid: string, chainAminoAcid: string | undefined, highlightDifferences: boolean): string {
-  return highlightDifferences && aminoAcid === chainAminoAcid ? "#dce2df" : AMINO_COLORS[aminoAcid] ?? "#667a75";
+  return highlightDifferences && aminoAcid === chainAminoAcid ? "#dce2df" : aminoAcidColor(aminoAcid);
 }
 
 function percent(value: number): string {
@@ -159,7 +163,7 @@ function ProfileChainAlignment({ profile, view, sites, colorMode }: ChainAlignme
                     ? <text x={x + glyphWidth / 2} y={CHAIN_TOP + CHAIN_HEIGHT * 0.72} textAnchor="middle" className="profile-chain-alignment__gap-letter">–</text>
                     : <>
                       <rect x={x} y={CHAIN_TOP} width={glyphWidth} height={CHAIN_HEIGHT} rx={1.5} fill={selectionColor} fillOpacity={0.2} stroke={site?.detected ? selectionColor : "none"} strokeWidth={site?.detected ? 1 : 0} />
-                      <LogoGlyph aminoAcid={residue.aminoAcid} x={x} y={CHAIN_TOP} width={glyphWidth} height={CHAIN_HEIGHT} color={AMINO_COLORS[residue.aminoAcid] ?? "#667a75"} className="profile-chain-alignment__chain-letter" />
+                      <LogoGlyph aminoAcid={residue.aminoAcid} x={x} y={CHAIN_TOP} width={glyphWidth} height={CHAIN_HEIGHT} color={aminoAcidColor(residue.aminoAcid)} className="profile-chain-alignment__chain-letter" />
                     </>}
                   {(alignmentIndex === 0 || (column !== undefined && column.site % 10 === 0)) && <>
                     <line x1={x + glyphWidth / 2} x2={x + glyphWidth / 2} y1={NUMBER_TOP} y2={NUMBER_TOP + 2} className="profile-chain-alignment__tick" />

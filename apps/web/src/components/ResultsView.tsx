@@ -3,6 +3,8 @@ import type { DifFubarRunResult } from "../types.js";
 import { DifFubarVisualizations } from "./DifFubarVisualizations.js";
 import { StructureMappingPanel } from "../features/structure-mapping/StructureMappingPanel.js";
 import { buildDifFubarStructureSites, difFubarStructureColorModes } from "../features/structure-mapping/result-colors.js";
+import { ReferenceResultMap } from "../features/reference-map/ReferenceResultMap.js";
+import { buildDifFubarReferenceEvidence, DIFFUBAR_REFERENCE_HYPOTHESES } from "../features/reference-map/reference-hypotheses.js";
 
 interface ResultsViewProps {
   readonly result: DifFubarRunResult;
@@ -39,6 +41,7 @@ export function ResultsView({ result, threshold, alignment }: ResultsViewProps) 
   );
   const structureSites = useMemo(() => buildDifFubarStructureSites(result, posteriorThreshold), [posteriorThreshold, result]);
   const structureColorModes = useMemo(() => difFubarStructureColorModes(structureSites), [structureSites]);
+  const referenceEvidence = useMemo(() => buildDifFubarReferenceEvidence(result), [result]);
 
   return (
     <section className="results" aria-labelledby="results-heading">
@@ -100,6 +103,7 @@ export function ResultsView({ result, threshold, alignment }: ResultsViewProps) 
           </tbody>
         </table>
       </div>
+      <ReferenceResultMap modelName="DifFUBAR" alignmentText={alignment} evidenceSites={referenceEvidence} hypotheses={DIFFUBAR_REFERENCE_HYPOTHESES} initialThreshold={posteriorThreshold} />
       <StructureMappingPanel alignmentText={alignment} sites={structureSites} colorModes={structureColorModes} />
     </section>
   );
