@@ -15,6 +15,7 @@
     "@phylo-workbench/domain": "*",
     "@phylo-workbench/model-diffubar": "*",
     "@phylo-workbench/model-fubar": "*",
+    "@phylo-workbench/model-bsrel": "*",
     "@phylo-workbench/model-sdk": "*"
   },
   "devDependencies": {

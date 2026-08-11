@@ -1,0 +1,35 @@
+{
+  "name": "@phylo-workbench/model-bsrel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Fixed-complexity three-rate BS-REL with all-to-all WASM tree messages",
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./browser-source": "./src/browser.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@phylo-workbench/domain": "*",
+    "@phylo-workbench/model-diffubar": "*",
+    "@phylo-workbench/model-sdk": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.2.1",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,6 +1,6 @@
 # EvoOnline
 
-An extensible phylogenetic analysis workbench with a static browser application, a shared artifact/model SDK, an optional job API, and independently packaged model runners. DifFUBAR and regular FUBAR are the first registered methods.
+An extensible phylogenetic analysis workbench with a static browser application, a shared artifact/model SDK, an optional job API, and independently packaged model runners. DifFUBAR, regular FUBAR, and fixed-complexity BS-REL are currently registered.
 
 The browser workflow currently supports:
 
@@ -9,7 +9,7 @@ The browser workflow currently supports:
 3. Uploading a Newick/NEXUS tree or inferring one with bioWASM FastTree directly from the main workflow.
 4. Viewing a tree, and tagging G1/G2 foreground branches when DifFUBAR requires them, in **phylotagger**.
 5. Validating each method's alignment/tree/tip-name/tag requirements.
-6. Running DifFUBAR or FUBAR in a dedicated browser worker. Exact parallel WASM is the default and WebGPU remains selectable.
+6. Running DifFUBAR, FUBAR, or fixed three-rate BS-REL in a dedicated browser worker. Exact parallel WASM is the default; the site methods also retain selectable WebGPU.
 7. Choosing deterministic Dirichlet-EM (the regular-FUBAR default) or exact Gibbs inference for FUBAR.
 8. Optionally deriving separate approximate-FEL likelihood-ratio tests from the already-computed FUBAR grid.
 9. Exploring model-owned, linked interactive SVG figures, editing publication labels, and exporting lossless SVG or CSV.
@@ -30,6 +30,7 @@ packages/
 models/
   diffubar/             Numerical core, WASM, WebGPU and model plugin
   fubar/                Regular FUBAR grid, inference and model plugin
+  bsrel/                Fixed three-rate branch-wise test and message optimizer
 docs/
   ARCHITECTURE.md
   ADDING_A_MODEL.md
@@ -64,7 +65,7 @@ npm test
 npm run build
 ```
 
-The DifFUBAR package retains its Julia/SciPy parity scripts, benchmark, WGSL validation, and exact WASM tests under `models/diffubar`. Regular FUBAR adds exact grid-transform, analytical Dirichlet-EM, Gibbs-allocation, posterior-product, ordinary-tree, exact-spline, known-optimum, and directional-LRT tests under `models/fubar`.
+The DifFUBAR package retains its Julia/SciPy parity scripts, benchmark, WGSL validation, and exact WASM tests under `models/diffubar`. Regular FUBAR adds exact grid-transform, analytical Dirichlet-EM, Gibbs-allocation, posterior-product, ordinary-tree, exact-spline, known-optimum, and directional-LRT tests under `models/fubar`. BS-REL tests the all-to-all message identity directly: a local edge replacement must match a complete tree re-prune in f64, including in the site-parallel worker pool.
 
 ## DifFUBAR figure studio
 
@@ -81,6 +82,14 @@ Regular FUBAR shares DifFUBAR's fitted MG94 model and optimized likelihood kerne
 The result renderer highlights both positive selection, P(β > α), and purifying selection, P(α > β). Positive and purifying visibility checkboxes are enabled by default and jointly filter the table, overview, marginal rows, posterior-surface choices, and structural detection calls. The studio provides the codon overview, paper-style α/β posterior-mass lanes at detected sites, an interactive posterior surface for any linked site, editable labels, and direct SVG/CSV export.
 
 **Also calculate approximate FEL** is an opt-in FUBAR checkbox and is off by default. It reuses each site's raw conditional likelihood grid before the Bayesian prior or mixture weights are applied; disabling it executes no FEL interpolation or optimization. Max-shifted log likelihoods are interpolated in the uniform FUBAR grid-index coordinate by a nodal-exact local bicubic surface; a deterministic local-curvature audit reduces cubic tension only when needed. Multi-start optimization finds the unrestricted surface maximum and the maximum on α=β, then reports the χ²(1) LRT plus separate signed-root positive and purifying p-values. Its controls, table, CSV, thresholds, conditional-likelihood SVG, and measured compute time are contained in a visibly separate result panel, so enabling it does not add columns to or alter the FUBAR posterior result.
+
+## Fixed-complexity BS-REL
+
+BS-REL is the original fixed three-rate branch-site random-effects construction, not aBS-REL: every branch always has ordered `ω− ≤ ωN ≤ 1 ≤ ω+` classes and three fitted weights. There is no AIC/AICc model-complexity selection. EvoOnline performs one joint L-BFGS optimization over all branch mixtures and branch-length multipliers. A custom SIMD WASM kernel marginalizes each three-class branch into one mixed Markov operator and evaluates codon sites across persistent workers.
+
+Each gradient pass performs one Felsenstein up-pass and one reversible down-pass to retain the two directed messages around every edge. A one-parameter branch perturbation then recomputes only the changed component and contracts it with that local blanket; unchanged rate components are reused. Whole-tree line-search calls omit the down-pass. After the universal alternative is fitted, every requested null fixes that branch's `ω+ = 1` and all nulls are re-optimized concurrently against their fixed two-sided boundary messages. The test uses the calibrated fixed three-rate mixture `0.50 χ²₀ + 0.05 χ²₁ + 0.45 χ²₂`, followed by Holm–Bonferroni across the requested branches.
+
+Results include the three ω values and weights, mean ω, fitted branch length, LRT, raw p-value, and Holm p-value. The linked phylogram uses fitted branch lengths for geometry and can color edges by Holm evidence, LRT, positive ω, positive-class fraction, mean ω, or fitted length. Tip/internal labels, branch annotations, line widths, dimensions, and title are adjustable; selecting an edge links to the table and the complete live tree exports as SVG.
 
 ## Selection-on-profile result maps
 

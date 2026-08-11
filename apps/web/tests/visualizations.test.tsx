@@ -13,6 +13,8 @@ import { PhylogramFigure } from "../src/components/PhylogramFigure.js";
 import type { FubarRunResult } from "../src/types.js";
 import { ApproximateFelResults, approximateFelCall } from "../src/components/ApproximateFelResults.js";
 import { normalizeCommittedNumberDraft } from "../src/components/CommittedNumberInput.js";
+import { BsrelResultsView } from "../src/components/BsrelResultsView.js";
+import type { BsrelRunResult } from "../src/types.js";
 
 test("deferred number fields accept replacement text and validate only when committed", () => {
   assert.equal(normalizeCommittedNumberDraft("", 17, 1, 100), 17);
@@ -64,6 +66,38 @@ test("tagged phylogram exposes branch colors, label controls, and SVG export", (
   assert.match(markup, /Export SVG/);
   assert.match(markup, /#ff4b4f/);
   assert.match(markup, /#4f46f5/);
+});
+
+test("BS-REL renders a fitted branch-length phylogram, branch metrics, and SVG export", () => {
+  const makeBranch = (branch: number, nodeId: number, name: string, terminal: boolean, p: number): BsrelRunResult["branches"][number] => ({
+    branch, nodeId, nodeIndex: nodeId, name, parentName: "Root", terminal, tested: true,
+    inputLength: 0.1, fittedLength: 0.08 + branch * 0.01,
+    omegaMinus: 0.1, weightMinus: 0.7, omegaNeutral: 0.8, weightNeutral: 0.2,
+    omegaPositive: 4.2, weightPositive: 0.1, meanOmega: 0.65,
+    nullLogLikelihood: -120, likelihoodRatio: 7.2, pValue: p / 2, pValueHolm: p, significant: p <= 0.05,
+  });
+  const result: BsrelRunResult = {
+    branches: [makeBranch(1, 1, "N", false, 0.01), makeBranch(2, 2, "a", true, 0.02), makeBranch(3, 3, "b", true, 0.4), makeBranch(4, 4, "c", true, 0.8)],
+    alternativeLogLikelihood: -116.4,
+    backend: "wasm-parallel",
+    timings: { totalMs: 1234 },
+    diagnostics: {
+      taxa: 3, codonSites: 100, branches: 4, testedBranches: 4, significantBranches: 2,
+      alternativeIterations: 9, alternativeConverged: true, nullIterations: 8, maximumOmega: 1000,
+      lrtCalibration: "0.50*chi2_0 + 0.05*chi2_1 + 0.45*chi2_2",
+      multipleTesting: "Holm-Bonferroni", messageAlgorithm: "upward-downward-local-blanket", precision: "f64",
+    },
+    tree: "((a:0.1,b:0.1)N:0.2,c:0.3);",
+    csv: "Branch,Name\n1,N\n",
+  };
+  const markup = renderToStaticMarkup(<BsrelResultsView result={result} threshold={0.05} />);
+  assert.match(markup, /Fixed three-rate BS-REL/);
+  assert.match(markup, /no AIC complexity selection/i);
+  assert.match(markup, /Annotated fitted phylogeny/);
+  assert.match(markup, /Holm p-value/);
+  assert.match(markup, /Fitted branch length/);
+  assert.match(markup, /Export SVG/);
+  assert.match(markup, /cached two-sided local blanket/);
 });
 
 test("FUBAR studio renders selection overview and site posterior products", () => {

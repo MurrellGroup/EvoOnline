@@ -2,6 +2,8 @@ import * as loader from "@assemblyscript/loader";
 import type {
   AlphaBetaSamplerOptions,
   AlphaBetaSamplerResult,
+  BsrelKernelRequest,
+  BsrelKernelResult,
   LikelihoodRequest,
   LikelihoodResult,
   MixtureFitOptions,
@@ -16,7 +18,9 @@ type WasmExports = Record<string, any> & {
   memory: WebAssembly.Memory;
   Uint8Array_ID: WebAssembly.Global;
   Uint32Array_ID: WebAssembly.Global;
+  Int32Array_ID: WebAssembly.Global;
   Float64Array_ID: WebAssembly.Global;
+  evaluateBsrelAllMessages(...args: number[]): number;
   evaluateLikelihood(...args: number[]): number;
   evaluateLikelihoodCached(...args: number[]): number;
   runWeightEM(...args: number[]): number;
@@ -260,6 +264,84 @@ export class WasmBackend {
       });
       request.signal?.throwIfAborted();
       return { logLikelihoods, backend: "wasm", elapsedMs: performance.now() - started, precision: "f64" };
+    } finally {
+      pinned.release();
+      wasm.__collect();
+    }
+  }
+
+  /**
+   * Evaluate one complete fixed three-rate branch-site model and a batch of
+   * exact single-edge replacements using upward/downward Felsenstein messages.
+   */
+  async evaluateBsrel(request: BsrelKernelRequest): Promise<BsrelKernelResult> {
+    request.signal?.throwIfAborted();
+    const candidateCount = request.candidateBranches.length;
+    if (
+      request.branchLengths.length !== request.tree.edgeCount
+      || request.branchModels.length !== request.tree.edgeCount * 3
+      || request.branchWeights.length !== request.tree.edgeCount * 3
+      || request.candidateLengths.length !== candidateCount
+      || request.candidateModels.length !== candidateCount * 3
+      || request.candidateWeights.length !== candidateCount * 3
+    ) throw new RangeError("BS-REL kernel array dimensions are inconsistent.");
+    request.onProgress?.(0, {
+      message: `${request.tree.edgeCount.toLocaleString()} branch mixtures · ${candidateCount.toLocaleString()} local replacements`,
+      current: 0,
+      total: request.siteCount,
+      indeterminate: true,
+    });
+    const wasm = await this.instance();
+    const pinned = new PinnedArrays(wasm);
+    const u8 = globalValue(wasm.Uint8Array_ID);
+    const u32 = globalValue(wasm.Uint32Array_ID);
+    const i32 = globalValue(wasm.Int32Array_ID);
+    const f64 = globalValue(wasm.Float64Array_ID);
+    const started = performance.now();
+    try {
+      const poissonTerms = request.poissonTerms ?? 0;
+      const maxLambdaPerStep = request.maxLambdaPerStep ?? (poissonTerms > 0 ? 2 : 64);
+      const raw = wasm.evaluateBsrelAllMessages(
+        pinned.add(u32, request.tree.childOffsets),
+        pinned.add(u32, request.tree.children),
+        pinned.add(i32, request.tree.tipForNode),
+        pinned.add(i32, request.tree.edgeForNode),
+        pinned.add(u32, request.tree.nodeForEdge),
+        pinned.add(u32, request.tree.postorder),
+        pinned.add(u32, request.tree.preorder),
+        pinned.add(u8, request.tipStates),
+        pinned.add(f64, request.branchLengths),
+        pinned.add(u32, request.branchModels),
+        pinned.add(f64, request.branchWeights),
+        pinned.add(u32, request.candidateBranches),
+        pinned.add(f64, request.candidateLengths),
+        pinned.add(u32, request.candidateModels),
+        pinned.add(f64, request.candidateWeights),
+        pinned.add(u32, request.models.neighborCount),
+        pinned.add(u32, request.models.neighborIndex),
+        pinned.add(f64, request.models.rDiagonal),
+        pinned.add(f64, request.models.rOffDiagonal),
+        pinned.add(f64, request.models.mu),
+        pinned.add(f64, request.equilibrium),
+        request.siteCount,
+        request.tree.nodeCount,
+        request.tree.edgeCount,
+        request.models.stateCount,
+        request.models.maxNeighbors,
+        request.tree.root,
+        poissonTerms,
+        maxLambdaPerStep,
+      );
+      const resultPointer = wasm.__pin(raw);
+      const objectives = wasm.__getFloat64Array(resultPointer).slice();
+      wasm.__unpin(resultPointer);
+      request.signal?.throwIfAborted();
+      request.onProgress?.(1, {
+        message: "Two-sided branch messages evaluated",
+        current: request.siteCount,
+        total: request.siteCount,
+      });
+      return { objectives, backend: "wasm", elapsedMs: performance.now() - started, precision: "f64" };
     } finally {
       pinned.release();
       wasm.__collect();

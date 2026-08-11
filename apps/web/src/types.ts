@@ -1,5 +1,6 @@
 import type { PosteriorMarginals, ProgressDetail, SiteResult } from "@phylo-workbench/model-diffubar/browser-source";
 import type { ApproximateFelProducts, FubarPosteriorProducts, FubarSiteResult } from "@phylo-workbench/model-fubar/browser-source";
+import type { BsrelBranchResult } from "@phylo-workbench/model-bsrel/browser-source";
 
 export interface DifFubarRunResult {
   readonly sites: readonly SiteResult[];
@@ -49,6 +50,30 @@ export interface FubarRunResult {
   readonly csv: string;
 }
 
+export interface BsrelRunResult {
+  readonly branches: readonly BsrelBranchResult[];
+  readonly alternativeLogLikelihood: number;
+  readonly backend: "wasm" | "wasm-parallel";
+  readonly timings: Readonly<Record<string, number>>;
+  readonly diagnostics: {
+    readonly taxa: number;
+    readonly codonSites: number;
+    readonly branches: number;
+    readonly testedBranches: number;
+    readonly significantBranches: number;
+    readonly alternativeIterations: number;
+    readonly alternativeConverged: boolean;
+    readonly nullIterations: number;
+    readonly maximumOmega: number;
+    readonly lrtCalibration: "0.50*chi2_0 + 0.05*chi2_1 + 0.45*chi2_2";
+    readonly multipleTesting: "Holm-Bonferroni";
+    readonly messageAlgorithm: "upward-downward-local-blanket";
+    readonly precision: "f64";
+  };
+  readonly tree: string;
+  readonly csv: string;
+}
+
 export type WorkerResponse =
   | { readonly type: "progress"; readonly id: string; readonly stage: string; readonly fraction: number; readonly detail?: ProgressDetail }
   | { readonly type: "result"; readonly id: string; readonly result: DifFubarRunResult }
@@ -57,4 +82,9 @@ export type WorkerResponse =
 export type FubarWorkerResponse =
   | { readonly type: "progress"; readonly id: string; readonly stage: string; readonly fraction: number; readonly detail?: ProgressDetail }
   | { readonly type: "result"; readonly id: string; readonly result: FubarRunResult }
+  | { readonly type: "error"; readonly id: string; readonly error: string };
+
+export type BsrelWorkerResponse =
+  | { readonly type: "progress"; readonly id: string; readonly stage: string; readonly fraction: number; readonly detail?: ProgressDetail }
+  | { readonly type: "result"; readonly id: string; readonly result: BsrelRunResult }
   | { readonly type: "error"; readonly id: string; readonly error: string };

@@ -31,6 +31,13 @@ export async function instantiate(module, imports = {}) {
         return exports.Uint32Array_ID.value >>> 0;
       }
     },
+    Int32Array_ID: {
+      // assembly/index/Int32Array_ID: u32
+      valueOf() { return this.value; },
+      get value() {
+        return exports.Int32Array_ID.value >>> 0;
+      }
+    },
     Float64Array_ID: {
       // assembly/index/Float64Array_ID: u32
       valueOf() { return this.value; },
@@ -38,18 +45,66 @@ export async function instantiate(module, imports = {}) {
         return exports.Float64Array_ID.value >>> 0;
       }
     },
+    evaluateBsrelAllMessages(childOffsets, children, tipForNode, edgeForNode, nodeForEdge, postorder, preorder, tipStates, branchLengths, branchModels, branchWeights, candidateBranches, candidateLengths, candidateModels, candidateWeights, neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu, equilibrium, siteCount, nodeCount, edgeCount, stateCount, maxNeighbors, root, poissonTerms, maxLambdaPerStep) {
+      // assembly/index/evaluateBsrelAllMessages(~lib/typedarray/Uint32Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Int32Array, ~lib/typedarray/Int32Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Uint8Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, i32, i32, i32, i32, i32, i32, i32, f64) => ~lib/typedarray/Float64Array
+      childOffsets = __retain(__lowerTypedArray(Uint32Array, 5, 2, childOffsets) || __notnull());
+      children = __retain(__lowerTypedArray(Uint32Array, 5, 2, children) || __notnull());
+      tipForNode = __retain(__lowerTypedArray(Int32Array, 6, 2, tipForNode) || __notnull());
+      edgeForNode = __retain(__lowerTypedArray(Int32Array, 6, 2, edgeForNode) || __notnull());
+      nodeForEdge = __retain(__lowerTypedArray(Uint32Array, 5, 2, nodeForEdge) || __notnull());
+      postorder = __retain(__lowerTypedArray(Uint32Array, 5, 2, postorder) || __notnull());
+      preorder = __retain(__lowerTypedArray(Uint32Array, 5, 2, preorder) || __notnull());
+      tipStates = __retain(__lowerTypedArray(Uint8Array, 4, 0, tipStates) || __notnull());
+      branchLengths = __retain(__lowerTypedArray(Float64Array, 7, 3, branchLengths) || __notnull());
+      branchModels = __retain(__lowerTypedArray(Uint32Array, 5, 2, branchModels) || __notnull());
+      branchWeights = __retain(__lowerTypedArray(Float64Array, 7, 3, branchWeights) || __notnull());
+      candidateBranches = __retain(__lowerTypedArray(Uint32Array, 5, 2, candidateBranches) || __notnull());
+      candidateLengths = __retain(__lowerTypedArray(Float64Array, 7, 3, candidateLengths) || __notnull());
+      candidateModels = __retain(__lowerTypedArray(Uint32Array, 5, 2, candidateModels) || __notnull());
+      candidateWeights = __retain(__lowerTypedArray(Float64Array, 7, 3, candidateWeights) || __notnull());
+      neighborCount = __retain(__lowerTypedArray(Uint32Array, 5, 2, neighborCount) || __notnull());
+      neighborIndex = __retain(__lowerTypedArray(Uint32Array, 5, 2, neighborIndex) || __notnull());
+      rDiagonal = __retain(__lowerTypedArray(Float64Array, 7, 3, rDiagonal) || __notnull());
+      rOffDiagonal = __retain(__lowerTypedArray(Float64Array, 7, 3, rOffDiagonal) || __notnull());
+      mu = __retain(__lowerTypedArray(Float64Array, 7, 3, mu) || __notnull());
+      equilibrium = __lowerTypedArray(Float64Array, 7, 3, equilibrium) || __notnull();
+      try {
+        return __liftTypedArray(Float64Array, exports.evaluateBsrelAllMessages(childOffsets, children, tipForNode, edgeForNode, nodeForEdge, postorder, preorder, tipStates, branchLengths, branchModels, branchWeights, candidateBranches, candidateLengths, candidateModels, candidateWeights, neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu, equilibrium, siteCount, nodeCount, edgeCount, stateCount, maxNeighbors, root, poissonTerms, maxLambdaPerStep) >>> 0);
+      } finally {
+        __release(childOffsets);
+        __release(children);
+        __release(tipForNode);
+        __release(edgeForNode);
+        __release(nodeForEdge);
+        __release(postorder);
+        __release(preorder);
+        __release(tipStates);
+        __release(branchLengths);
+        __release(branchModels);
+        __release(branchWeights);
+        __release(candidateBranches);
+        __release(candidateLengths);
+        __release(candidateModels);
+        __release(candidateWeights);
+        __release(neighborCount);
+        __release(neighborIndex);
+        __release(rDiagonal);
+        __release(rOffDiagonal);
+        __release(mu);
+      }
+    },
     evaluateLikelihood(ops, edgeLengths, tipStates, gridModels, neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu, equilibrium, siteCount, gridCount, classCount, stateCount, maxNeighbors, slotCount, rootSlot, poissonTerms, maxLambdaPerStep) {
       // assembly/index/evaluateLikelihood(~lib/typedarray/Uint32Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Uint8Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, i32, i32, i32, i32, i32, i32, i32, i32, f64) => ~lib/typedarray/Float64Array
       ops = __retain(__lowerTypedArray(Uint32Array, 5, 2, ops) || __notnull());
-      edgeLengths = __retain(__lowerTypedArray(Float64Array, 6, 3, edgeLengths) || __notnull());
+      edgeLengths = __retain(__lowerTypedArray(Float64Array, 7, 3, edgeLengths) || __notnull());
       tipStates = __retain(__lowerTypedArray(Uint8Array, 4, 0, tipStates) || __notnull());
       gridModels = __retain(__lowerTypedArray(Uint32Array, 5, 2, gridModels) || __notnull());
       neighborCount = __retain(__lowerTypedArray(Uint32Array, 5, 2, neighborCount) || __notnull());
       neighborIndex = __retain(__lowerTypedArray(Uint32Array, 5, 2, neighborIndex) || __notnull());
-      rDiagonal = __retain(__lowerTypedArray(Float64Array, 6, 3, rDiagonal) || __notnull());
-      rOffDiagonal = __retain(__lowerTypedArray(Float64Array, 6, 3, rOffDiagonal) || __notnull());
-      mu = __retain(__lowerTypedArray(Float64Array, 6, 3, mu) || __notnull());
-      equilibrium = __lowerTypedArray(Float64Array, 6, 3, equilibrium) || __notnull();
+      rDiagonal = __retain(__lowerTypedArray(Float64Array, 7, 3, rDiagonal) || __notnull());
+      rOffDiagonal = __retain(__lowerTypedArray(Float64Array, 7, 3, rOffDiagonal) || __notnull());
+      mu = __retain(__lowerTypedArray(Float64Array, 7, 3, mu) || __notnull());
+      equilibrium = __lowerTypedArray(Float64Array, 7, 3, equilibrium) || __notnull();
       try {
         return __liftTypedArray(Float64Array, exports.evaluateLikelihood(ops, edgeLengths, tipStates, gridModels, neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu, equilibrium, siteCount, gridCount, classCount, stateCount, maxNeighbors, slotCount, rootSlot, poissonTerms, maxLambdaPerStep) >>> 0);
       } finally {
@@ -72,15 +127,15 @@ export async function instantiate(module, imports = {}) {
       combinationModels = __retain(__lowerTypedArray(Uint32Array, 5, 2, combinationModels) || __notnull());
       combinationCategories = __retain(__lowerTypedArray(Uint32Array, 5, 2, combinationCategories) || __notnull());
       cacheCategoryMap = __retain(__lowerTypedArray(Uint32Array, 5, 2, cacheCategoryMap) || __notnull());
-      edgeLengths = __retain(__lowerTypedArray(Float64Array, 6, 3, edgeLengths) || __notnull());
+      edgeLengths = __retain(__lowerTypedArray(Float64Array, 7, 3, edgeLengths) || __notnull());
       tipStates = __retain(__lowerTypedArray(Uint8Array, 4, 0, tipStates) || __notnull());
       gridModels = __retain(__lowerTypedArray(Uint32Array, 5, 2, gridModels) || __notnull());
       neighborCount = __retain(__lowerTypedArray(Uint32Array, 5, 2, neighborCount) || __notnull());
       neighborIndex = __retain(__lowerTypedArray(Uint32Array, 5, 2, neighborIndex) || __notnull());
-      rDiagonal = __retain(__lowerTypedArray(Float64Array, 6, 3, rDiagonal) || __notnull());
-      rOffDiagonal = __retain(__lowerTypedArray(Float64Array, 6, 3, rOffDiagonal) || __notnull());
-      mu = __retain(__lowerTypedArray(Float64Array, 6, 3, mu) || __notnull());
-      equilibrium = __lowerTypedArray(Float64Array, 6, 3, equilibrium) || __notnull();
+      rDiagonal = __retain(__lowerTypedArray(Float64Array, 7, 3, rDiagonal) || __notnull());
+      rOffDiagonal = __retain(__lowerTypedArray(Float64Array, 7, 3, rOffDiagonal) || __notnull());
+      mu = __retain(__lowerTypedArray(Float64Array, 7, 3, mu) || __notnull());
+      equilibrium = __lowerTypedArray(Float64Array, 7, 3, equilibrium) || __notnull();
       try {
         return __liftTypedArray(Float64Array, exports.evaluateLikelihoodCached(mainOps, cacheOps, cacheDescriptors, combinationModels, combinationCategories, cacheCategoryMap, edgeLengths, tipStates, gridModels, neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu, equilibrium, siteCount, gridCount, classCount, stateCount, maxNeighbors, slotCount, rootSlot, cacheCount, cacheEntryCount, poissonTerms, maxLambdaPerStep) >>> 0);
       } finally {
@@ -102,8 +157,8 @@ export async function instantiate(module, imports = {}) {
     },
     runWeightEM(categoryMajorConditionals, initialTheta, gridCount, siteCount, iterations, concentration, tolerance) {
       // assembly/index/runWeightEM(~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, i32, i32, i32, f64, f64) => ~lib/typedarray/Float64Array
-      categoryMajorConditionals = __retain(__lowerTypedArray(Float64Array, 6, 3, categoryMajorConditionals) || __notnull());
-      initialTheta = __lowerTypedArray(Float64Array, 6, 3, initialTheta) || __notnull();
+      categoryMajorConditionals = __retain(__lowerTypedArray(Float64Array, 7, 3, categoryMajorConditionals) || __notnull());
+      initialTheta = __lowerTypedArray(Float64Array, 7, 3, initialTheta) || __notnull();
       try {
         return __liftTypedArray(Float64Array, exports.runWeightEM(categoryMajorConditionals, initialTheta, gridCount, siteCount, iterations, concentration, tolerance) >>> 0);
       } finally {
@@ -112,8 +167,8 @@ export async function instantiate(module, imports = {}) {
     },
     runGibbs(siteMajorConditionals, categories, gridCount, siteCount, parameterCount, iterations, burnin, concentration, seed, likelihoodCutoff, trackAllocations) {
       // assembly/index/runGibbs(~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, i32, i32, i32, i32, i32, f64, u32, f64, bool) => ~lib/typedarray/Float64Array
-      siteMajorConditionals = __retain(__lowerTypedArray(Float64Array, 6, 3, siteMajorConditionals) || __notnull());
-      categories = __lowerTypedArray(Float64Array, 6, 3, categories) || __notnull();
+      siteMajorConditionals = __retain(__lowerTypedArray(Float64Array, 7, 3, siteMajorConditionals) || __notnull());
+      categories = __lowerTypedArray(Float64Array, 7, 3, categories) || __notnull();
       trackAllocations = trackAllocations ? 1 : 0;
       try {
         return __liftTypedArray(Float64Array, exports.runGibbs(siteMajorConditionals, categories, gridCount, siteCount, parameterCount, iterations, burnin, concentration, seed, likelihoodCutoff, trackAllocations) >>> 0);
@@ -123,8 +178,8 @@ export async function instantiate(module, imports = {}) {
     },
     runGibbsRejection(categoryMajorConditionals, categories, gridCount, siteCount, parameterCount, iterations, burnin, concentration, seed, likelihoodCutoff, trackAllocations) {
       // assembly/index/runGibbsRejection(~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, i32, i32, i32, i32, i32, f64, u32, f64, bool) => ~lib/typedarray/Float64Array
-      categoryMajorConditionals = __retain(__lowerTypedArray(Float64Array, 6, 3, categoryMajorConditionals) || __notnull());
-      categories = __lowerTypedArray(Float64Array, 6, 3, categories) || __notnull();
+      categoryMajorConditionals = __retain(__lowerTypedArray(Float64Array, 7, 3, categoryMajorConditionals) || __notnull());
+      categories = __lowerTypedArray(Float64Array, 7, 3, categories) || __notnull();
       trackAllocations = trackAllocations ? 1 : 0;
       try {
         return __liftTypedArray(Float64Array, exports.runGibbsRejection(categoryMajorConditionals, categories, gridCount, siteCount, parameterCount, iterations, burnin, concentration, seed, likelihoodCutoff, trackAllocations) >>> 0);
@@ -134,8 +189,8 @@ export async function instantiate(module, imports = {}) {
     },
     runFubarGibbsRejection(categoryMajorConditionals, categories, gridCount, siteCount, iterations, burnin, concentration, seed, trackAllocations) {
       // assembly/index/runFubarGibbsRejection(~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, i32, i32, i32, i32, f64, u32, bool) => ~lib/typedarray/Float64Array
-      categoryMajorConditionals = __retain(__lowerTypedArray(Float64Array, 6, 3, categoryMajorConditionals) || __notnull());
-      categories = __lowerTypedArray(Float64Array, 6, 3, categories) || __notnull();
+      categoryMajorConditionals = __retain(__lowerTypedArray(Float64Array, 7, 3, categoryMajorConditionals) || __notnull());
+      categories = __lowerTypedArray(Float64Array, 7, 3, categories) || __notnull();
       trackAllocations = trackAllocations ? 1 : 0;
       try {
         return __liftTypedArray(Float64Array, exports.runFubarGibbsRejection(categoryMajorConditionals, categories, gridCount, siteCount, iterations, burnin, concentration, seed, trackAllocations) >>> 0);
@@ -145,10 +200,10 @@ export async function instantiate(module, imports = {}) {
     },
     runGibbsSparse(conditionalValues, siteOffsets, categoryIndices, categories, gridCount, siteCount, parameterCount, iterations, burnin, concentration, seed, trackAllocations) {
       // assembly/index/runGibbsSparse(~lib/typedarray/Float64Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Float64Array, i32, i32, i32, i32, i32, f64, u32, bool) => ~lib/typedarray/Float64Array
-      conditionalValues = __retain(__lowerTypedArray(Float64Array, 6, 3, conditionalValues) || __notnull());
+      conditionalValues = __retain(__lowerTypedArray(Float64Array, 7, 3, conditionalValues) || __notnull());
       siteOffsets = __retain(__lowerTypedArray(Uint32Array, 5, 2, siteOffsets) || __notnull());
       categoryIndices = __retain(__lowerTypedArray(Uint32Array, 5, 2, categoryIndices) || __notnull());
-      categories = __lowerTypedArray(Float64Array, 6, 3, categories) || __notnull();
+      categories = __lowerTypedArray(Float64Array, 7, 3, categories) || __notnull();
       trackAllocations = trackAllocations ? 1 : 0;
       try {
         return __liftTypedArray(Float64Array, exports.runGibbsSparse(conditionalValues, siteOffsets, categoryIndices, categories, gridCount, siteCount, parameterCount, iterations, burnin, concentration, seed, trackAllocations) >>> 0);
@@ -160,8 +215,8 @@ export async function instantiate(module, imports = {}) {
     },
     runCollapsedGibbs(siteMajorConditionals, categories, gridCount, siteCount, parameterCount, iterations, burnin, concentration, seed, trackAllocations) {
       // assembly/index/runCollapsedGibbs(~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, i32, i32, i32, i32, i32, f64, u32, bool) => ~lib/typedarray/Float64Array
-      siteMajorConditionals = __retain(__lowerTypedArray(Float64Array, 6, 3, siteMajorConditionals) || __notnull());
-      categories = __lowerTypedArray(Float64Array, 6, 3, categories) || __notnull();
+      siteMajorConditionals = __retain(__lowerTypedArray(Float64Array, 7, 3, siteMajorConditionals) || __notnull());
+      categories = __lowerTypedArray(Float64Array, 7, 3, categories) || __notnull();
       trackAllocations = trackAllocations ? 1 : 0;
       try {
         return __liftTypedArray(Float64Array, exports.runCollapsedGibbs(siteMajorConditionals, categories, gridCount, siteCount, parameterCount, iterations, burnin, concentration, seed, trackAllocations) >>> 0);

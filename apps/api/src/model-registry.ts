@@ -15,6 +15,13 @@ import {
   validateFubarWorkspace,
   type FubarAnalysisResult,
 } from "@phylo-workbench/model-fubar";
+import {
+  analyzeBsrel,
+  bsrelManifest,
+  bsrelResultsToCsv,
+  validateBsrelWorkspace,
+  type BsrelAnalysisResult,
+} from "@phylo-workbench/model-bsrel";
 
 export interface ServerRunContext {
   readonly alignment: string;
@@ -86,6 +93,25 @@ function serialiseFubarResult(result: FubarAnalysisResult, threshold: number) {
   };
 }
 
+function serialiseBsrelResult(result: BsrelAnalysisResult) {
+  return {
+    branches: result.branches,
+    alternativeLogLikelihood: result.alternativeLogLikelihood,
+    backend: result.backend,
+    timings: result.timings,
+    diagnostics: result.diagnostics,
+    fittedModel: {
+      gtrRates: [...result.fittedModel.gtrRates],
+      f3x4: [...result.fittedModel.f3x4],
+      globalAlpha: result.fittedModel.globalAlpha,
+      globalBeta: result.fittedModel.globalBeta,
+      logLikelihood: result.fittedModel.logLikelihood,
+      fitKind: result.fittedModel.fitKind,
+    },
+    csv: bsrelResultsToCsv(result),
+  };
+}
+
 export const serverModelRegistry: readonly ServerModelRegistration[] = [
   {
     manifest: difFubarManifest,
@@ -131,6 +157,27 @@ export const serverModelRegistry: readonly ServerModelRegistration[] = [
         onStage: onProgress,
       });
       return serialiseFubarResult(result, posteriorThreshold);
+    },
+  },
+  {
+    manifest: bsrelManifest,
+    validate: validateBsrelWorkspace,
+    run: async ({ alignment, tree, parameters, signal, onProgress }) => {
+      const branchScope = parameters.branchScope === "internal" || parameters.branchScope === "terminal"
+        ? parameters.branchScope
+        : "all";
+      const result = await analyzeBsrel(alignment, tree, {
+        backend: "wasm",
+        branchScope,
+        significanceThreshold: numberParameter(parameters, "significanceThreshold", 0.05),
+        alternativeIterations: numberParameter(parameters, "alternativeIterations", 45),
+        nullIterations: numberParameter(parameters, "nullIterations", 10),
+        maximumOmega: numberParameter(parameters, "maximumOmega", 1000),
+        fitMode: parameters.fitMode === "reference-compatible" ? "reference-compatible" : "empirical-fast",
+        signal,
+        onStage: onProgress,
+      });
+      return serialiseBsrelResult(result);
     },
   },
 ];

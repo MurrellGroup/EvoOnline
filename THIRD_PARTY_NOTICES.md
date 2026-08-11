@@ -22,6 +22,10 @@ alivibe loads Aioli/bioWASM for Kalign and FastTree. Those runtime packages reta
 
 `models/fubar` independently implements the fixed-grid and DirichletFUBAR behavior documented by [MurrellGroup/CodonMolecularEvolution.jl](https://github.com/MurrellGroup/CodonMolecularEvolution.jl), which is MIT licensed. It reuses this repository's own optimized MG94 kernels; no Julia runtime or HyPhy FUBAR code is bundled.
 
+## BS-REL method and MolecularEvolution.jl message semantics
+
+`models/bsrel` is an independent TypeScript/AssemblyScript implementation of the fixed three-rate BS-REL method described by Kosakovsky Pond et al. (2011). It does not bundle HyPhy, aBS-REL, or any AIC-based adaptive model-selection code. Its root-to-tip outside-message organization follows the public `felsenstein_down!` semantics documented by [MurrellGroup/MolecularEvolution.jl](https://github.com/MurrellGroup/MolecularEvolution.jl), which is MIT licensed; the SIMD kernels and optimizer in this repository are original code.
+
 ## Mol*
 
 The optional structure-mapping panel lazy-loads the pinned standalone [Mol*](https://github.com/molstar/molstar) 5.11.0 viewer from jsDelivr. Mol* is MIT licensed. It is not installed as an npm dependency or included in EvoOnline's application bundle; the runtime is requested only after the user maps a structure.

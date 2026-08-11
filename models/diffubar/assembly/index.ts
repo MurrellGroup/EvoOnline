@@ -1,5 +1,6 @@
 export const Uint8Array_ID: u32 = idof<Uint8Array>();
 export const Uint32Array_ID: u32 = idof<Uint32Array>();
+export const Int32Array_ID: u32 = idof<Int32Array>();
 export const Float64Array_ID: u32 = idof<Float64Array>();
 
 const LOAD_TIP: u32 = 0;
@@ -219,6 +220,541 @@ function propagateBlock(
     }
     for (; site < blockCount; site += 1) siteSums[site] += equilibrium[state] * values[rootRow + site];
   }
+}
+
+@inline function copySlot(
+  destination: Float64Array,
+  destinationSlot: i32,
+  source: Float64Array,
+  sourceSlot: i32,
+  stateCount: i32,
+  blockCount: i32,
+): void {
+  const destinationOffset = destinationSlot * stateCount * SITE_BLOCK;
+  const sourceOffset = sourceSlot * stateCount * SITE_BLOCK;
+  for (let state = 0; state < stateCount; state += 1) {
+    copyF64Range(destination, destinationOffset + state * SITE_BLOCK, source, sourceOffset + state * SITE_BLOCK, blockCount);
+  }
+}
+
+@inline function copyScale(
+  destination: Float64Array,
+  destinationSlot: i32,
+  source: Float64Array,
+  sourceSlot: i32,
+  blockCount: i32,
+): void {
+  copyF64Range(destination, destinationSlot * SITE_BLOCK, source, sourceSlot * SITE_BLOCK, blockCount);
+}
+
+/** Normalize a state-by-site slot and fold its norm into an existing log scale. */
+function normalizeSlot(
+  values: Float64Array,
+  scales: Float64Array,
+  slot: i32,
+  stateCount: i32,
+  blockCount: i32,
+  siteSums: Float64Array,
+): void {
+  const valueOffset = slot * stateCount * SITE_BLOCK;
+  const scaleOffset = slot * SITE_BLOCK;
+  for (let site = 0; site < blockCount; site += 1) siteSums[site] = 0.0;
+  for (let state = 0; state < stateCount; state += 1) {
+    const row = valueOffset + state * SITE_BLOCK;
+    for (let site = 0; site < blockCount; site += 1) siteSums[site] += values[row + site];
+  }
+  for (let site = 0; site < blockCount; site += 1) {
+    const total = siteSums[site];
+    if (total > 0.0 && isFinite(total)) {
+      scales[scaleOffset + site] += Math.log(total);
+      siteSums[site] = 1.0 / total;
+    } else {
+      scales[scaleOffset + site] = -Infinity;
+      siteSums[site] = 0.0;
+    }
+  }
+  for (let state = 0; state < stateCount; state += 1) {
+    const row = valueOffset + state * SITE_BLOCK;
+    for (let site = 0; site < blockCount; site += 1) values[row + site] *= siteSums[site];
+  }
+}
+
+/** Multiply slots from separate message banks and normalize the destination. */
+function multiplyExternalNormalize(
+  destinationValues: Float64Array,
+  destinationScales: Float64Array,
+  destinationSlot: i32,
+  sourceValues: Float64Array,
+  sourceScales: Float64Array,
+  sourceSlot: i32,
+  stateCount: i32,
+  blockCount: i32,
+  siteSums: Float64Array,
+): void {
+  const destinationOffset = destinationSlot * stateCount * SITE_BLOCK;
+  const sourceOffset = sourceSlot * stateCount * SITE_BLOCK;
+  const destinationScaleOffset = destinationSlot * SITE_BLOCK;
+  const sourceScaleOffset = sourceSlot * SITE_BLOCK;
+  for (let site = 0; site < blockCount; site += 1) siteSums[site] = 0.0;
+  for (let state = 0; state < stateCount; state += 1) {
+    const destinationRow = destinationOffset + state * SITE_BLOCK;
+    const sourceRow = sourceOffset + state * SITE_BLOCK;
+    for (let site = 0; site < blockCount; site += 1) {
+      const product = destinationValues[destinationRow + site] * sourceValues[sourceRow + site];
+      destinationValues[destinationRow + site] = product;
+      siteSums[site] += product;
+    }
+  }
+  for (let site = 0; site < blockCount; site += 1) {
+    const total = siteSums[site];
+    if (total > 0.0 && isFinite(total)) {
+      destinationScales[destinationScaleOffset + site] += sourceScales[sourceScaleOffset + site] + Math.log(total);
+      siteSums[site] = 1.0 / total;
+    } else {
+      destinationScales[destinationScaleOffset + site] = -Infinity;
+      siteSums[site] = 0.0;
+    }
+  }
+  for (let state = 0; state < stateCount; state += 1) {
+    const row = destinationOffset + state * SITE_BLOCK;
+    for (let site = 0; site < blockCount; site += 1) destinationValues[row + site] *= siteSums[site];
+  }
+}
+
+/** Build and retain all three transformed components for one baseline edge. */
+function propagateBaselineMixture(
+  edgeValues: Float64Array,
+  edgeScales: Float64Array,
+  edgeComponents: Float64Array,
+  edge: i32,
+  sourceValues: Float64Array,
+  sourceScales: Float64Array,
+  sourceSlot: i32,
+  blockCount: i32,
+  branchLength: f64,
+  branchModels: Uint32Array,
+  branchWeights: Float64Array,
+  stateCount: i32,
+  maxNeighbors: i32,
+  poissonTerms: i32,
+  maxLambdaPerStep: f64,
+  neighborCount: Uint32Array,
+  neighborIndex: Uint32Array,
+  rDiagonal: Float64Array,
+  rOffDiagonal: Float64Array,
+  mu: Float64Array,
+  workA: Float64Array,
+  workB: Float64Array,
+  accumulator: Float64Array,
+  siteSums: Float64Array,
+): void {
+  const parameterOffset = edge * 3;
+  for (let component = 0; component < 3; component += 1) {
+    const componentSlot = parameterOffset + component;
+    copySlot(edgeComponents, componentSlot, sourceValues, sourceSlot, stateCount, blockCount);
+    propagateBlock(
+      edgeComponents, componentSlot, blockCount, branchLength, <i32>branchModels[componentSlot],
+      stateCount, maxNeighbors, poissonTerms, maxLambdaPerStep,
+      neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu, workA, workB, accumulator,
+    );
+  }
+  const destinationOffset = edge * stateCount * SITE_BLOCK;
+  const source0 = parameterOffset * stateCount * SITE_BLOCK;
+  const source1 = (parameterOffset + 1) * stateCount * SITE_BLOCK;
+  const source2 = (parameterOffset + 2) * stateCount * SITE_BLOCK;
+  const weight0 = branchWeights[parameterOffset];
+  const weight1 = branchWeights[parameterOffset + 1];
+  const weight2 = branchWeights[parameterOffset + 2];
+  for (let state = 0; state < stateCount; state += 1) {
+    const destinationRow = destinationOffset + state * SITE_BLOCK;
+    const row0 = source0 + state * SITE_BLOCK;
+    const row1 = source1 + state * SITE_BLOCK;
+    const row2 = source2 + state * SITE_BLOCK;
+    for (let site = 0; site < blockCount; site += 1) {
+      edgeValues[destinationRow + site] = weight0 * edgeComponents[row0 + site]
+        + weight1 * edgeComponents[row1 + site]
+        + weight2 * edgeComponents[row2 + site];
+    }
+  }
+  copyScale(edgeScales, edge, sourceScales, sourceSlot, blockCount);
+  normalizeSlot(edgeValues, edgeScales, edge, stateCount, blockCount, siteSums);
+}
+
+/** Propagate a parent-side joint message in the forward direction by reversibility. */
+function propagateForwardMixture(
+  outsideValues: Float64Array,
+  outsideScales: Float64Array,
+  childNode: i32,
+  contextValues: Float64Array,
+  contextScales: Float64Array,
+  edge: i32,
+  branchLength: f64,
+  branchModels: Uint32Array,
+  branchWeights: Float64Array,
+  equilibrium: Float64Array,
+  scratchComponents: Float64Array,
+  blockCount: i32,
+  stateCount: i32,
+  maxNeighbors: i32,
+  poissonTerms: i32,
+  maxLambdaPerStep: f64,
+  neighborCount: Uint32Array,
+  neighborIndex: Uint32Array,
+  rDiagonal: Float64Array,
+  rOffDiagonal: Float64Array,
+  mu: Float64Array,
+  workA: Float64Array,
+  workB: Float64Array,
+  accumulator: Float64Array,
+  siteSums: Float64Array,
+): void {
+  const contextOffset = edge * stateCount * SITE_BLOCK;
+  const parameterOffset = edge * 3;
+  for (let component = 0; component < 3; component += 1) {
+    const componentOffset = component * stateCount * SITE_BLOCK;
+    for (let state = 0; state < stateCount; state += 1) {
+      const sourceRow = contextOffset + state * SITE_BLOCK;
+      const destinationRow = componentOffset + state * SITE_BLOCK;
+      const inverseEquilibrium = 1.0 / equilibrium[state];
+      for (let site = 0; site < blockCount; site += 1) {
+        scratchComponents[destinationRow + site] = contextValues[sourceRow + site] * inverseEquilibrium;
+      }
+    }
+    propagateBlock(
+      scratchComponents, component, blockCount, branchLength, <i32>branchModels[parameterOffset + component],
+      stateCount, maxNeighbors, poissonTerms, maxLambdaPerStep,
+      neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu, workA, workB, accumulator,
+    );
+  }
+  const destinationOffset = childNode * stateCount * SITE_BLOCK;
+  const weight0 = branchWeights[parameterOffset];
+  const weight1 = branchWeights[parameterOffset + 1];
+  const weight2 = branchWeights[parameterOffset + 2];
+  for (let state = 0; state < stateCount; state += 1) {
+    const destinationRow = destinationOffset + state * SITE_BLOCK;
+    const row0 = state * SITE_BLOCK;
+    const row1 = stateCount * SITE_BLOCK + state * SITE_BLOCK;
+    const row2 = 2 * stateCount * SITE_BLOCK + state * SITE_BLOCK;
+    const pi = equilibrium[state];
+    for (let site = 0; site < blockCount; site += 1) {
+      outsideValues[destinationRow + site] = pi * (
+        weight0 * scratchComponents[row0 + site]
+        + weight1 * scratchComponents[row1 + site]
+        + weight2 * scratchComponents[row2 + site]
+      );
+    }
+  }
+  copyScale(outsideScales, childNode, contextScales, edge, blockCount);
+  normalizeSlot(outsideValues, outsideScales, childNode, stateCount, blockCount, siteSums);
+}
+
+/** Divide a full node blanket by one strictly-positive child contribution. */
+function divideBlanket(
+  contextValues: Float64Array,
+  contextScales: Float64Array,
+  edge: i32,
+  totalValues: Float64Array,
+  totalScales: Float64Array,
+  edgeValues: Float64Array,
+  edgeScales: Float64Array,
+  stateCount: i32,
+  blockCount: i32,
+  siteSums: Float64Array,
+): bool {
+  const contextOffset = edge * stateCount * SITE_BLOCK;
+  const edgeOffset = edge * stateCount * SITE_BLOCK;
+  let valid = true;
+  for (let site = 0; site < blockCount; site += 1) siteSums[site] = 0.0;
+  for (let state = 0; state < stateCount; state += 1) {
+    const totalRow = state * SITE_BLOCK;
+    const edgeRow = edgeOffset + state * SITE_BLOCK;
+    const contextRow = contextOffset + state * SITE_BLOCK;
+    for (let site = 0; site < blockCount; site += 1) {
+      const denominator = edgeValues[edgeRow + site];
+      if (!(denominator > 0.0)) valid = false;
+      const value = denominator > 0.0 ? totalValues[totalRow + site] / denominator : 0.0;
+      contextValues[contextRow + site] = value;
+      siteSums[site] += value;
+    }
+  }
+  const contextScaleOffset = edge * SITE_BLOCK;
+  const edgeScaleOffset = edge * SITE_BLOCK;
+  for (let site = 0; site < blockCount; site += 1) {
+    const total = siteSums[site];
+    if (total > 0.0 && isFinite(total)) {
+      contextScales[contextScaleOffset + site] = totalScales[site] - edgeScales[edgeScaleOffset + site] + Math.log(total);
+      siteSums[site] = 1.0 / total;
+    } else {
+      contextScales[contextScaleOffset + site] = -Infinity;
+      siteSums[site] = 0.0;
+      valid = false;
+    }
+  }
+  for (let state = 0; state < stateCount; state += 1) {
+    const row = contextOffset + state * SITE_BLOCK;
+    for (let site = 0; site < blockCount; site += 1) contextValues[row + site] *= siteSums[site];
+  }
+  return valid;
+}
+
+function buildBlanketFallback(
+  contextValues: Float64Array,
+  contextScales: Float64Array,
+  edge: i32,
+  parentNode: i32,
+  childOffsets: Uint32Array,
+  children: Uint32Array,
+  edgeForNode: Int32Array,
+  outsideValues: Float64Array,
+  outsideScales: Float64Array,
+  edgeValues: Float64Array,
+  edgeScales: Float64Array,
+  stateCount: i32,
+  blockCount: i32,
+  siteSums: Float64Array,
+): void {
+  copySlot(contextValues, edge, outsideValues, parentNode, stateCount, blockCount);
+  copyScale(contextScales, edge, outsideScales, parentNode, blockCount);
+  const start = <i32>childOffsets[parentNode];
+  const end = <i32>childOffsets[parentNode + 1];
+  for (let childIndex = start; childIndex < end; childIndex += 1) {
+    const siblingEdge = edgeForNode[<i32>children[childIndex]];
+    if (siblingEdge == edge) continue;
+    multiplyExternalNormalize(
+      contextValues, contextScales, edge, edgeValues, edgeScales, siblingEdge,
+      stateCount, blockCount, siteSums,
+    );
+  }
+}
+
+/**
+ * Fixed three-rate BS-REL kernel. One upward pass and one reversible downward
+ * pass expose the exact local blanket around every edge. Candidate objectives
+ * then replace only their selected edge and never re-prune the rest of tree.
+ */
+export function evaluateBsrelAllMessages(
+  childOffsets: Uint32Array,
+  children: Uint32Array,
+  tipForNode: Int32Array,
+  edgeForNode: Int32Array,
+  nodeForEdge: Uint32Array,
+  postorder: Uint32Array,
+  preorder: Uint32Array,
+  tipStates: Uint8Array,
+  branchLengths: Float64Array,
+  branchModels: Uint32Array,
+  branchWeights: Float64Array,
+  candidateBranches: Uint32Array,
+  candidateLengths: Float64Array,
+  candidateModels: Uint32Array,
+  candidateWeights: Float64Array,
+  neighborCount: Uint32Array,
+  neighborIndex: Uint32Array,
+  rDiagonal: Float64Array,
+  rOffDiagonal: Float64Array,
+  mu: Float64Array,
+  equilibrium: Float64Array,
+  siteCount: i32,
+  nodeCount: i32,
+  edgeCount: i32,
+  stateCount: i32,
+  maxNeighbors: i32,
+  root: i32,
+  poissonTerms: i32,
+  maxLambdaPerStep: f64,
+): Float64Array {
+  const candidateCount = candidateBranches.length;
+  const result = new Float64Array(candidateCount + 1);
+  const upValues = new Float64Array(nodeCount * stateCount * SITE_BLOCK);
+  const upScales = new Float64Array(nodeCount * SITE_BLOCK);
+  const edgeValues = new Float64Array(edgeCount * stateCount * SITE_BLOCK);
+  const edgeScales = new Float64Array(edgeCount * SITE_BLOCK);
+  const edgeComponents = new Float64Array(edgeCount * 3 * stateCount * SITE_BLOCK);
+  const outsideValues = new Float64Array(nodeCount * stateCount * SITE_BLOCK);
+  const outsideScales = new Float64Array(nodeCount * SITE_BLOCK);
+  const contextValues = new Float64Array(edgeCount * stateCount * SITE_BLOCK);
+  const contextScales = new Float64Array(edgeCount * SITE_BLOCK);
+  const totalValues = new Float64Array(stateCount * SITE_BLOCK);
+  const totalScales = new Float64Array(SITE_BLOCK);
+  const scratchComponents = new Float64Array(4 * stateCount * SITE_BLOCK);
+  const workA = new Float64Array(stateCount * SITE_BLOCK);
+  const workB = new Float64Array(stateCount * SITE_BLOCK);
+  const accumulator = new Float64Array(stateCount * SITE_BLOCK);
+  const siteSums = new Float64Array(SITE_BLOCK);
+
+  for (let blockStart = 0; blockStart < siteCount; blockStart += SITE_BLOCK) {
+    const blockCount = min<i32>(SITE_BLOCK, siteCount - blockStart);
+
+    // Tip-to-root pass. Edge mixtures are normalized individually and retain
+    // their component transforms for cheap local finite differences.
+    for (let order = 0; order < postorder.length; order += 1) {
+      const node = <i32>postorder[order];
+      const start = <i32>childOffsets[node];
+      const end = <i32>childOffsets[node + 1];
+      if (start == end) {
+        const tip = tipForNode[node];
+        const valueOffset = node * stateCount * SITE_BLOCK;
+        for (let state = 0; state < stateCount; state += 1) {
+          const row = valueOffset + state * SITE_BLOCK;
+          for (let site = 0; site < blockCount; site += 1) {
+            const observed = tipStates[tip * siteCount + blockStart + site];
+            upValues[row + site] = observed == 255 || observed == state ? 1.0 : 0.0;
+          }
+        }
+        const scaleOffset = node * SITE_BLOCK;
+        for (let site = 0; site < blockCount; site += 1) upScales[scaleOffset + site] = 0.0;
+      } else {
+        const firstChild = <i32>children[start];
+        const firstEdge = edgeForNode[firstChild];
+        copySlot(upValues, node, edgeValues, firstEdge, stateCount, blockCount);
+        copyScale(upScales, node, edgeScales, firstEdge, blockCount);
+        for (let childIndex = start + 1; childIndex < end; childIndex += 1) {
+          const child = <i32>children[childIndex];
+          const edge = edgeForNode[child];
+          multiplyExternalNormalize(
+            upValues, upScales, node, edgeValues, edgeScales, edge,
+            stateCount, blockCount, siteSums,
+          );
+        }
+      }
+      const edge = edgeForNode[node];
+      if (edge >= 0) {
+        propagateBaselineMixture(
+          edgeValues, edgeScales, edgeComponents, edge,
+          upValues, upScales, node, blockCount,
+          branchLengths[edge], branchModels, branchWeights,
+          stateCount, maxNeighbors, poissonTerms, maxLambdaPerStep,
+          neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu,
+          workA, workB, accumulator, siteSums,
+        );
+      }
+    }
+
+    const rootOffset = root * stateCount * SITE_BLOCK;
+    const rootScaleOffset = root * SITE_BLOCK;
+    for (let site = 0; site < blockCount; site += 1) siteSums[site] = 0.0;
+    for (let state = 0; state < stateCount; state += 1) {
+      const row = rootOffset + state * SITE_BLOCK;
+      for (let site = 0; site < blockCount; site += 1) siteSums[site] += equilibrium[state] * upValues[row + site];
+    }
+    for (let site = 0; site < blockCount; site += 1) {
+      const rootSum = siteSums[site];
+      if (rootSum > 0.0 && isFinite(result[0])) result[0] += upScales[rootScaleOffset + site] + Math.log(rootSum);
+      else result[0] = -Infinity;
+    }
+    if (candidateCount == 0) continue;
+
+    // Root-to-tip pass. The complete node blanket is divided by each positive
+    // child message; a zero-safe sibling product handles exact zero branches.
+    const outsideRootOffset = root * stateCount * SITE_BLOCK;
+    for (let state = 0; state < stateCount; state += 1) {
+      const row = outsideRootOffset + state * SITE_BLOCK;
+      for (let site = 0; site < blockCount; site += 1) outsideValues[row + site] = equilibrium[state];
+    }
+    const outsideRootScale = root * SITE_BLOCK;
+    for (let site = 0; site < blockCount; site += 1) outsideScales[outsideRootScale + site] = 0.0;
+
+    for (let order = 0; order < preorder.length; order += 1) {
+      const parentNode = <i32>preorder[order];
+      const start = <i32>childOffsets[parentNode];
+      const end = <i32>childOffsets[parentNode + 1];
+      if (start == end) continue;
+      copySlot(totalValues, 0, outsideValues, parentNode, stateCount, blockCount);
+      copyScale(totalScales, 0, outsideScales, parentNode, blockCount);
+      for (let childIndex = start; childIndex < end; childIndex += 1) {
+        const child = <i32>children[childIndex];
+        const edge = edgeForNode[child];
+        multiplyExternalNormalize(
+          totalValues, totalScales, 0, edgeValues, edgeScales, edge,
+          stateCount, blockCount, siteSums,
+        );
+      }
+      for (let childIndex = start; childIndex < end; childIndex += 1) {
+        const child = <i32>children[childIndex];
+        const edge = edgeForNode[child];
+        if (!divideBlanket(
+          contextValues, contextScales, edge,
+          totalValues, totalScales, edgeValues, edgeScales,
+          stateCount, blockCount, siteSums,
+        )) {
+          buildBlanketFallback(
+            contextValues, contextScales, edge, parentNode,
+            childOffsets, children, edgeForNode,
+            outsideValues, outsideScales, edgeValues, edgeScales,
+            stateCount, blockCount, siteSums,
+          );
+        }
+        propagateForwardMixture(
+          outsideValues, outsideScales, child,
+          contextValues, contextScales, edge,
+          branchLengths[edge], branchModels, branchWeights, equilibrium,
+          scratchComponents, blockCount, stateCount, maxNeighbors,
+          poissonTerms, maxLambdaPerStep,
+          neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu,
+          workA, workB, accumulator, siteSums,
+        );
+      }
+    }
+
+    // Exact local edge replacements. Components unchanged from the baseline
+    // are read from the retained transform, so a one-parameter perturbation
+    // usually needs one propagation instead of three.
+    for (let candidate = 0; candidate < candidateCount; candidate += 1) {
+      const edge = <i32>candidateBranches[candidate];
+      const childNode = <i32>nodeForEdge[edge];
+      const candidateOffset = candidate * 3;
+      const baselineOffset = edge * 3;
+      const sameLength = candidateLengths[candidate] == branchLengths[edge];
+      for (let component = 0; component < 3; component += 1) {
+        if (sameLength && candidateModels[candidateOffset + component] == branchModels[baselineOffset + component]) continue;
+        copySlot(scratchComponents, component, upValues, childNode, stateCount, blockCount);
+        propagateBlock(
+          scratchComponents, component, blockCount, candidateLengths[candidate], <i32>candidateModels[candidateOffset + component],
+          stateCount, maxNeighbors, poissonTerms, maxLambdaPerStep,
+          neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu,
+          workA, workB, accumulator,
+        );
+      }
+      const mixedSlot = 3;
+      const mixedOffset = mixedSlot * stateCount * SITE_BLOCK;
+      for (let state = 0; state < stateCount; state += 1) {
+        const mixedRow = mixedOffset + state * SITE_BLOCK;
+        for (let site = 0; site < blockCount; site += 1) {
+          let value = 0.0;
+          for (let component = 0; component < 3; component += 1) {
+            const reuse = sameLength && candidateModels[candidateOffset + component] == branchModels[baselineOffset + component];
+            const sourceOffset = reuse
+              ? (baselineOffset + component) * stateCount * SITE_BLOCK
+              : component * stateCount * SITE_BLOCK;
+            if (reuse) value += candidateWeights[candidateOffset + component]
+              * edgeComponents[sourceOffset + state * SITE_BLOCK + site];
+            else value += candidateWeights[candidateOffset + component]
+              * scratchComponents[sourceOffset + state * SITE_BLOCK + site];
+          }
+          scratchComponents[mixedRow + site] = value;
+        }
+      }
+      const contextOffset = edge * stateCount * SITE_BLOCK;
+      const contextScaleOffset = edge * SITE_BLOCK;
+      const childScaleOffset = childNode * SITE_BLOCK;
+      for (let site = 0; site < blockCount; site += 1) siteSums[site] = 0.0;
+      for (let state = 0; state < stateCount; state += 1) {
+        const contextRow = contextOffset + state * SITE_BLOCK;
+        const mixedRow = mixedOffset + state * SITE_BLOCK;
+        for (let site = 0; site < blockCount; site += 1) {
+          siteSums[site] += contextValues[contextRow + site] * scratchComponents[mixedRow + site];
+        }
+      }
+      for (let site = 0; site < blockCount; site += 1) {
+        const dot = siteSums[site];
+        if (dot > 0.0 && isFinite(dot) && isFinite(result[candidate + 1])) {
+          result[candidate + 1] += contextScales[contextScaleOffset + site]
+            + upScales[childScaleOffset + site] + Math.log(dot);
+        } else result[candidate + 1] = -Infinity;
+      }
+    }
+  }
+  return result;
 }
 
 /** Exact f64 CPU/WASM pruning backend, output in category-major order. */

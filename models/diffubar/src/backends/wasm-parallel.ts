@@ -1,10 +1,17 @@
-import type { LikelihoodRequest, LikelihoodResult, RuntimeWorkload } from "../types.js";
+import type {
+  BsrelKernelRequest,
+  BsrelKernelResult,
+  LikelihoodRequest,
+  LikelihoodResult,
+  RuntimeWorkload,
+} from "../types.js";
 import { WasmBackend, compileWasmModule } from "./wasm.js";
 
 interface WorkerMessage {
   readonly id?: number;
   readonly type?: "ready";
   readonly logLikelihoods?: Float64Array;
+  readonly objectives?: Float64Array;
   readonly error?: string;
 }
 
@@ -93,7 +100,28 @@ export class ParallelWasmBackend {
       };
       worker.addEventListener?.("message", receiveEvent);
       worker.on?.("message", receive);
-      worker.postMessage({ id, request });
+      worker.postMessage({ id, kind: "likelihood", request });
+    });
+  }
+
+  private callBsrel(worker: WorkerLike, request: BsrelKernelRequest): Promise<Float64Array> {
+    const id = this.nextMessageId++;
+    return new Promise((resolve, reject) => {
+      const receive = (message: WorkerMessage): void => {
+        if (message.id !== id) return;
+        cleanup();
+        if (message.error !== undefined) reject(new Error(message.error));
+        else if (message.objectives === undefined) reject(new Error("Parallel WASM worker returned no BS-REL objectives."));
+        else resolve(message.objectives);
+      };
+      const receiveEvent = (event: MessageEvent<WorkerMessage>): void => receive(event.data);
+      const cleanup = (): void => {
+        worker.removeEventListener?.("message", receiveEvent);
+        worker.off?.("message", receive);
+      };
+      worker.addEventListener?.("message", receiveEvent);
+      worker.on?.("message", receive);
+      worker.postMessage({ id, kind: "bsrel", request });
     });
   }
 
@@ -172,6 +200,54 @@ export class ParallelWasmBackend {
       elapsedMs: performance.now() - started,
       precision: "f64",
     };
+  }
+
+  async evaluateBsrel(request: BsrelKernelRequest): Promise<BsrelKernelResult> {
+    request.signal?.throwIfAborted();
+    if (this.workerCount <= 1 || request.siteCount < 32) return this.local.evaluateBsrel(request);
+    const started = performance.now();
+    const pool = await this.workers();
+    const activeCount = Math.min(pool.length, Math.max(1, Math.ceil(request.siteCount / 32)));
+    request.onProgress?.(0, {
+      message: `Starting ${activeCount.toLocaleString()} site-parallel all-message workers`,
+      current: 0,
+      total: request.siteCount,
+      indeterminate: true,
+    });
+    const jobs: Array<{ readonly count: number; readonly result: Promise<Float64Array> }> = [];
+    for (let index = 0; index < activeCount; index += 1) {
+      const start = Math.floor(index * request.siteCount / activeCount);
+      const end = Math.floor((index + 1) * request.siteCount / activeCount);
+      const count = end - start;
+      const tips = new Uint8Array(request.tree.tipCount * count);
+      for (let tip = 0; tip < request.tree.tipCount; tip += 1) {
+        tips.set(request.tipStates.subarray(tip * request.siteCount + start, tip * request.siteCount + end), tip * count);
+      }
+      const { signal: _signal, onProgress: _onProgress, ...workerSafeRequest } = request;
+      const workerRequest: BsrelKernelRequest = {
+        ...workerSafeRequest,
+        tipStates: tips,
+        siteCount: count,
+      };
+      jobs.push({ count, result: this.callBsrel(pool[index]!, workerRequest) });
+    }
+    const objectives = new Float64Array(request.candidateBranches.length + 1);
+    let completedSites = 0;
+    const pieces = await Promise.all(jobs.map(async (job) => {
+      const piece = await job.result;
+      completedSites += job.count;
+      request.onProgress?.(completedSites / request.siteCount, {
+        message: `${completedSites.toLocaleString()}/${request.siteCount.toLocaleString()} codon sites messaged`,
+        current: completedSites,
+        total: request.siteCount,
+      });
+      return piece;
+    }));
+    for (const piece of pieces) {
+      for (let index = 0; index < objectives.length; index += 1) objectives[index] = objectives[index]! + piece[index]!;
+    }
+    request.signal?.throwIfAborted();
+    return { objectives, backend: "wasm-parallel", elapsedMs: performance.now() - started, precision: "f64" };
   }
 
   async dispose(): Promise<void> {

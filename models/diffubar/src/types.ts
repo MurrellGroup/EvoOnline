@@ -138,6 +138,60 @@ export interface LikelihoodResult {
   readonly precision: "f32" | "f64";
 }
 
+/**
+ * Flat rooted-tree topology used by the BS-REL all-to-all message kernel.
+ * Every non-root node owns exactly one edge (`edgeForNode`); children are
+ * stored in CSR form so the WASM pass also handles genuine polytomies.
+ */
+export interface BsrelKernelTree {
+  readonly parent: Int32Array;
+  readonly childOffsets: Uint32Array;
+  readonly children: Uint32Array;
+  readonly tipForNode: Int32Array;
+  readonly edgeForNode: Int32Array;
+  readonly nodeForEdge: Uint32Array;
+  readonly postorder: Uint32Array;
+  readonly preorder: Uint32Array;
+  readonly root: number;
+  readonly nodeCount: number;
+  readonly edgeCount: number;
+  readonly tipCount: number;
+}
+
+/**
+ * One full fixed-complexity BS-REL likelihood plus any number of exact local
+ * edge substitutions. Local candidates are evaluated against two-sided
+ * messages that exclude the candidate edge, so they do not re-prune the tree.
+ */
+export interface BsrelKernelRequest {
+  readonly tree: BsrelKernelTree;
+  readonly tipStates: Uint8Array;
+  readonly siteCount: number;
+  readonly branchLengths: Float64Array;
+  /** Three model ids per edge: purifying, near-neutral, positive. */
+  readonly branchModels: Uint32Array;
+  /** Three normalized mixture weights per edge. */
+  readonly branchWeights: Float64Array;
+  readonly candidateBranches: Uint32Array;
+  readonly candidateLengths: Float64Array;
+  readonly candidateModels: Uint32Array;
+  readonly candidateWeights: Float64Array;
+  readonly models: ModelBank;
+  readonly equilibrium: Float64Array;
+  readonly poissonTerms?: number;
+  readonly maxLambdaPerStep?: number;
+  readonly signal?: AbortSignal;
+  readonly onProgress?: (fraction: number, detail?: ProgressDetail) => void;
+}
+
+export interface BsrelKernelResult {
+  /** Baseline total log L followed by one total log L per local candidate. */
+  readonly objectives: Float64Array;
+  readonly backend: "wasm" | "wasm-parallel";
+  readonly elapsedMs: number;
+  readonly precision: "f64";
+}
+
 export interface SamplerOptions {
   readonly iterations?: number;
   readonly burnin?: number;

@@ -1,12 +1,15 @@
 import type { ComponentType } from "react";
 import { difFubarPlugin } from "@phylo-workbench/model-diffubar/browser-source";
 import { fubarPlugin } from "@phylo-workbench/model-fubar/browser-source";
+import { bsrelPlugin } from "@phylo-workbench/model-bsrel/browser-source";
 import type { ModelPlugin, ParameterValues } from "@phylo-workbench/model-sdk";
 import { ResultsView } from "./components/ResultsView.js";
 import { FubarResultsView } from "./components/FubarResultsView.js";
+import { BsrelResultsView } from "./components/BsrelResultsView.js";
 import { DifFubarClient, type RunProgress } from "./lib/diffubar-client.js";
 import { FubarClient } from "./lib/fubar-client.js";
-import type { DifFubarRunResult, FubarRunResult } from "./types.js";
+import { BsrelClient } from "./lib/bsrel-client.js";
+import type { BsrelRunResult, DifFubarRunResult, FubarRunResult } from "./types.js";
 
 export interface BrowserModelExecutor {
   run(
@@ -42,6 +45,10 @@ function FubarResult({ result, parameters, alignment }: ResultProps) {
   return <FubarResultsView result={result as FubarRunResult} threshold={Number(parameters.posteriorThreshold ?? 0.95)} alignment={alignment} />;
 }
 
+function BsrelResult({ result, parameters }: ResultProps) {
+  return <BsrelResultsView result={result as BsrelRunResult} threshold={Number(parameters.significanceThreshold ?? 0.05)} />;
+}
+
 export const modelRegistry: readonly BrowserModelRegistration[] = [
   {
     plugin: difFubarPlugin,
@@ -60,6 +67,17 @@ export const modelRegistry: readonly BrowserModelRegistration[] = [
     completionMessage: (result) => {
       const output = result as FubarRunResult;
       return `FUBAR completed with ${output.backend}: ${output.positiveSites.length} positive and ${output.purifyingSites.length} purifying sites.`;
+    },
+  },
+  {
+    plugin: bsrelPlugin,
+    glyph: "ω↗",
+    runtimeLabel: "Parallel WASM",
+    createExecutor: () => new BsrelClient(),
+    ResultView: BsrelResult,
+    completionMessage: (result) => {
+      const output = result as BsrelRunResult;
+      return `BS-REL completed with ${output.backend}: ${output.diagnostics.significantBranches} Holm-significant branches.`;
     },
   },
 ];

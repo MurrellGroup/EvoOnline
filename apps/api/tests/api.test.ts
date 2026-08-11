@@ -56,6 +56,7 @@ test("lists models and completes a small DifFUBAR job", async () => {
   assert.equal(models.status, 200);
   assert.equal(models.body.models[0].id, "diffubar");
   assert.ok(models.body.models.some((model: { id: string }) => model.id === "fubar"));
+  assert.ok(models.body.models.some((model: { id: string }) => model.id === "bsrel"));
 
   const alignment = await readFile(new URL("../../../examples/diffubar-demo.fasta", import.meta.url), "utf8");
   const tree = await readFile(new URL("../../../examples/diffubar-demo.nwk", import.meta.url), "utf8");
@@ -127,4 +128,33 @@ test("completes a small untagged FUBAR job with separate optional FEL results", 
   assert.equal(gibbsJob.result.diagnostics.inferenceMethod, "gibbs");
   assert.equal(gibbsJob.result.diagnostics.inferenceIterations, 200);
   assert.equal(gibbsJob.result.diagnostics.inferenceBurnin, 40);
+});
+
+test("completes a small fixed-complexity BS-REL branch test", async () => {
+  const alignment = await readFile(new URL("../../../examples/diffubar-demo.fasta", import.meta.url), "utf8");
+  const taggedTree = await readFile(new URL("../../../examples/diffubar-demo.nwk", import.meta.url), "utf8");
+  const tree = taggedTree.replaceAll(/\{[^}]+\}/g, "");
+  const submitted = await requestJson("POST", "/v1/jobs", {
+    modelId: "bsrel",
+    alignment: { name: "demo.fasta", text: alignment },
+    tree: { name: "demo.nwk", text: tree },
+    parameters: {
+      branchScope: "all",
+      alternativeIterations: 2,
+      nullIterations: 2,
+      maximumOmega: 50,
+    },
+  });
+  assert.equal(submitted.status, 202);
+  let job = submitted.body;
+  for (let attempt = 0; attempt < 200 && ["queued", "running"].includes(job.status); attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    job = (await requestJson("GET", `/v1/jobs/${submitted.body.id}`)).body;
+  }
+  assert.equal(job.status, "succeeded", job.error);
+  assert.equal(job.result.diagnostics.messageAlgorithm, "upward-downward-local-blanket");
+  assert.equal(job.result.diagnostics.lrtCalibration, "0.50*chi2_0 + 0.05*chi2_1 + 0.45*chi2_2");
+  assert.equal(job.result.branches.length, job.result.diagnostics.branches);
+  assert.ok(job.result.branches.every((branch: { pValueHolm: number | null }) => branch.pValueHolm !== null));
+  assert.match(job.result.csv, /Holm p-value/);
 });

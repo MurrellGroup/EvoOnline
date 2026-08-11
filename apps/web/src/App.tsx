@@ -28,6 +28,8 @@ const stageLabels: Readonly<Record<string, string>> = {
   "approximate-fel": "Optimizing approximate FEL surfaces",
   "gibbs-sampler": "Sampling the posterior",
   "dirichlet-em": "Fitting the Dirichlet mixture",
+  "branch-alternative": "Optimizing the joint BS-REL alternative",
+  "branch-nulls": "Re-optimizing branch nulls locally",
   tabulation: "Tabulating site posteriors",
   complete: "Complete",
 };

@@ -1,5 +1,5 @@
 import { WasmBackend } from "./wasm.js";
-import type { LikelihoodRequest } from "../types.js";
+import type { BsrelKernelRequest, LikelihoodRequest } from "../types.js";
 
 interface InitializeMessage {
   readonly type: "initialize";
@@ -8,7 +8,8 @@ interface InitializeMessage {
 
 interface RequestMessage {
   readonly id: number;
-  readonly request: LikelihoodRequest;
+  readonly kind?: "likelihood" | "bsrel";
+  readonly request: LikelihoodRequest | BsrelKernelRequest;
 }
 
 interface WorkerScope {
@@ -32,11 +33,19 @@ scope.onmessage = (event: MessageEvent<InitializeMessage | RequestMessage>) => {
   void (async () => {
     try {
       if (backend === undefined) throw new Error("Parallel WASM worker was not initialized.");
-      const result = await backend.evaluate(requestMessage.request);
-      scope.postMessage(
-        { id: requestMessage.id, logLikelihoods: result.logLikelihoods, elapsedMs: result.elapsedMs },
-        [result.logLikelihoods.buffer as ArrayBuffer],
-      );
+      if (requestMessage.kind === "bsrel") {
+        const result = await backend.evaluateBsrel(requestMessage.request as BsrelKernelRequest);
+        scope.postMessage(
+          { id: requestMessage.id, objectives: result.objectives, elapsedMs: result.elapsedMs },
+          [result.objectives.buffer as ArrayBuffer],
+        );
+      } else {
+        const result = await backend.evaluate(requestMessage.request as LikelihoodRequest);
+        scope.postMessage(
+          { id: requestMessage.id, logLikelihoods: result.logLikelihoods, elapsedMs: result.elapsedMs },
+          [result.logLikelihoods.buffer as ArrayBuffer],
+        );
+      }
     } catch (error) {
       scope.postMessage({
         id: requestMessage.id,
