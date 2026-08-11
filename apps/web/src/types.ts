@@ -6,6 +6,10 @@ import type {
   FameSiteResult,
   FlavorPosteriorProducts,
   FlavorSiteResult,
+  GlobalGammaBranchResult,
+  GlobalGammaFit,
+  GlobalGammaPosteriorProducts,
+  GlobalGammaSiteResult,
 } from "@phylo-workbench/model-bame/browser-source";
 
 export interface DifFubarRunResult {
@@ -146,8 +150,42 @@ export interface FlavorRunResult {
 
 export type BameRunResult = FameRunResult | FlavorRunResult;
 
+export interface GlobalGammaRunResult {
+  readonly method: "global-gamma";
+  readonly sites: readonly GlobalGammaSiteResult[];
+  readonly branches: readonly GlobalGammaBranchResult[];
+  readonly fit: GlobalGammaFit;
+  readonly omegaValues: Float64Array;
+  readonly alphaValues: Float64Array;
+  readonly positivePrior: number;
+  readonly posterior: GlobalGammaPosteriorProducts;
+  readonly backend: "wasm" | "wasm-parallel";
+  readonly timings: Readonly<Record<string, number>>;
+  readonly diagnostics: {
+    readonly taxa: number;
+    readonly codonSites: number;
+    readonly branches: number;
+    readonly omegaSlices: number;
+    readonly alphaSlices: number;
+    readonly fitPreset: "fast" | "thorough";
+    readonly coarseCandidates: number;
+    readonly refinementCandidates: number;
+    readonly activationPriorAlpha: number;
+    readonly activationPriorBeta: number;
+    readonly messageAlgorithm: "upward-downward-local-blanket";
+    readonly alphaModel: "mean-one-global-discrete-gamma";
+    readonly omegaModel: "global-discrete-gamma-iid-branch-site";
+    readonly evidenceCalibration: "plug-in-conditional-empirical-bayes";
+    readonly fitNumerics: "coarse-to-fine-grid-ml-julia-interpolation";
+    readonly finalNumerics: "direct-f64-uniformization";
+  };
+  readonly tree: string;
+  readonly siteCsv: string;
+  readonly branchCsv: string;
+}
+
 export interface BameWorkerRunRequest extends WorkerRunRequest {
-  readonly method: "fame" | "flavor";
+  readonly method: "fame" | "flavor" | "global-gamma";
 }
 
 export type WorkerResponse =
@@ -167,5 +205,5 @@ export type BsrelWorkerResponse =
 
 export type BameWorkerResponse =
   | { readonly type: "progress"; readonly id: string; readonly stage: string; readonly fraction: number; readonly detail?: ProgressDetail }
-  | { readonly type: "result"; readonly id: string; readonly result: BameRunResult }
+  | { readonly type: "result"; readonly id: string; readonly result: BameRunResult | GlobalGammaRunResult }
   | { readonly type: "error"; readonly id: string; readonly error: string };

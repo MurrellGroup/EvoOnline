@@ -16,6 +16,7 @@ export type BameBackendKind = Extract<BackendKind, "auto" | "wasm" | "wasm-paral
 export type FameWeightIntegration = "likelihood-quadrature" | "julia-draft-log-average";
 export type BameGridPreset = "fast" | "julia-draft";
 export type FlavorTransitionEngine = "julia-interpolated" | "direct-uniformization";
+export type GlobalGammaFitPreset = "fast" | "thorough";
 
 export interface FameGrid extends DifFUBARGrid {
   readonly alphaValues: Float64Array;
@@ -176,6 +177,100 @@ export interface FlavorAnalysisResult {
     readonly interpolationTableCap: 35;
     readonly cappedGridMultiplicityRetained: true;
     readonly gridPreset: BameGridPreset;
+  };
+}
+
+export interface GlobalGammaFit {
+  readonly omegaMean: number;
+  readonly omegaShape: number;
+  /** Shape of the mean-one Gamma distribution over site-wise alpha. */
+  readonly alphaShape: number;
+  readonly logLikelihood: number;
+}
+
+export interface GlobalGammaSiteResult {
+  readonly site: number;
+  /** log L(global Gamma) - log L(all branches capped at omega<=1). */
+  readonly cappedLogEvidence: number;
+  readonly cappedEvidenceRatio: number;
+  /** Equal-prior transform of the conditional evidence ratio, for plotting only. */
+  readonly conditionalSupport: number;
+  readonly expectedPositiveBranches: number;
+  readonly maximumBranchPosterior: number;
+}
+
+export interface GlobalGammaBranchResult {
+  readonly branch: number;
+  readonly nodeId: number;
+  readonly nodeIndex: number;
+  readonly name: string;
+  readonly parentName: string;
+  readonly terminal: boolean;
+  readonly branchLength: number;
+  /** Sum over sites of exact one-edge capped log likelihood ratios. */
+  readonly cappedLogEvidence: number;
+  readonly cappedEvidenceRatio: number;
+  /** Empirical-Bayes factor from the integrated branch activation model. */
+  readonly activationLogBayesFactor: number;
+  readonly activationBayesFactor: number;
+  readonly activationPosteriorMean: number;
+  readonly expectedPositiveSites: number;
+  readonly anySitePositivePosterior: number;
+  readonly anySitePositiveLogBayesFactor: number;
+  readonly maximumSitePosterior: number;
+}
+
+export interface GlobalGammaPosteriorProducts {
+  readonly siteCount: number;
+  readonly branchCount: number;
+  /** Edge-major P(omega>1 | data, fitted global parameters). */
+  readonly tailPosterior: Float32Array;
+  /** Edge-major log L(uncapped edge) - log L(capped edge). */
+  readonly localLogEvidence: Float32Array;
+}
+
+export interface GlobalGammaAnalysisOptions {
+  readonly backend?: BameBackendKind;
+  readonly omegaSlices?: number;
+  readonly alphaSlices?: number;
+  readonly fitPreset?: GlobalGammaFitPreset;
+  readonly activationPriorAlpha?: number;
+  readonly activationPriorBeta?: number;
+  readonly fitMode?: "empirical-fast" | "reference-compatible";
+  readonly fittedModel?: FittedModel;
+  readonly signal?: AbortSignal;
+  readonly onStage?: (stage: string, fraction: number, detail?: ProgressDetail) => void;
+}
+
+export interface GlobalGammaAnalysisResult {
+  readonly method: "global-gamma";
+  readonly sites: readonly GlobalGammaSiteResult[];
+  readonly branches: readonly GlobalGammaBranchResult[];
+  readonly fittedModel: FittedModel;
+  readonly fit: GlobalGammaFit;
+  readonly omegaValues: Float64Array;
+  readonly alphaValues: Float64Array;
+  readonly positivePrior: number;
+  readonly posterior: GlobalGammaPosteriorProducts;
+  readonly backend: "wasm" | "wasm-parallel";
+  readonly timings: Readonly<Record<string, number>>;
+  readonly diagnostics: {
+    readonly taxa: number;
+    readonly codonSites: number;
+    readonly branches: number;
+    readonly omegaSlices: number;
+    readonly alphaSlices: number;
+    readonly fitPreset: GlobalGammaFitPreset;
+    readonly coarseCandidates: number;
+    readonly refinementCandidates: number;
+    readonly activationPriorAlpha: number;
+    readonly activationPriorBeta: number;
+    readonly messageAlgorithm: "upward-downward-local-blanket";
+    readonly alphaModel: "mean-one-global-discrete-gamma";
+    readonly omegaModel: "global-discrete-gamma-iid-branch-site";
+    readonly evidenceCalibration: "plug-in-conditional-empirical-bayes";
+    readonly fitNumerics: "coarse-to-fine-grid-ml-julia-interpolation";
+    readonly finalNumerics: "direct-f64-uniformization";
   };
 }
 

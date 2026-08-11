@@ -6,6 +6,8 @@ import type {
   FlavorInterpolatedLikelihoodRequest,
   BsrelKernelRequest,
   BsrelKernelResult,
+  GlobalGammaMessageRequest,
+  GlobalGammaMessageResult,
   LikelihoodRequest,
   LikelihoodResult,
   MixtureFitOptions,
@@ -26,6 +28,7 @@ type WasmExports = Record<string, any> & {
   evaluateBranchMixtureLikelihood(...args: number[]): number;
   evaluateFlavorInterpolatedLikelihood(...args: number[]): number;
   evaluateBsrelAllMessages(...args: number[]): number;
+  evaluateGlobalGammaAllMessages(...args: number[]): number;
   evaluateLikelihood(...args: number[]): number;
   evaluateLikelihoodCached(...args: number[]): number;
   runWeightEM(...args: number[]): number;
@@ -540,6 +543,102 @@ export class WasmBackend {
         total: request.siteCount,
       });
       return { objectives, backend: "wasm", elapsedMs: performance.now() - started, precision: "f64" };
+    } finally {
+      pinned.release();
+      wasm.__collect();
+    }
+  }
+
+  /**
+   * Evaluate a globally shared Gamma(omega) mixture under a site-level
+   * Gamma(alpha) mixture and expose exact capped-edge/tail local likelihoods.
+   */
+  async evaluateGlobalGammaMessages(request: GlobalGammaMessageRequest): Promise<GlobalGammaMessageResult> {
+    request.signal?.throwIfAborted();
+    const edgeCount = request.tree.edgeCount;
+    const omegaCount = request.omegaModels.length;
+    const alphaCount = request.alphaValues.length;
+    if (
+      request.branchLengths.length !== edgeCount
+      || omegaCount < 2
+      || request.omegaWeights.length !== omegaCount
+      || request.positiveMask.length !== omegaCount
+      || alphaCount < 2
+      || request.alphaWeights.length !== alphaCount
+      || request.neutralModel < 0
+      || request.neutralModel >= request.models.modelCount
+    ) throw new RangeError("Global-Gamma message-kernel array dimensions are inconsistent.");
+    const omegaTotal = request.omegaWeights.reduce((sum, value) => sum + value, 0);
+    const alphaTotal = request.alphaWeights.reduce((sum, value) => sum + value, 0);
+    if (Math.abs(omegaTotal - 1) > 1e-10 || Math.abs(alphaTotal - 1) > 1e-10) {
+      throw new RangeError("Global-Gamma quadrature weights must each sum to one.");
+    }
+    request.onProgress?.(0, {
+      message: `${alphaCount} alpha rates × ${omegaCount} omega rates · ${edgeCount.toLocaleString()} exact local blankets`,
+      current: 0,
+      total: request.siteCount,
+      indeterminate: true,
+    });
+    const wasm = await this.instance();
+    const pinned = new PinnedArrays(wasm);
+    const u8 = globalValue(wasm.Uint8Array_ID);
+    const u32 = globalValue(wasm.Uint32Array_ID);
+    const i32 = globalValue(wasm.Int32Array_ID);
+    const f64 = globalValue(wasm.Float64Array_ID);
+    const started = performance.now();
+    try {
+      const poissonTerms = request.poissonTerms ?? 0;
+      const maxLambdaPerStep = request.maxLambdaPerStep ?? (poissonTerms > 0 ? 2 : 64);
+      const raw = wasm.evaluateGlobalGammaAllMessages(
+        pinned.add(u32, request.tree.childOffsets),
+        pinned.add(u32, request.tree.children),
+        pinned.add(i32, request.tree.tipForNode),
+        pinned.add(i32, request.tree.edgeForNode),
+        pinned.add(u32, request.tree.nodeForEdge),
+        pinned.add(u32, request.tree.postorder),
+        pinned.add(u32, request.tree.preorder),
+        pinned.add(u8, request.tipStates),
+        pinned.add(f64, request.branchLengths),
+        pinned.add(u32, request.omegaModels),
+        pinned.add(f64, request.omegaWeights),
+        pinned.add(u8, request.positiveMask),
+        request.neutralModel,
+        pinned.add(f64, request.alphaValues),
+        pinned.add(f64, request.alphaWeights),
+        pinned.add(u32, request.models.neighborCount),
+        pinned.add(u32, request.models.neighborIndex),
+        pinned.add(f64, request.models.rDiagonal),
+        pinned.add(f64, request.models.rOffDiagonal),
+        pinned.add(f64, request.models.mu),
+        pinned.add(f64, request.equilibrium),
+        request.siteCount,
+        request.tree.nodeCount,
+        edgeCount,
+        request.models.stateCount,
+        request.models.maxNeighbors,
+        request.tree.root,
+        poissonTerms,
+        maxLambdaPerStep,
+      );
+      const resultPointer = wasm.__pin(raw);
+      const values = wasm.__getFloat64Array(resultPointer).slice();
+      wasm.__unpin(resultPointer);
+      const matrixSize = edgeCount * request.siteCount;
+      if (values.length !== request.siteCount + matrixSize * 2) throw new Error("Global-Gamma WASM kernel returned an invalid result length.");
+      request.signal?.throwIfAborted();
+      request.onProgress?.(1, {
+        message: "Alternative, capped-edge, and positive-tail messages evaluated",
+        current: request.siteCount,
+        total: request.siteCount,
+      });
+      return {
+        siteLogLikelihoods: values.slice(0, request.siteCount),
+        cappedEdgeLogLikelihoods: values.slice(request.siteCount, request.siteCount + matrixSize),
+        positiveEdgeLogLikelihoods: values.slice(request.siteCount + matrixSize),
+        backend: "wasm",
+        elapsedMs: performance.now() - started,
+        precision: "f64",
+      };
     } finally {
       pinned.release();
       wasm.__collect();

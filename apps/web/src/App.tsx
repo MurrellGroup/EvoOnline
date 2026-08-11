@@ -32,6 +32,10 @@ const stageLabels: Readonly<Record<string, string>> = {
   "dirichlet-em": "Fitting the Dirichlet mixture",
   "branch-alternative": "Optimizing the joint BS-REL alternative",
   "branch-nulls": "Re-optimizing branch nulls locally",
+  "global-gamma-fit": "Fitting global Gamma distributions",
+  "global-gamma-messages": "Passing all-to-all Gamma messages",
+  "global-gamma-capped-sites": "Evaluating all-branches capped sites",
+  "global-gamma-tabulation": "Integrating branch and site evidence",
   tabulation: "Tabulating site posteriors",
   complete: "Complete",
 };

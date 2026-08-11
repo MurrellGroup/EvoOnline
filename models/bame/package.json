@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Browser-parallel WASM ports of the experimental CodonMolecularEvolution.jl FAME and FLAVOR branch-mixture models",
+  "description": "Browser-parallel FAME/FLAVOR ports and exploratory global-Gamma branch-site scan",
   "license": "MIT",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -17,6 +17,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "bench:transitions": "node --import tsx scripts/compare-transition-engines.ts",
+    "bench:global-gamma": "node --import tsx scripts/run-global-gamma-demo.ts",
     "test": "node --import tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit"
   },

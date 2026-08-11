@@ -1,6 +1,6 @@
 # EvoOnline
 
-An extensible phylogenetic analysis workbench with a static browser application, a shared artifact/model SDK, an optional job API, and independently packaged model runners. DifFUBAR, regular FUBAR, fixed-complexity BS-REL, and the experimental FAME and FLAVOR branch-mixture models are currently registered.
+An extensible phylogenetic analysis workbench with a static browser application, a shared artifact/model SDK, an optional job API, and independently packaged model runners. DifFUBAR, regular FUBAR, fixed-complexity BS-REL, the experimental FAME/FLAVOR models, and an exploratory global-Gamma branch–site scan are currently registered.
 
 The browser workflow currently supports:
 
@@ -9,7 +9,7 @@ The browser workflow currently supports:
 3. Uploading a Newick/NEXUS tree or inferring one with bioWASM FastTree directly from the main workflow.
 4. Viewing a tree, and tagging G1/G2 foreground branches when DifFUBAR requires them, in **phylotagger**.
 5. Validating each method's alignment/tree/tip-name/tag requirements.
-6. Running DifFUBAR, FUBAR, fixed three-rate BS-REL, FAME, or FLAVOR in a dedicated browser worker. Exact parallel WASM is the default; DifFUBAR and regular FUBAR also retain selectable WebGPU.
+6. Running DifFUBAR, FUBAR, fixed three-rate BS-REL, FAME, FLAVOR, or the global-Gamma branch–site scan in a dedicated browser worker. Exact parallel WASM is the default; DifFUBAR and regular FUBAR also retain selectable WebGPU.
 7. Choosing deterministic Dirichlet-EM or exact Gibbs inference for FUBAR, FAME, and FLAVOR.
 8. Optionally deriving separate approximate-FEL likelihood-ratio tests from the already-computed FUBAR grid.
 9. Exploring model-owned, linked interactive SVG figures, editing publication labels, and exporting lossless SVG or CSV.
@@ -31,7 +31,7 @@ models/
   diffubar/             Numerical core, WASM, WebGPU and model plugin
   fubar/                Regular FUBAR grid, inference and model plugin
   bsrel/                Fixed three-rate branch-wise test and message optimizer
-  bame/                 Experimental FAME/FLAVOR branch-mixture models
+  bame/                 FAME/FLAVOR plus the exploratory global-Gamma scan
 docs/
   ARCHITECTURE.md
   ADDING_A_MODEL.md
@@ -66,7 +66,7 @@ npm test
 npm run build
 ```
 
-The DifFUBAR package retains its Julia/SciPy parity scripts, benchmark, WGSL validation, and exact WASM tests under `models/diffubar`. Regular FUBAR adds exact grid-transform, analytical Dirichlet-EM, Gibbs-allocation, posterior-product, ordinary-tree, exact-spline, known-optimum, and directional-LRT tests under `models/fubar`. BS-REL tests the all-to-all message identity directly: a local edge replacement must match a complete tree re-prune in f64, including in the site-parallel worker pool. FAME/FLAVOR tests pin the development-branch grid dimensions, extreme Gamma quantiles, quadrature moments, sparse/dense kernel equivalence, the exact latent branch-state expansion of a mixed transition operator, and FLAVOR interpolation parity at every lookup-table node.
+The DifFUBAR package retains its Julia/SciPy parity scripts, benchmark, WGSL validation, and exact WASM tests under `models/diffubar`. Regular FUBAR adds exact grid-transform, analytical Dirichlet-EM, Gibbs-allocation, posterior-product, ordinary-tree, exact-spline, known-optimum, and directional-LRT tests under `models/fubar`. BS-REL tests the all-to-all message identity directly: a local edge replacement must match a complete tree re-prune in f64, including in the site-parallel worker pool. FAME/FLAVOR tests pin the development-branch grid dimensions, extreme Gamma quantiles, quadrature moments, sparse/dense kernel equivalence, the exact latent branch-state expansion of a mixed transition operator, and FLAVOR interpolation parity at every lookup-table node. Global-Gamma tests additionally enumerate all branchwise ω assignments inside each site-level α category and require the optimized message kernel to match the explicit alternative, capped-edge likelihood, and positive-tail numerator.
 
 ## DifFUBAR figure studio
 
@@ -99,6 +99,12 @@ FAME and FLAVOR are pinned ports of the early-development [`MixtureModels`](http
 FLAVOR gives every branch an ω drawn from a mid-quantile discrete Gamma distribution and contrasts uncapped categories against distributions capped at ω=1. The browser default uses 12 Gamma slices. It preserves the source model's repeated capped outer categories, because removing them would change its learned category prior, while combining repeated ω=1 components exactly inside each transition operator. FLAVOR now defaults to Julia's 50-node, `t=0.001`, cap-35 `matrix_sequence` recurrence and element-wise interpolation. Each capped/μ/shape transition table is built once and reused over its complete α block, all branches, and all sites; direct uniformization remains an advanced accuracy-reference option. FAME remains on direct uniformization because its pinned Julia implementation does not use this interpolation scheme. Both methods use Dirichlet-EM by default and offer exact Gibbs allocation sampling.
 
 The interactive defaults use transformed 512-category FAME and 896-category FLAVOR grids; the exact 3,375/6,720-category development grids remain selectable for source reproduction and are substantially slower. Category-parallel f64 WASM keeps complete FLAVOR α blocks together and never materializes an operator-by-site expansion. On the bundled demo, the committed transition benchmark measures about a 15.5× FLAVOR likelihood-stage speedup over direct uniformization in this environment. Result studios provide linked site evidence, empirical Bayes factors, paper-style parameter probability-mass lanes, editable/exportable posterior projections, and for FLAVOR a posterior-predictive branch-ω CDF. These methods remain explicitly labelled experimental.
+
+## Exploratory global-Gamma branch–site scan
+
+This model fits one Gamma distribution for ω globally across branch–site cells and an independent mean-one Gamma distribution for synonymous rate α across sites. The likelihood hierarchy is deliberate: for a fixed α category, the same α applies to every branch at that site while every branch independently marginalizes the weighted ω categories; only complete-tree site likelihoods are then averaged over α. A threshold-aware ω quadrature preserves the continuous Gamma mass above and below ω=1, while conditional-mean α categories have an exact discrete mean of one. A broad Julia-interpolated coarse grid plus local refinements estimates the two Gamma shapes and mean ω; final evidence uses direct f64 uniformization with branch lengths and nucleotide parameters fixed after the global codon fit.
+
+The site contrast caps all ω>1 categories on every branch without re-optimization. One upward/downward message pass exposes every edge blanket, so the exact branch contrast—every site on just that branch capped—requires only a local contraction and is always reported. The same per-site capped-edge ratios feed a Beta-integrated branch activation empirical Bayes factor. Per branch/site positive-tail responsibilities color the phylogeny when a codon is selected and form an alignment track when a branch is selected. Results include linked editable SVG tree/site figures, two CSVs, branch and site tables, and the optional amino-acid profile/reference map. Literal branch-level P(any positive site) and its empirical-Bayes odds are reported alongside expected positive-site burden; the interface warns through its method description that “any” can saturate on long alignments.
 
 ## Selection-on-profile result maps
 

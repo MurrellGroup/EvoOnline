@@ -1,18 +1,18 @@
 import type { ParameterValues } from "@phylo-workbench/model-sdk";
-import type { BameRunResult, BameWorkerResponse, BameWorkerRunRequest } from "../types.js";
+import type { BameRunResult, BameWorkerResponse, BameWorkerRunRequest, GlobalGammaRunResult } from "../types.js";
 import type { RunProgress } from "./diffubar-client.js";
 
 export class BameClient {
   private worker: Worker | undefined;
   private rejectActive: ((error: Error) => void) | undefined;
 
-  constructor(private readonly method: "fame" | "flavor") {}
+  constructor(private readonly method: "fame" | "flavor" | "global-gamma") {}
 
   private createWorker(): Worker {
     return new Worker(new URL("../workers/bame.worker.ts", import.meta.url), { type: "module" });
   }
 
-  run(alignment: string, tree: string, parameters: ParameterValues, onProgress: (progress: RunProgress) => void): Promise<BameRunResult> {
+  run(alignment: string, tree: string, parameters: ParameterValues, onProgress: (progress: RunProgress) => void): Promise<BameRunResult | GlobalGammaRunResult> {
     this.cancel();
     const worker = this.createWorker();
     this.worker = worker;

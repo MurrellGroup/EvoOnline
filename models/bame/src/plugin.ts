@@ -9,7 +9,8 @@ import {
 } from "@phylo-workbench/model-sdk";
 import { normalizeDifFubarTreeText, parseFasta, parseNewick } from "@phylo-workbench/model-diffubar";
 import { fameResultsToCsv, flavorResultsToCsv } from "./pipeline.js";
-import type { FameAnalysisResult, FlavorAnalysisResult } from "./types.js";
+import { globalGammaBranchesToCsv } from "./global-gamma.js";
+import type { FameAnalysisResult, FlavorAnalysisResult, GlobalGammaAnalysisResult } from "./types.js";
 
 const commonParameters: ModelManifest["parameters"] = [
   {
@@ -218,6 +219,108 @@ export const flavorManifest: ModelManifest = {
   citation: "Experimental FLAVOR implementation, CodonMolecularEvolution.jl MixtureModels branch at 4c65c984",
 };
 
+export const globalGammaManifest: ModelManifest = {
+  id: "global-gamma",
+  version: "0.1.0-exploratory",
+  title: "Global Gamma branch–site scan",
+  shortTitle: "Global Gamma",
+  description: "Exploratory global Gamma random-effects model with exact capped site/branch contrasts, activation evidence, and branch-by-site positive-tail posteriors.",
+  category: "selection",
+  inputSlots: commonInputs,
+  parameters: [
+    {
+      id: "backend",
+      label: "Compute backend",
+      description: "Parallel f64 WASM evaluates the global fit and all-to-all branch messages across browser workers.",
+      type: "select",
+      default: "wasm-parallel",
+      options: [
+        { value: "wasm-parallel", label: "Parallel WASM (recommended)" },
+        { value: "wasm", label: "Single-worker WASM" },
+        { value: "auto", label: "Automatic compatibility mode" },
+      ],
+    },
+    {
+      id: "omegaSlices",
+      label: "Gamma omega slices",
+      description: "Mid-quantile categories used for the globally fitted branch–site omega distribution.",
+      type: "integer",
+      default: 8,
+      minimum: 4,
+      maximum: 24,
+      step: 2,
+    },
+    {
+      id: "alphaSlices",
+      label: "Gamma alpha slices",
+      description: "Mean-one site-wise synonymous-rate categories. Four captures broad rate heterogeneity without multiplying the message cost excessively.",
+      type: "integer",
+      default: 4,
+      minimum: 3,
+      maximum: 12,
+      step: 1,
+    },
+    {
+      id: "fitPreset",
+      label: "Global Gamma fit",
+      description: "Fast performs a broad coarse scan plus local refinement; thorough uses a denser starting grid and a second refinement.",
+      type: "select",
+      default: "fast",
+      options: [
+        { value: "fast", label: "Fast coarse-to-fine ML (recommended)" },
+        { value: "thorough", label: "Thorough exploratory fit" },
+      ],
+    },
+    {
+      id: "posteriorThreshold",
+      label: "Tail-posterior display threshold",
+      description: "Interactive display threshold for branch-by-site P(omega>1); it does not alter model fitting.",
+      type: "number",
+      default: 0.9,
+      minimum: 0.5,
+      maximum: 0.999,
+      step: 0.01,
+    },
+    {
+      id: "activationPriorAlpha",
+      label: "Activation Beta prior alpha",
+      description: "The branch activation alternative integrates lambda under Beta(alpha,beta).",
+      type: "number",
+      default: 1,
+      minimum: 0.1,
+      maximum: 20,
+      step: 0.1,
+      advanced: true,
+    },
+    {
+      id: "activationPriorBeta",
+      label: "Activation Beta prior beta",
+      description: "Beta(1,9) gives a sparse alternative with prior mean activation 0.1.",
+      type: "number",
+      default: 9,
+      minimum: 0.1,
+      maximum: 100,
+      step: 0.5,
+      advanced: true,
+    },
+    {
+      id: "fitMode",
+      label: "Global codon fit",
+      description: "The initial nucleotide/codon fit supplies fixed branch lengths, GTR rates, and F3x4 frequencies.",
+      type: "select",
+      default: "empirical-fast",
+      options: [
+        { value: "empirical-fast", label: "Empirical fast" },
+        { value: "reference-compatible", label: "Reference-compatible" },
+      ],
+      advanced: true,
+    },
+  ],
+  runtimes: ["browser-wasm", "server-native"],
+  outputKinds: ["site-posterior-table", "branch-test-table", "annotated-tree", "detected-site-set", "csv"],
+  citation: "Exploratory EvoOnline global-Gamma branch–site random-effects model",
+};
+
 export function validateBameWorkspace(workspace: PhyloWorkspaceSnapshot): ModelValidation {
   const issues: ValidationIssue[] = [];
   let alignment;
@@ -265,3 +368,4 @@ function createPlugin<R>(manifest: ModelManifest, resultToCsv: (result: R) => st
 
 export const famePlugin = createPlugin<FameAnalysisResult>(fameManifest, fameResultsToCsv);
 export const flavorPlugin = createPlugin<FlavorAnalysisResult>(flavorManifest, flavorResultsToCsv);
+export const globalGammaPlugin = createPlugin<GlobalGammaAnalysisResult>(globalGammaManifest, globalGammaBranchesToCsv);

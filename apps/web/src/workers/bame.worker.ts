@@ -2,12 +2,15 @@
 import {
   analyzeFame,
   analyzeFlavor,
+  analyzeGlobalGamma,
   fameResultsToCsv,
   flavorResultsToCsv,
+  globalGammaSitesToCsv,
+  globalGammaBranchesToCsv,
 } from "@phylo-workbench/model-bame/browser-source";
 import type { BameBackendKind } from "@phylo-workbench/model-bame/browser-source";
 import type { ProgressDetail } from "@phylo-workbench/model-diffubar/browser-source";
-import type { BameRunResult, BameWorkerResponse, BameWorkerRunRequest } from "../types.js";
+import type { BameRunResult, BameWorkerResponse, BameWorkerRunRequest, GlobalGammaRunResult } from "../types.js";
 
 const scope = self as DedicatedWorkerGlobalScope;
 const transferableBuffer = (value: ArrayBufferView): ArrayBuffer => value.buffer as ArrayBuffer;
@@ -36,7 +39,7 @@ scope.onmessage = (event: MessageEvent<BameWorkerRunRequest>): void => {
           scope.postMessage(message);
         },
       };
-      let compact: BameRunResult;
+      let compact: BameRunResult | GlobalGammaRunResult;
       let transfer: ArrayBuffer[];
       if (request.method === "fame") {
         const result = await analyzeFame(request.alignment, request.tree, {
@@ -61,7 +64,7 @@ scope.onmessage = (event: MessageEvent<BameWorkerRunRequest>): void => {
           transferableBuffer(result.posterior.alphaValues), transferableBuffer(result.posterior.omega1Values), transferableBuffer(result.posterior.omega2Values),
           transferableBuffer(result.posterior.surfaces), transferableBuffer(result.posterior.alpha), transferableBuffer(result.posterior.omega1), transferableBuffer(result.posterior.omega2),
         ];
-      } else {
+      } else if (request.method === "flavor") {
         const result = await analyzeFlavor(request.alignment, request.tree, {
           ...common,
           gammaSlices: Number(parameters.gammaSlices ?? 12),
@@ -83,6 +86,40 @@ scope.onmessage = (event: MessageEvent<BameWorkerRunRequest>): void => {
           transferableBuffer(result.posterior.muValues), transferableBuffer(result.posterior.shapeValues), transferableBuffer(result.posterior.alphaValues),
           transferableBuffer(result.posterior.surfaces), transferableBuffer(result.posterior.mu), transferableBuffer(result.posterior.shape),
           transferableBuffer(result.posterior.alpha), transferableBuffer(result.posterior.capState),
+        ];
+      } else {
+        const result = await analyzeGlobalGamma(request.alignment, request.tree, {
+          backend,
+          omegaSlices: Number(parameters.omegaSlices ?? 8),
+          alphaSlices: Number(parameters.alphaSlices ?? 4),
+          fitPreset: parameters.fitPreset === "thorough" ? "thorough" : "fast",
+          activationPriorAlpha: Number(parameters.activationPriorAlpha ?? 1),
+          activationPriorBeta: Number(parameters.activationPriorBeta ?? 9),
+          fitMode: parameters.fitMode === "reference-compatible" ? "reference-compatible" : "empirical-fast",
+          onStage: (stage: string, fraction: number, detail?: ProgressDetail) => {
+            const message: BameWorkerResponse = { type: "progress", id: request.id, stage, fraction, ...(detail === undefined ? {} : { detail }) };
+            scope.postMessage(message);
+          },
+        });
+        compact = {
+          method: "global-gamma",
+          sites: result.sites,
+          branches: result.branches,
+          fit: result.fit,
+          omegaValues: result.omegaValues,
+          alphaValues: result.alphaValues,
+          positivePrior: result.positivePrior,
+          posterior: result.posterior,
+          backend: result.backend,
+          timings: result.timings,
+          diagnostics: result.diagnostics,
+          tree: request.tree,
+          siteCsv: globalGammaSitesToCsv(result),
+          branchCsv: globalGammaBranchesToCsv(result),
+        };
+        transfer = [
+          transferableBuffer(result.omegaValues), transferableBuffer(result.alphaValues),
+          transferableBuffer(result.posterior.tailPosterior), transferableBuffer(result.posterior.localLogEvidence),
         ];
       }
       const message: BameWorkerResponse = { type: "result", id: request.id, result: compact };

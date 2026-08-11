@@ -2,17 +2,18 @@ import type { ComponentType } from "react";
 import { difFubarPlugin } from "@phylo-workbench/model-diffubar/browser-source";
 import { fubarPlugin } from "@phylo-workbench/model-fubar/browser-source";
 import { bsrelPlugin } from "@phylo-workbench/model-bsrel/browser-source";
-import { famePlugin, flavorPlugin } from "@phylo-workbench/model-bame/browser-source";
+import { famePlugin, flavorPlugin, globalGammaPlugin } from "@phylo-workbench/model-bame/browser-source";
 import type { ModelPlugin, ParameterValues } from "@phylo-workbench/model-sdk";
 import { ResultsView } from "./components/ResultsView.js";
 import { FubarResultsView } from "./components/FubarResultsView.js";
 import { BsrelResultsView } from "./components/BsrelResultsView.js";
 import { BameResultsView } from "./components/BameResultsView.js";
+import { GlobalGammaResultsView } from "./components/GlobalGammaResultsView.js";
 import { DifFubarClient, type RunProgress } from "./lib/diffubar-client.js";
 import { FubarClient } from "./lib/fubar-client.js";
 import { BsrelClient } from "./lib/bsrel-client.js";
 import { BameClient } from "./lib/bame-client.js";
-import type { BameRunResult, BsrelRunResult, DifFubarRunResult, FubarRunResult } from "./types.js";
+import type { BameRunResult, BsrelRunResult, DifFubarRunResult, FubarRunResult, GlobalGammaRunResult } from "./types.js";
 
 export interface BrowserModelExecutor {
   run(
@@ -54,6 +55,10 @@ function BsrelResult({ result, parameters }: ResultProps) {
 
 function BameResult({ result, parameters, alignment }: ResultProps) {
   return <BameResultsView result={result as BameRunResult} threshold={Number(parameters.posteriorThreshold ?? 0.9)} alignment={alignment} />;
+}
+
+function GlobalGammaResult({ result, parameters, alignment }: ResultProps) {
+  return <GlobalGammaResultsView result={result as GlobalGammaRunResult} threshold={Number(parameters.posteriorThreshold ?? 0.9)} alignment={alignment} />;
 }
 
 export const modelRegistry: readonly BrowserModelRegistration[] = [
@@ -107,6 +112,18 @@ export const modelRegistry: readonly BrowserModelRegistration[] = [
     completionMessage: (result) => {
       const output = result as BameRunResult;
       return `FLAVOR completed with ${output.backend}: ${output.detectedSites.length} episodic-positive sites.`;
+    },
+  },
+  {
+    plugin: globalGammaPlugin,
+    glyph: "Γω↗",
+    runtimeLabel: "Parallel WASM",
+    createExecutor: () => new BameClient("global-gamma"),
+    ResultView: GlobalGammaResult,
+    completionMessage: (result) => {
+      const output = result as GlobalGammaRunResult;
+      const supported = output.branches.filter((branch) => branch.activationLogBayesFactor >= Math.log(10)).length;
+      return `Global-Gamma scan completed with ${output.backend}: ${supported} branches have activation empirical BF ≥ 10.`;
     },
   },
 ];

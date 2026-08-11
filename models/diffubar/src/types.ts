@@ -246,6 +246,47 @@ export interface BsrelKernelResult {
   readonly precision: "f64";
 }
 
+/**
+ * Global branch/site random-effects kernel. Alpha is a site-level outer
+ * mixture, while omega is integrated independently on every branch. The
+ * kernel returns exact single-edge capped replacements from two-sided
+ * messages, plus the unnormalised positive-tail contribution on every edge.
+ */
+export interface GlobalGammaMessageRequest {
+  readonly tree: BsrelKernelTree;
+  readonly tipStates: Uint8Array;
+  readonly siteCount: number;
+  readonly branchLengths: Float64Array;
+  /** Atomic omega model ids shared by every branch. */
+  readonly omegaModels: Uint32Array;
+  readonly omegaWeights: Float64Array;
+  /** One for omega categories strictly greater than one. */
+  readonly positiveMask: Uint8Array;
+  /** Atomic model id for omega=1, used by the capped edge operator. */
+  readonly neutralModel: number;
+  /** Mean-one site-rate Gamma quadrature. */
+  readonly alphaValues: Float64Array;
+  readonly alphaWeights: Float64Array;
+  readonly models: ModelBank;
+  readonly equilibrium: Float64Array;
+  readonly poissonTerms?: number;
+  readonly maxLambdaPerStep?: number;
+  readonly signal?: AbortSignal;
+  readonly onProgress?: (fraction: number, detail?: ProgressDetail) => void;
+}
+
+export interface GlobalGammaMessageResult {
+  /** Alpha-marginal alternative log likelihood, one value per site. */
+  readonly siteLogLikelihoods: Float64Array;
+  /** Exact alpha-marginal likelihood with just this edge capped; edge-major. */
+  readonly cappedEdgeLogLikelihoods: Float64Array;
+  /** Unnormalised likelihood mass from omega>1 on this edge; edge-major. */
+  readonly positiveEdgeLogLikelihoods: Float64Array;
+  readonly backend: "wasm" | "wasm-parallel";
+  readonly elapsedMs: number;
+  readonly precision: "f64";
+}
+
 export interface SamplerOptions {
   readonly iterations?: number;
   readonly burnin?: number;

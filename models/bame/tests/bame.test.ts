@@ -20,6 +20,8 @@ import {
   createFlavorGrid,
   gammaQuantile,
   gammaSlices,
+  gammaMeanSlices,
+  thresholdGammaSlices,
   gaussLegendreUnit,
 } from "../src/index.js";
 
@@ -59,6 +61,130 @@ test("Gamma quantiles cover FLAVOR's extreme shape grid without underflow artifa
   const slices = gammaSlices(3, 0.05, 20);
   assert.ok(slices[0]! > 0 && slices[0]! < 1e-30);
   assert.ok(slices.every((value, index) => index === 0 || value > slices[index - 1]!));
+});
+
+test("threshold-aware Gamma quadrature preserves the continuous omega>1 tail", () => {
+  const quadrature = thresholdGammaSlices(0.7, 9.7, 8);
+  const representedTail = quadrature.weights.reduce((sum, weight, index) => sum + (quadrature.positiveMask[index] ? weight : 0), 0);
+  assert.ok(quadrature.values.some((value) => value < 1));
+  assert.ok(quadrature.values.some((value) => value > 1));
+  assert.ok(Math.abs(representedTail - quadrature.positiveProbability) < 2e-14);
+  assert.ok(Math.abs(quadrature.weights.reduce((sum, value) => sum + value, 0) - 1) < 2e-14);
+  const representedMean = quadrature.weights.reduce((sum, weight, index) => sum + weight * quadrature.values[index]!, 0);
+  assert.ok(Math.abs(representedMean - 0.7) < 2e-12);
+});
+
+test("site-wise alpha Gamma categories retain an exact mean of one", () => {
+  for (const shape of [0.16, 0.5, 1, 4, 10]) {
+    const values = gammaMeanSlices(1, shape, 4);
+    assert.ok(values.every((value, index) => value > 0 && (index === 0 || value > values[index - 1]!)));
+    assert.ok(Math.abs(values.reduce((sum, value) => sum + value, 0) / values.length - 1) < 2e-12);
+  }
+});
+
+test("Global-Gamma messages integrate omega on branches inside each site-level alpha category", async () => {
+  const alignment = parseFasta(">a\nATGAAA\n>b\nATGAAG\n");
+  const tree = parseNewick("(a:0.1,b:0.2);");
+  const f3x4 = countF3x4(alignment);
+  const equilibrium = codonEquilibriumFromF3x4(f3x4);
+  const omegaValues = Float64Array.of(0.25, 3);
+  const atomicGrid: DifFUBARGrid = {
+    alpha: Float64Array.of(1), omega: Float64Array.of(0.25, 3, 1), backgroundOmega: new Float64Array(0),
+    categories: Float64Array.of(1, 0.25, 1, 3, 1, 1), categoryCount: 3, parameterCount: 2, hasBackground: false,
+  };
+  const atomicModels = buildModelBank(atomicGrid, tree, Float64Array.of(1, 1, 1, 1, 1, 1), f3x4);
+  const backend = new WasmBackend();
+  const messageRequest = {
+    tree: {
+      parent: Int32Array.of(-1, 0, 0),
+      childOffsets: Uint32Array.of(0, 2, 2, 2),
+      children: Uint32Array.of(1, 2),
+      tipForNode: Int32Array.of(-1, 0, 1),
+      edgeForNode: Int32Array.of(-1, 0, 1),
+      nodeForEdge: Uint32Array.of(1, 2),
+      postorder: Uint32Array.of(1, 2, 0),
+      preorder: Uint32Array.of(0, 1, 2),
+      root: 0, nodeCount: 3, edgeCount: 2, tipCount: 2,
+    },
+    tipStates: encodeCodonTips(alignment, tree),
+    siteCount: alignment.codonSites,
+    branchLengths: Float64Array.of(0.1, 0.2),
+    omegaModels: atomicModels.gridModels.slice(0, 2),
+    omegaWeights: Float64Array.of(0.4, 0.6),
+    positiveMask: Uint8Array.of(0, 1),
+    neutralModel: atomicModels.gridModels[2]!,
+    alphaValues: Float64Array.of(0.5, 1.5),
+    alphaWeights: Float64Array.of(0.3, 0.7),
+    models: atomicModels,
+    equilibrium,
+  } as const;
+  const messages = await backend.evaluateGlobalGammaMessages(messageRequest);
+
+  const taggedTree = parseTaggedNewick("(a{G1}:0.1,b{G2}:0.2);");
+  const assignmentWeights = [0.16, 0.24, 0.24, 0.36];
+  const alphaValues = [0.5, 1.5];
+  const alphaWeights = [0.3, 0.7];
+  const categories: number[] = [];
+  const cappedCategories: number[] = [];
+  for (const alpha of alphaValues) {
+    for (const first of omegaValues) for (const second of omegaValues) {
+      categories.push(alpha, first, second);
+      cappedCategories.push(alpha, Math.min(1, first), second);
+    }
+  }
+  const explicitGrid = (values: number[]): DifFUBARGrid => ({
+    alpha: Float64Array.from(alphaValues), omega: omegaValues, backgroundOmega: new Float64Array(0),
+    categories: Float64Array.from(values), categoryCount: 8, parameterCount: 3, hasBackground: false,
+  });
+  const fullGrid = explicitGrid(categories);
+  const cappedGrid = explicitGrid(cappedCategories);
+  const fullModels = buildModelBank(fullGrid, taggedTree, Float64Array.of(1, 1, 1, 1, 1, 1), f3x4);
+  const cappedModels = buildModelBank(cappedGrid, taggedTree, Float64Array.of(1, 1, 1, 1, 1, 1), f3x4);
+  const full = await backend.evaluate({ tree: compileTree(taggedTree), tipStates: encodeCodonTips(alignment, taggedTree), siteCount: 2, grid: fullGrid, models: fullModels, equilibrium });
+  const capped = await backend.evaluate({ tree: compileTree(taggedTree), tipStates: encodeCodonTips(alignment, taggedTree), siteCount: 2, grid: cappedGrid, models: cappedModels, equilibrium });
+  const logSum = (terms: readonly number[]): number => {
+    const maximum = Math.max(...terms);
+    return maximum + Math.log(terms.reduce((sum, value) => sum + Math.exp(value - maximum), 0));
+  };
+  for (let site = 0; site < 2; site += 1) {
+    const fullTerms: number[] = [];
+    const cappedTerms: number[] = [];
+    const positiveTerms: number[] = [];
+    for (let alpha = 0; alpha < 2; alpha += 1) {
+      for (let assignment = 0; assignment < 4; assignment += 1) {
+        const category = alpha * 4 + assignment;
+        const logWeight = Math.log(alphaWeights[alpha]!) + Math.log(assignmentWeights[assignment]!);
+        fullTerms.push(logWeight + full.logLikelihoods[category * 2 + site]!);
+        cappedTerms.push(logWeight + capped.logLikelihoods[category * 2 + site]!);
+        if (assignment >= 2) positiveTerms.push(logWeight + full.logLikelihoods[category * 2 + site]!);
+      }
+    }
+    assert.ok(Math.abs(messages.siteLogLikelihoods[site]! - logSum(fullTerms)) < 4e-10);
+    assert.ok(Math.abs(messages.cappedEdgeLogLikelihoods[site]! - logSum(cappedTerms)) < 4e-10);
+    assert.ok(Math.abs(messages.positiveEdgeLogLikelihoods[site]! - logSum(positiveTerms)) < 4e-10);
+  }
+
+  // Force the site-partitioned worker path and require it to splice all three
+  // edge-major result blocks back together without changing a bit.
+  const repeatedSiteCount = 64;
+  const repeatedTips = new Uint8Array(tree.tips.length * repeatedSiteCount);
+  for (let tip = 0; tip < tree.tips.length; tip += 1) {
+    for (let site = 0; site < repeatedSiteCount; site += 1) {
+      repeatedTips[tip * repeatedSiteCount + site] = messageRequest.tipStates[tip * messageRequest.siteCount + site % messageRequest.siteCount]!;
+    }
+  }
+  const repeatedRequest = { ...messageRequest, tipStates: repeatedTips, siteCount: repeatedSiteCount };
+  const serialRepeated = await backend.evaluateGlobalGammaMessages(repeatedRequest);
+  const parallelBackend = new ParallelWasmBackend(2, 0);
+  try {
+    const parallelRepeated = await parallelBackend.evaluateGlobalGammaMessages(repeatedRequest);
+    assert.equal(parallelRepeated.backend, "wasm-parallel");
+    assert.deepEqual(parallelRepeated.siteLogLikelihoods, serialRepeated.siteLogLikelihoods);
+    assert.deepEqual(parallelRepeated.cappedEdgeLogLikelihoods, serialRepeated.cappedEdgeLogLikelihoods);
+    assert.deepEqual(parallelRepeated.positiveEdgeLogLikelihoods, serialRepeated.positiveEdgeLogLikelihoods);
+  } finally {
+    await parallelBackend.dispose();
+  }
 });
 
 test("Gauss-Legendre weight quadrature is normalized and integrates low-order polynomials", () => {

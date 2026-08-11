@@ -1,5 +1,5 @@
 import { WasmBackend } from "./wasm.js";
-import type { BranchMixtureLikelihoodRequest, BsrelKernelRequest, FlavorInterpolatedLikelihoodRequest, LikelihoodRequest } from "../types.js";
+import type { BranchMixtureLikelihoodRequest, BsrelKernelRequest, FlavorInterpolatedLikelihoodRequest, GlobalGammaMessageRequest, LikelihoodRequest } from "../types.js";
 
 interface InitializeMessage {
   readonly type: "initialize";
@@ -8,8 +8,8 @@ interface InitializeMessage {
 
 interface RequestMessage {
   readonly id: number;
-  readonly kind?: "likelihood" | "branch-mixture" | "flavor-interpolated" | "bsrel";
-  readonly request: LikelihoodRequest | BranchMixtureLikelihoodRequest | FlavorInterpolatedLikelihoodRequest | BsrelKernelRequest;
+  readonly kind?: "likelihood" | "branch-mixture" | "flavor-interpolated" | "bsrel" | "global-gamma";
+  readonly request: LikelihoodRequest | BranchMixtureLikelihoodRequest | FlavorInterpolatedLikelihoodRequest | BsrelKernelRequest | GlobalGammaMessageRequest;
 }
 
 interface WorkerScope {
@@ -33,7 +33,14 @@ scope.onmessage = (event: MessageEvent<InitializeMessage | RequestMessage>) => {
   void (async () => {
     try {
       if (backend === undefined) throw new Error("Parallel WASM worker was not initialized.");
-      if (requestMessage.kind === "bsrel") {
+      if (requestMessage.kind === "global-gamma") {
+        const result = await backend.evaluateGlobalGammaMessages(requestMessage.request as GlobalGammaMessageRequest);
+        const values = new Float64Array(result.siteLogLikelihoods.length + result.cappedEdgeLogLikelihoods.length + result.positiveEdgeLogLikelihoods.length);
+        values.set(result.siteLogLikelihoods, 0);
+        values.set(result.cappedEdgeLogLikelihoods, result.siteLogLikelihoods.length);
+        values.set(result.positiveEdgeLogLikelihoods, result.siteLogLikelihoods.length + result.cappedEdgeLogLikelihoods.length);
+        scope.postMessage({ id: requestMessage.id, globalGammaValues: values, elapsedMs: result.elapsedMs }, [values.buffer as ArrayBuffer]);
+      } else if (requestMessage.kind === "bsrel") {
         const result = await backend.evaluateBsrel(requestMessage.request as BsrelKernelRequest);
         scope.postMessage(
           { id: requestMessage.id, objectives: result.objectives, elapsedMs: result.elapsedMs },

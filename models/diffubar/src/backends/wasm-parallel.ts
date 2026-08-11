@@ -3,6 +3,8 @@ import type {
   FlavorInterpolatedLikelihoodRequest,
   BsrelKernelRequest,
   BsrelKernelResult,
+  GlobalGammaMessageRequest,
+  GlobalGammaMessageResult,
   LikelihoodRequest,
   LikelihoodResult,
   RuntimeWorkload,
@@ -14,6 +16,7 @@ interface WorkerMessage {
   readonly type?: "ready";
   readonly logLikelihoods?: Float64Array;
   readonly objectives?: Float64Array;
+  readonly globalGammaValues?: Float64Array;
   readonly error?: string;
 }
 
@@ -166,6 +169,27 @@ export class ParallelWasmBackend {
       worker.addEventListener?.("message", receiveEvent);
       worker.on?.("message", receive);
       worker.postMessage({ id, kind: "bsrel", request });
+    });
+  }
+
+  private callGlobalGamma(worker: WorkerLike, request: GlobalGammaMessageRequest): Promise<Float64Array> {
+    const id = this.nextMessageId++;
+    return new Promise((resolve, reject) => {
+      const receive = (message: WorkerMessage): void => {
+        if (message.id !== id) return;
+        cleanup();
+        if (message.error !== undefined) reject(new Error(message.error));
+        else if (message.globalGammaValues === undefined) reject(new Error("Parallel WASM worker returned no Global-Gamma messages."));
+        else resolve(message.globalGammaValues);
+      };
+      const receiveEvent = (event: MessageEvent<WorkerMessage>): void => receive(event.data);
+      const cleanup = (): void => {
+        worker.removeEventListener?.("message", receiveEvent);
+        worker.off?.("message", receive);
+      };
+      worker.addEventListener?.("message", receiveEvent);
+      worker.on?.("message", receive);
+      worker.postMessage({ id, kind: "global-gamma", request });
     });
   }
 
@@ -467,6 +491,70 @@ export class ParallelWasmBackend {
     }
     request.signal?.throwIfAborted();
     return { objectives, backend: "wasm-parallel", elapsedMs: performance.now() - started, precision: "f64" };
+  }
+
+  async evaluateGlobalGammaMessages(request: GlobalGammaMessageRequest): Promise<GlobalGammaMessageResult> {
+    request.signal?.throwIfAborted();
+    if (this.workerCount <= 1 || request.siteCount < 32) return this.local.evaluateGlobalGammaMessages(request);
+    const started = performance.now();
+    const pool = await this.workers();
+    const activeCount = Math.min(pool.length, Math.max(1, Math.ceil(request.siteCount / 32)));
+    request.onProgress?.(0, {
+      message: `Starting ${activeCount.toLocaleString()} site-parallel Global-Gamma message workers`,
+      current: 0,
+      total: request.siteCount,
+      indeterminate: true,
+    });
+    const jobs: Array<{ readonly start: number; readonly count: number; readonly result: Promise<Float64Array> }> = [];
+    for (let index = 0; index < activeCount; index += 1) {
+      const start = Math.floor(index * request.siteCount / activeCount);
+      const end = Math.floor((index + 1) * request.siteCount / activeCount);
+      const count = end - start;
+      const tips = new Uint8Array(request.tree.tipCount * count);
+      for (let tip = 0; tip < request.tree.tipCount; tip += 1) {
+        tips.set(request.tipStates.subarray(tip * request.siteCount + start, tip * request.siteCount + end), tip * count);
+      }
+      const { signal: _signal, onProgress: _onProgress, ...workerSafeRequest } = request;
+      const workerRequest: GlobalGammaMessageRequest = { ...workerSafeRequest, tipStates: tips, siteCount: count };
+      jobs.push({ start, count, result: this.callGlobalGamma(pool[index]!, workerRequest) });
+    }
+    const siteLogLikelihoods = new Float64Array(request.siteCount);
+    const matrixSize = request.tree.edgeCount * request.siteCount;
+    const cappedEdgeLogLikelihoods = new Float64Array(matrixSize);
+    const positiveEdgeLogLikelihoods = new Float64Array(matrixSize);
+    let completedSites = 0;
+    const pieces = await Promise.all(jobs.map(async (job) => {
+      const piece = await job.result;
+      completedSites += job.count;
+      request.onProgress?.(completedSites / request.siteCount, {
+        message: `${completedSites.toLocaleString()}/${request.siteCount.toLocaleString()} codon sites messaged`,
+        current: completedSites,
+        total: request.siteCount,
+      });
+      return piece;
+    }));
+    for (let jobIndex = 0; jobIndex < jobs.length; jobIndex += 1) {
+      const job = jobs[jobIndex]!;
+      const piece = pieces[jobIndex]!;
+      const pieceMatrixSize = request.tree.edgeCount * job.count;
+      siteLogLikelihoods.set(piece.subarray(0, job.count), job.start);
+      const cappedOffset = job.count;
+      const positiveOffset = job.count + pieceMatrixSize;
+      for (let edge = 0; edge < request.tree.edgeCount; edge += 1) {
+        const destination = edge * request.siteCount + job.start;
+        cappedEdgeLogLikelihoods.set(piece.subarray(cappedOffset + edge * job.count, cappedOffset + (edge + 1) * job.count), destination);
+        positiveEdgeLogLikelihoods.set(piece.subarray(positiveOffset + edge * job.count, positiveOffset + (edge + 1) * job.count), destination);
+      }
+    }
+    request.signal?.throwIfAborted();
+    return {
+      siteLogLikelihoods,
+      cappedEdgeLogLikelihoods,
+      positiveEdgeLogLikelihoods,
+      backend: "wasm-parallel",
+      elapsedMs: performance.now() - started,
+      precision: "f64",
+    };
   }
 
   async dispose(): Promise<void> {

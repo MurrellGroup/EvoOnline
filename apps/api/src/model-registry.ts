@@ -25,13 +25,18 @@ import {
 import {
   analyzeFame,
   analyzeFlavor,
+  analyzeGlobalGamma,
   fameManifest,
   fameResultsToCsv,
   flavorManifest,
   flavorResultsToCsv,
+  globalGammaManifest,
+  globalGammaSitesToCsv,
+  globalGammaBranchesToCsv,
   validateBameWorkspace,
   type FameAnalysisResult,
   type FlavorAnalysisResult,
+  type GlobalGammaAnalysisResult,
 } from "@phylo-workbench/model-bame";
 
 export interface ServerRunContext {
@@ -141,6 +146,37 @@ function serialiseBameResult(result: FameAnalysisResult | FlavorAnalysisResult, 
       fitKind: result.fittedModel.fitKind,
     },
     csv: result.method === "fame" ? fameResultsToCsv(result, threshold) : flavorResultsToCsv(result, threshold),
+  };
+}
+
+function serialiseGlobalGammaResult(result: GlobalGammaAnalysisResult) {
+  return {
+    method: result.method,
+    sites: result.sites,
+    branches: result.branches,
+    fit: result.fit,
+    omegaValues: [...result.omegaValues],
+    alphaValues: [...result.alphaValues],
+    positivePrior: result.positivePrior,
+    posterior: {
+      siteCount: result.posterior.siteCount,
+      branchCount: result.posterior.branchCount,
+      tailPosterior: [...result.posterior.tailPosterior],
+      localLogEvidence: [...result.posterior.localLogEvidence],
+    },
+    backend: result.backend,
+    timings: result.timings,
+    diagnostics: result.diagnostics,
+    fittedModel: {
+      gtrRates: [...result.fittedModel.gtrRates],
+      f3x4: [...result.fittedModel.f3x4],
+      globalAlpha: result.fittedModel.globalAlpha,
+      globalBeta: result.fittedModel.globalBeta,
+      logLikelihood: result.fittedModel.logLikelihood,
+      fitKind: result.fittedModel.fitKind,
+    },
+    siteCsv: globalGammaSitesToCsv(result),
+    branchCsv: globalGammaBranchesToCsv(result),
   };
 }
 
@@ -257,6 +293,24 @@ export const serverModelRegistry: readonly ServerModelRegistration[] = [
         onStage: onProgress,
       });
       return serialiseBameResult(result, threshold);
+    },
+  },
+  {
+    manifest: globalGammaManifest,
+    validate: validateBameWorkspace,
+    run: async ({ alignment, tree, parameters, signal, onProgress }) => {
+      const result = await analyzeGlobalGamma(alignment, tree, {
+        backend: "wasm",
+        omegaSlices: numberParameter(parameters, "omegaSlices", 8),
+        alphaSlices: numberParameter(parameters, "alphaSlices", 4),
+        fitPreset: parameters.fitPreset === "thorough" ? "thorough" : "fast",
+        activationPriorAlpha: numberParameter(parameters, "activationPriorAlpha", 1),
+        activationPriorBeta: numberParameter(parameters, "activationPriorBeta", 9),
+        fitMode: parameters.fitMode === "reference-compatible" ? "reference-compatible" : "empirical-fast",
+        signal,
+        onStage: onProgress,
+      });
+      return serialiseGlobalGammaResult(result);
     },
   },
 ];

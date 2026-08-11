@@ -757,6 +757,376 @@ export function evaluateBsrelAllMessages(
   return result;
 }
 
+@inline function logAddExp(left: f64, right: f64): f64 {
+  if (left == -Infinity) return right;
+  if (right == -Infinity) return left;
+  const maximum = Math.max(left, right);
+  return maximum + Math.log(Math.exp(left - maximum) + Math.exp(right - maximum));
+}
+
+/**
+ * Apply the shared omega mixture to one child message. The normalized full
+ * edge message is used for pruning; unnormalised low- and positive-tail
+ * pieces retain the child's scale for exact local capped-edge contractions.
+ */
+function propagateGlobalGammaEdge(
+  edgeValues: Float64Array,
+  edgeScales: Float64Array,
+  lowValues: Float64Array,
+  positiveValues: Float64Array,
+  edge: i32,
+  sourceValues: Float64Array,
+  sourceScales: Float64Array,
+  sourceSlot: i32,
+  blockCount: i32,
+  branchLength: f64,
+  omegaModels: Uint32Array,
+  omegaWeights: Float64Array,
+  positiveMask: Uint8Array,
+  stateCount: i32,
+  maxNeighbors: i32,
+  poissonTerms: i32,
+  maxLambdaPerStep: f64,
+  neighborCount: Uint32Array,
+  neighborIndex: Uint32Array,
+  rDiagonal: Float64Array,
+  rOffDiagonal: Float64Array,
+  mu: Float64Array,
+  component: Float64Array,
+  workA: Float64Array,
+  workB: Float64Array,
+  accumulator: Float64Array,
+  siteSums: Float64Array,
+): void {
+  const destinationOffset = edge * stateCount * SITE_BLOCK;
+  for (let state = 0; state < stateCount; state += 1) {
+    const row = destinationOffset + state * SITE_BLOCK;
+    for (let site = 0; site < blockCount; site += 1) {
+      edgeValues[row + site] = 0.0;
+      lowValues[row + site] = 0.0;
+      positiveValues[row + site] = 0.0;
+    }
+  }
+  for (let omega = 0; omega < omegaModels.length; omega += 1) {
+    copySlot(component, 0, sourceValues, sourceSlot, stateCount, blockCount);
+    propagateBlock(
+      component, 0, blockCount, branchLength, <i32>omegaModels[omega],
+      stateCount, maxNeighbors, poissonTerms, maxLambdaPerStep,
+      neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu,
+      workA, workB, accumulator,
+    );
+    const weight = omegaWeights[omega];
+    const positive = positiveMask[omega] != 0;
+    for (let state = 0; state < stateCount; state += 1) {
+      const destinationRow = destinationOffset + state * SITE_BLOCK;
+      const componentRow = state * SITE_BLOCK;
+      for (let site = 0; site < blockCount; site += 1) {
+        const value = weight * component[componentRow + site];
+        edgeValues[destinationRow + site] += value;
+        if (positive) positiveValues[destinationRow + site] += value;
+        else lowValues[destinationRow + site] += value;
+      }
+    }
+  }
+  copyScale(edgeScales, edge, sourceScales, sourceSlot, blockCount);
+  normalizeSlot(edgeValues, edgeScales, edge, stateCount, blockCount, siteSums);
+}
+
+/** Reversible parent-to-child propagation under the shared omega mixture. */
+function propagateForwardGlobalGamma(
+  outsideValues: Float64Array,
+  outsideScales: Float64Array,
+  childNode: i32,
+  contextValues: Float64Array,
+  contextScales: Float64Array,
+  edge: i32,
+  branchLength: f64,
+  omegaModels: Uint32Array,
+  omegaWeights: Float64Array,
+  equilibrium: Float64Array,
+  component: Float64Array,
+  blockCount: i32,
+  stateCount: i32,
+  maxNeighbors: i32,
+  poissonTerms: i32,
+  maxLambdaPerStep: f64,
+  neighborCount: Uint32Array,
+  neighborIndex: Uint32Array,
+  rDiagonal: Float64Array,
+  rOffDiagonal: Float64Array,
+  mu: Float64Array,
+  workA: Float64Array,
+  workB: Float64Array,
+  accumulator: Float64Array,
+  siteSums: Float64Array,
+): void {
+  const contextOffset = edge * stateCount * SITE_BLOCK;
+  const destinationOffset = childNode * stateCount * SITE_BLOCK;
+  for (let state = 0; state < stateCount; state += 1) {
+    const row = destinationOffset + state * SITE_BLOCK;
+    for (let site = 0; site < blockCount; site += 1) outsideValues[row + site] = 0.0;
+  }
+  for (let omega = 0; omega < omegaModels.length; omega += 1) {
+    for (let state = 0; state < stateCount; state += 1) {
+      const sourceRow = contextOffset + state * SITE_BLOCK;
+      const componentRow = state * SITE_BLOCK;
+      const inverseEquilibrium = 1.0 / equilibrium[state];
+      for (let site = 0; site < blockCount; site += 1) {
+        component[componentRow + site] = contextValues[sourceRow + site] * inverseEquilibrium;
+      }
+    }
+    propagateBlock(
+      component, 0, blockCount, branchLength, <i32>omegaModels[omega],
+      stateCount, maxNeighbors, poissonTerms, maxLambdaPerStep,
+      neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu,
+      workA, workB, accumulator,
+    );
+    const weight = omegaWeights[omega];
+    for (let state = 0; state < stateCount; state += 1) {
+      const destinationRow = destinationOffset + state * SITE_BLOCK;
+      const componentRow = state * SITE_BLOCK;
+      const pi = equilibrium[state];
+      for (let site = 0; site < blockCount; site += 1) {
+        outsideValues[destinationRow + site] += pi * weight * component[componentRow + site];
+      }
+    }
+  }
+  copyScale(outsideScales, childNode, contextScales, edge, blockCount);
+  normalizeSlot(outsideValues, outsideScales, childNode, stateCount, blockCount, siteSums);
+}
+
+/**
+ * Global Gamma branch/site scan. Alpha is integrated as a site-level outer
+ * mixture. Omega is independently integrated on each branch. A single upward
+ * and downward pass per alpha rate yields every exact one-edge cap and every
+ * positive-tail responsibility without branch-wise re-pruning.
+ *
+ * Output layout: site alternative log L; edge-major capped-edge log L;
+ * edge-major positive-tail log likelihood mass.
+ */
+export function evaluateGlobalGammaAllMessages(
+  childOffsets: Uint32Array,
+  children: Uint32Array,
+  tipForNode: Int32Array,
+  edgeForNode: Int32Array,
+  nodeForEdge: Uint32Array,
+  postorder: Uint32Array,
+  preorder: Uint32Array,
+  tipStates: Uint8Array,
+  branchLengths: Float64Array,
+  omegaModels: Uint32Array,
+  omegaWeights: Float64Array,
+  positiveMask: Uint8Array,
+  neutralModel: i32,
+  alphaValues: Float64Array,
+  alphaWeights: Float64Array,
+  neighborCount: Uint32Array,
+  neighborIndex: Uint32Array,
+  rDiagonal: Float64Array,
+  rOffDiagonal: Float64Array,
+  mu: Float64Array,
+  equilibrium: Float64Array,
+  siteCount: i32,
+  nodeCount: i32,
+  edgeCount: i32,
+  stateCount: i32,
+  maxNeighbors: i32,
+  root: i32,
+  poissonTerms: i32,
+  maxLambdaPerStep: f64,
+): Float64Array {
+  const matrixSize = edgeCount * siteCount;
+  const cappedResultOffset = siteCount;
+  const positiveResultOffset = siteCount + matrixSize;
+  const result = new Float64Array(siteCount + matrixSize * 2);
+  for (let index = 0; index < result.length; index += 1) result[index] = -Infinity;
+
+  let positiveWeight = 0.0;
+  for (let omega = 0; omega < omegaWeights.length; omega += 1) {
+    if (positiveMask[omega] != 0) positiveWeight += omegaWeights[omega];
+  }
+
+  const upValues = new Float64Array(nodeCount * stateCount * SITE_BLOCK);
+  const upScales = new Float64Array(nodeCount * SITE_BLOCK);
+  const edgeValues = new Float64Array(edgeCount * stateCount * SITE_BLOCK);
+  const edgeScales = new Float64Array(edgeCount * SITE_BLOCK);
+  const lowValues = new Float64Array(edgeCount * stateCount * SITE_BLOCK);
+  const positiveValues = new Float64Array(edgeCount * stateCount * SITE_BLOCK);
+  const outsideValues = new Float64Array(nodeCount * stateCount * SITE_BLOCK);
+  const outsideScales = new Float64Array(nodeCount * SITE_BLOCK);
+  const contextValues = new Float64Array(edgeCount * stateCount * SITE_BLOCK);
+  const contextScales = new Float64Array(edgeCount * SITE_BLOCK);
+  const totalValues = new Float64Array(stateCount * SITE_BLOCK);
+  const totalScales = new Float64Array(SITE_BLOCK);
+  const component = new Float64Array(stateCount * SITE_BLOCK);
+  const workA = new Float64Array(stateCount * SITE_BLOCK);
+  const workB = new Float64Array(stateCount * SITE_BLOCK);
+  const accumulator = new Float64Array(stateCount * SITE_BLOCK);
+  const siteSums = new Float64Array(SITE_BLOCK);
+  const positiveSums = new Float64Array(SITE_BLOCK);
+
+  for (let alpha = 0; alpha < alphaValues.length; alpha += 1) {
+    const logAlphaWeight = Math.log(alphaWeights[alpha]);
+    const alphaScale = alphaValues[alpha];
+    for (let blockStart = 0; blockStart < siteCount; blockStart += SITE_BLOCK) {
+      const blockCount = min<i32>(SITE_BLOCK, siteCount - blockStart);
+
+      for (let order = 0; order < postorder.length; order += 1) {
+        const node = <i32>postorder[order];
+        const start = <i32>childOffsets[node];
+        const end = <i32>childOffsets[node + 1];
+        if (start == end) {
+          const tip = tipForNode[node];
+          const valueOffset = node * stateCount * SITE_BLOCK;
+          for (let state = 0; state < stateCount; state += 1) {
+            const row = valueOffset + state * SITE_BLOCK;
+            for (let site = 0; site < blockCount; site += 1) {
+              const observed = tipStates[tip * siteCount + blockStart + site];
+              upValues[row + site] = observed == 255 || observed == state ? 1.0 : 0.0;
+            }
+          }
+          const scaleOffset = node * SITE_BLOCK;
+          for (let site = 0; site < blockCount; site += 1) upScales[scaleOffset + site] = 0.0;
+        } else {
+          const firstChild = <i32>children[start];
+          const firstEdge = edgeForNode[firstChild];
+          copySlot(upValues, node, edgeValues, firstEdge, stateCount, blockCount);
+          copyScale(upScales, node, edgeScales, firstEdge, blockCount);
+          for (let childIndex = start + 1; childIndex < end; childIndex += 1) {
+            const child = <i32>children[childIndex];
+            const edge = edgeForNode[child];
+            multiplyExternalNormalize(
+              upValues, upScales, node, edgeValues, edgeScales, edge,
+              stateCount, blockCount, siteSums,
+            );
+          }
+        }
+        const edge = edgeForNode[node];
+        if (edge >= 0) {
+          propagateGlobalGammaEdge(
+            edgeValues, edgeScales, lowValues, positiveValues, edge,
+            upValues, upScales, node, blockCount,
+            branchLengths[edge] * alphaScale, omegaModels, omegaWeights, positiveMask,
+            stateCount, maxNeighbors, poissonTerms, maxLambdaPerStep,
+            neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu,
+            component, workA, workB, accumulator, siteSums,
+          );
+        }
+      }
+
+      const rootOffset = root * stateCount * SITE_BLOCK;
+      const rootScaleOffset = root * SITE_BLOCK;
+      for (let site = 0; site < blockCount; site += 1) siteSums[site] = 0.0;
+      for (let state = 0; state < stateCount; state += 1) {
+        const row = rootOffset + state * SITE_BLOCK;
+        for (let site = 0; site < blockCount; site += 1) siteSums[site] += equilibrium[state] * upValues[row + site];
+      }
+      for (let site = 0; site < blockCount; site += 1) {
+        const rootSum = siteSums[site];
+        const siteIndex = blockStart + site;
+        if (rootSum > 0.0) {
+          const logLikelihood = upScales[rootScaleOffset + site] + Math.log(rootSum);
+          result[siteIndex] = logAddExp(result[siteIndex], logAlphaWeight + logLikelihood);
+        }
+      }
+
+      const outsideRootOffset = root * stateCount * SITE_BLOCK;
+      for (let state = 0; state < stateCount; state += 1) {
+        const row = outsideRootOffset + state * SITE_BLOCK;
+        for (let site = 0; site < blockCount; site += 1) outsideValues[row + site] = equilibrium[state];
+      }
+      const outsideRootScale = root * SITE_BLOCK;
+      for (let site = 0; site < blockCount; site += 1) outsideScales[outsideRootScale + site] = 0.0;
+
+      for (let order = 0; order < preorder.length; order += 1) {
+        const parentNode = <i32>preorder[order];
+        const start = <i32>childOffsets[parentNode];
+        const end = <i32>childOffsets[parentNode + 1];
+        if (start == end) continue;
+        copySlot(totalValues, 0, outsideValues, parentNode, stateCount, blockCount);
+        copyScale(totalScales, 0, outsideScales, parentNode, blockCount);
+        for (let childIndex = start; childIndex < end; childIndex += 1) {
+          const child = <i32>children[childIndex];
+          const edge = edgeForNode[child];
+          multiplyExternalNormalize(totalValues, totalScales, 0, edgeValues, edgeScales, edge, stateCount, blockCount, siteSums);
+        }
+        for (let childIndex = start; childIndex < end; childIndex += 1) {
+          const child = <i32>children[childIndex];
+          const edge = edgeForNode[child];
+          if (!divideBlanket(
+            contextValues, contextScales, edge,
+            totalValues, totalScales, edgeValues, edgeScales,
+            stateCount, blockCount, siteSums,
+          )) {
+            buildBlanketFallback(
+              contextValues, contextScales, edge, parentNode,
+              childOffsets, children, edgeForNode,
+              outsideValues, outsideScales, edgeValues, edgeScales,
+              stateCount, blockCount, siteSums,
+            );
+          }
+          propagateForwardGlobalGamma(
+            outsideValues, outsideScales, child,
+            contextValues, contextScales, edge,
+            branchLengths[edge] * alphaScale, omegaModels, omegaWeights, equilibrium,
+            component, blockCount, stateCount, maxNeighbors, poissonTerms,
+            maxLambdaPerStep, neighborCount, neighborIndex, rDiagonal,
+            rOffDiagonal, mu, workA, workB, accumulator, siteSums,
+          );
+        }
+      }
+
+      for (let edge = 0; edge < edgeCount; edge += 1) {
+        const childNode = <i32>nodeForEdge[edge];
+        copySlot(component, 0, upValues, childNode, stateCount, blockCount);
+        propagateBlock(
+          component, 0, blockCount, branchLengths[edge] * alphaScale, neutralModel,
+          stateCount, maxNeighbors, poissonTerms, maxLambdaPerStep,
+          neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu,
+          workA, workB, accumulator,
+        );
+        const contextOffset = edge * stateCount * SITE_BLOCK;
+        const rawOffset = edge * stateCount * SITE_BLOCK;
+        for (let site = 0; site < blockCount; site += 1) {
+          siteSums[site] = 0.0;
+          positiveSums[site] = 0.0;
+        }
+        for (let state = 0; state < stateCount; state += 1) {
+          const contextRow = contextOffset + state * SITE_BLOCK;
+          const rawRow = rawOffset + state * SITE_BLOCK;
+          const neutralRow = state * SITE_BLOCK;
+          for (let site = 0; site < blockCount; site += 1) {
+            const context = contextValues[contextRow + site];
+            const capped = lowValues[rawRow + site] + positiveWeight * component[neutralRow + site];
+            siteSums[site] += context * capped;
+            positiveSums[site] += context * positiveValues[rawRow + site];
+          }
+        }
+        const contextScaleOffset = edge * SITE_BLOCK;
+        const childScaleOffset = childNode * SITE_BLOCK;
+        for (let site = 0; site < blockCount; site += 1) {
+          const siteIndex = blockStart + site;
+          const matrixIndex = edge * siteCount + siteIndex;
+          const commonScale = contextScales[contextScaleOffset + site] + upScales[childScaleOffset + site];
+          const cappedDot = siteSums[site];
+          if (cappedDot > 0.0) {
+            const value = logAlphaWeight + commonScale + Math.log(cappedDot);
+            const outputIndex = cappedResultOffset + matrixIndex;
+            result[outputIndex] = logAddExp(result[outputIndex], value);
+          }
+          const positiveDot = positiveSums[site];
+          if (positiveDot > 0.0) {
+            const value = logAlphaWeight + commonScale + Math.log(positiveDot);
+            const outputIndex = positiveResultOffset + matrixIndex;
+            result[outputIndex] = logAddExp(result[outputIndex], value);
+          }
+        }
+      }
+    }
+  }
+  return result;
+}
+
 /** Exact f64 CPU/WASM pruning backend, output in category-major order. */
 export function evaluateLikelihood(
   ops: Uint32Array,

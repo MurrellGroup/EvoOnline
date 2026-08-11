@@ -17,6 +17,8 @@ import { BsrelResultsView } from "../src/components/BsrelResultsView.js";
 import type { BsrelRunResult } from "../src/types.js";
 import { BameVisualizations } from "../src/components/BameVisualizations.js";
 import type { FameRunResult, FlavorRunResult } from "../src/types.js";
+import { GlobalGammaResultsView } from "../src/components/GlobalGammaResultsView.js";
+import type { GlobalGammaRunResult } from "../src/types.js";
 
 test("deferred number fields accept replacement text and validate only when committed", () => {
   assert.equal(normalizeCommittedNumberDraft("", 17, 1, 100), 17);
@@ -100,6 +102,47 @@ test("BS-REL renders a fitted branch-length phylogram, branch metrics, and SVG e
   assert.match(markup, /Fitted branch length/);
   assert.match(markup, /Export SVG/);
   assert.match(markup, /cached two-sided local blanket/);
+});
+
+test("Global-Gamma results link exact capped evidence, activation evidence, sites, and tree posteriors", () => {
+  const branches: GlobalGammaRunResult["branches"] = [
+    { branch: 1, nodeId: 1, nodeIndex: 1, name: "N", parentName: "Root", terminal: false, branchLength: 0.2, cappedLogEvidence: 3.1, cappedEvidenceRatio: 22.2, activationLogBayesFactor: 2.8, activationBayesFactor: 16.4, activationPosteriorMean: 0.34, expectedPositiveSites: 1.2, anySitePositivePosterior: 0.72, anySitePositiveLogBayesFactor: 1.8, maximumSitePosterior: 0.84 },
+    { branch: 2, nodeId: 2, nodeIndex: 2, name: "a", parentName: "N", terminal: true, branchLength: 0.1, cappedLogEvidence: 0.2, cappedEvidenceRatio: 1.22, activationLogBayesFactor: 0.1, activationBayesFactor: 1.1, activationPosteriorMean: 0.11, expectedPositiveSites: 0.3, anySitePositivePosterior: 0.25, anySitePositiveLogBayesFactor: 0.1, maximumSitePosterior: 0.22 },
+    { branch: 3, nodeId: 3, nodeIndex: 3, name: "b", parentName: "N", terminal: true, branchLength: 0.1, cappedLogEvidence: -0.4, cappedEvidenceRatio: 0.67, activationLogBayesFactor: -0.2, activationBayesFactor: 0.82, activationPosteriorMean: 0.08, expectedPositiveSites: 0.2, anySitePositivePosterior: 0.18, anySitePositiveLogBayesFactor: -0.2, maximumSitePosterior: 0.16 },
+    { branch: 4, nodeId: 4, nodeIndex: 4, name: "c", parentName: "Root", terminal: true, branchLength: 0.3, cappedLogEvidence: 1.1, cappedEvidenceRatio: 3, activationLogBayesFactor: 0.7, activationBayesFactor: 2, activationPosteriorMean: 0.17, expectedPositiveSites: 0.6, anySitePositivePosterior: 0.45, anySitePositiveLogBayesFactor: 0.5, maximumSitePosterior: 0.55 },
+  ];
+  const result: GlobalGammaRunResult = {
+    method: "global-gamma",
+    sites: [
+      { site: 1, cappedLogEvidence: 2.1, cappedEvidenceRatio: 8.17, conditionalSupport: 0.891, expectedPositiveBranches: 1.4, maximumBranchPosterior: 0.84 },
+      { site: 2, cappedLogEvidence: -0.3, cappedEvidenceRatio: 0.74, conditionalSupport: 0.426, expectedPositiveBranches: 0.3, maximumBranchPosterior: 0.22 },
+    ],
+    branches,
+    fit: { omegaMean: 0.72, omegaShape: 0.8, alphaShape: 1.6, logLikelihood: -123.4 },
+    omegaValues: Float64Array.of(0.1, 0.5, 1.4, 4),
+    alphaValues: Float64Array.of(0.2, 0.8, 1.2, 1.8),
+    positivePrior: 0.15,
+    posterior: { siteCount: 2, branchCount: 4, tailPosterior: Float32Array.of(0.84, 0.1, 0.22, 0.08, 0.16, 0.06, 0.55, 0.06), localLogEvidence: Float32Array.of(2, 0.1, 0.2, 0, -0.1, -0.2, 0.8, 0.3) },
+    backend: "wasm-parallel",
+    timings: { totalMs: 2300 },
+    diagnostics: {
+      taxa: 3, codonSites: 2, branches: 4, omegaSlices: 4, alphaSlices: 4, fitPreset: "fast", coarseCandidates: 20, refinementCandidates: 9,
+      activationPriorAlpha: 1, activationPriorBeta: 9, messageAlgorithm: "upward-downward-local-blanket", alphaModel: "mean-one-global-discrete-gamma",
+      omegaModel: "global-discrete-gamma-iid-branch-site", evidenceCalibration: "plug-in-conditional-empirical-bayes", fitNumerics: "coarse-to-fine-grid-ml-julia-interpolation", finalNumerics: "direct-f64-uniformization",
+    },
+    tree: "((a:0.1,b:0.1)N:0.2,c:0.3);",
+    siteCsv: "Codon site\n1\n",
+    branchCsv: "Branch\n1\n",
+  };
+  const markup = renderToStaticMarkup(<GlobalGammaResultsView result={result} threshold={0.9} alignment=">a\nATGAAA\n>b\nATGAAG\n>c\nATGAAA\n" />);
+  assert.match(markup, /Global Gamma branch–site scan/);
+  assert.match(markup, /same site-wise α is used on every edge/);
+  assert.match(markup, /each edge independently integrates/);
+  assert.match(markup, /Activation empirical BF/);
+  assert.match(markup, /Exact capped-edge evidence/);
+  assert.match(markup, /Selected-site tail posterior/);
+  assert.match(markup, /Codon alignment evidence track/);
+  assert.ok((markup.match(/Export SVG/g) ?? []).length >= 2);
 });
 
 test("FUBAR studio renders selection overview and site posterior products", () => {

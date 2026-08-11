@@ -93,6 +93,52 @@ export async function instantiate(module, imports = {}) {
         __release(mu);
       }
     },
+    evaluateGlobalGammaAllMessages(childOffsets, children, tipForNode, edgeForNode, nodeForEdge, postorder, preorder, tipStates, branchLengths, omegaModels, omegaWeights, positiveMask, neutralModel, alphaValues, alphaWeights, neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu, equilibrium, siteCount, nodeCount, edgeCount, stateCount, maxNeighbors, root, poissonTerms, maxLambdaPerStep) {
+      // assembly/index/evaluateGlobalGammaAllMessages(~lib/typedarray/Uint32Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Int32Array, ~lib/typedarray/Int32Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Uint8Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Uint8Array, i32, ~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, i32, i32, i32, i32, i32, i32, i32, f64) => ~lib/typedarray/Float64Array
+      childOffsets = __retain(__lowerTypedArray(Uint32Array, 5, 2, childOffsets) || __notnull());
+      children = __retain(__lowerTypedArray(Uint32Array, 5, 2, children) || __notnull());
+      tipForNode = __retain(__lowerTypedArray(Int32Array, 6, 2, tipForNode) || __notnull());
+      edgeForNode = __retain(__lowerTypedArray(Int32Array, 6, 2, edgeForNode) || __notnull());
+      nodeForEdge = __retain(__lowerTypedArray(Uint32Array, 5, 2, nodeForEdge) || __notnull());
+      postorder = __retain(__lowerTypedArray(Uint32Array, 5, 2, postorder) || __notnull());
+      preorder = __retain(__lowerTypedArray(Uint32Array, 5, 2, preorder) || __notnull());
+      tipStates = __retain(__lowerTypedArray(Uint8Array, 4, 0, tipStates) || __notnull());
+      branchLengths = __retain(__lowerTypedArray(Float64Array, 7, 3, branchLengths) || __notnull());
+      omegaModels = __retain(__lowerTypedArray(Uint32Array, 5, 2, omegaModels) || __notnull());
+      omegaWeights = __retain(__lowerTypedArray(Float64Array, 7, 3, omegaWeights) || __notnull());
+      positiveMask = __retain(__lowerTypedArray(Uint8Array, 4, 0, positiveMask) || __notnull());
+      alphaValues = __retain(__lowerTypedArray(Float64Array, 7, 3, alphaValues) || __notnull());
+      alphaWeights = __retain(__lowerTypedArray(Float64Array, 7, 3, alphaWeights) || __notnull());
+      neighborCount = __retain(__lowerTypedArray(Uint32Array, 5, 2, neighborCount) || __notnull());
+      neighborIndex = __retain(__lowerTypedArray(Uint32Array, 5, 2, neighborIndex) || __notnull());
+      rDiagonal = __retain(__lowerTypedArray(Float64Array, 7, 3, rDiagonal) || __notnull());
+      rOffDiagonal = __retain(__lowerTypedArray(Float64Array, 7, 3, rOffDiagonal) || __notnull());
+      mu = __retain(__lowerTypedArray(Float64Array, 7, 3, mu) || __notnull());
+      equilibrium = __lowerTypedArray(Float64Array, 7, 3, equilibrium) || __notnull();
+      try {
+        return __liftTypedArray(Float64Array, exports.evaluateGlobalGammaAllMessages(childOffsets, children, tipForNode, edgeForNode, nodeForEdge, postorder, preorder, tipStates, branchLengths, omegaModels, omegaWeights, positiveMask, neutralModel, alphaValues, alphaWeights, neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu, equilibrium, siteCount, nodeCount, edgeCount, stateCount, maxNeighbors, root, poissonTerms, maxLambdaPerStep) >>> 0);
+      } finally {
+        __release(childOffsets);
+        __release(children);
+        __release(tipForNode);
+        __release(edgeForNode);
+        __release(nodeForEdge);
+        __release(postorder);
+        __release(preorder);
+        __release(tipStates);
+        __release(branchLengths);
+        __release(omegaModels);
+        __release(omegaWeights);
+        __release(positiveMask);
+        __release(alphaValues);
+        __release(alphaWeights);
+        __release(neighborCount);
+        __release(neighborIndex);
+        __release(rDiagonal);
+        __release(rOffDiagonal);
+        __release(mu);
+      }
+    },
     evaluateLikelihood(ops, edgeLengths, tipStates, gridModels, neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu, equilibrium, siteCount, gridCount, classCount, stateCount, maxNeighbors, slotCount, rootSlot, poissonTerms, maxLambdaPerStep) {
       // assembly/index/evaluateLikelihood(~lib/typedarray/Uint32Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Uint8Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, i32, i32, i32, i32, i32, i32, i32, i32, f64) => ~lib/typedarray/Float64Array
       ops = __retain(__lowerTypedArray(Uint32Array, 5, 2, ops) || __notnull());
