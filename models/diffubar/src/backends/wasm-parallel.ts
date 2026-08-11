@@ -1,5 +1,6 @@
 import type {
   BranchMixtureLikelihoodRequest,
+  FlavorInterpolatedLikelihoodRequest,
   BsrelKernelRequest,
   BsrelKernelResult,
   LikelihoodRequest,
@@ -123,6 +124,27 @@ export class ParallelWasmBackend {
       worker.addEventListener?.("message", receiveEvent);
       worker.on?.("message", receive);
       worker.postMessage({ id, kind: "branch-mixture", request });
+    });
+  }
+
+  private callFlavorInterpolated(worker: WorkerLike, request: FlavorInterpolatedLikelihoodRequest): Promise<Float64Array> {
+    const id = this.nextMessageId++;
+    return new Promise((resolve, reject) => {
+      const receive = (message: WorkerMessage): void => {
+        if (message.id !== id) return;
+        cleanup();
+        if (message.error !== undefined) reject(new Error(message.error));
+        else if (message.logLikelihoods === undefined) reject(new Error("Parallel WASM worker returned no interpolated FLAVOR likelihood matrix."));
+        else resolve(message.logLikelihoods);
+      };
+      const receiveEvent = (event: MessageEvent<WorkerMessage>): void => receive(event.data);
+      const cleanup = (): void => {
+        worker.removeEventListener?.("message", receiveEvent);
+        worker.off?.("message", receive);
+      };
+      worker.addEventListener?.("message", receiveEvent);
+      worker.on?.("message", receive);
+      worker.postMessage({ id, kind: "flavor-interpolated", request });
     });
   }
 
@@ -306,6 +328,95 @@ export class ParallelWasmBackend {
       const { start } = jobs[job]!;
       const piece = pieces[job]!;
       logLikelihoods.set(piece, start * request.siteCount);
+    }
+    return { logLikelihoods, backend: "wasm-parallel", elapsedMs: performance.now() - started, precision: "f64" };
+  }
+
+  /** Partition FLAVOR only at complete Gamma-distribution alpha blocks. */
+  async evaluateFlavorInterpolated(request: FlavorInterpolatedLikelihoodRequest): Promise<LikelihoodResult> {
+    request.signal?.throwIfAborted();
+    const alphaCount = request.alphaCount;
+    const distributionCount = request.grid.categoryCount / alphaCount;
+    const categorySites = request.grid.categoryCount * request.siteCount;
+    if (
+      this.workerCount <= 1
+      || categorySites < this.minimumCategorySites
+      || request.siteCount < 2
+      || !Number.isInteger(distributionCount)
+      || distributionCount < 2
+    ) return this.local.evaluateFlavorInterpolated(request);
+    const started = performance.now();
+    const pool = await this.workers();
+    const modelBytes = request.models.rDiagonal.byteLength + request.models.rOffDiagonal.byteLength
+      + request.models.mu.byteLength + request.models.neighborCount.byteLength + request.models.neighborIndex.byteLength;
+    const memoryBoundWorkers = Math.max(1, Math.floor((192 * 1024 * 1024) / Math.max(1, modelBytes)));
+    const activeCount = Math.min(pool.length, distributionCount, memoryBoundWorkers);
+    request.onProgress?.(0, {
+      message: `Starting ${activeCount.toLocaleString()} FLAVOR interpolation workers · ${distributionCount.toLocaleString()} shared Gamma tables`,
+      current: 0,
+      total: distributionCount,
+      indeterminate: true,
+    });
+    const jobs: Array<{ readonly categoryStart: number; readonly distributionCount: number; readonly result: Promise<Float64Array> }> = [];
+    for (let index = 0; index < activeCount; index += 1) {
+      const distributionStart = Math.floor(index * distributionCount / activeCount);
+      const distributionEnd = Math.floor((index + 1) * distributionCount / activeCount);
+      const categoryStart = distributionStart * alphaCount;
+      const categoryEnd = distributionEnd * alphaCount;
+      const componentStart = request.operators.operatorOffsets[categoryStart]!;
+      const componentEnd = request.operators.operatorOffsets[categoryEnd]!;
+      const operatorOffsets = new Uint32Array(categoryEnd - categoryStart + 1);
+      for (let operator = categoryStart; operator <= categoryEnd; operator += 1) {
+        operatorOffsets[operator - categoryStart] = request.operators.operatorOffsets[operator]! - componentStart;
+      }
+      const grid = {
+        ...request.grid,
+        categories: request.grid.categories.slice(categoryStart * request.grid.parameterCount, categoryEnd * request.grid.parameterCount),
+        categoryCount: categoryEnd - categoryStart,
+      };
+      const workerRequest: FlavorInterpolatedLikelihoodRequest = {
+        tree: request.tree,
+        tipStates: request.tipStates,
+        siteCount: request.siteCount,
+        grid,
+        models: request.models,
+        operators: {
+          operatorCount: categoryEnd - categoryStart,
+          operatorOffsets,
+          componentModels: request.operators.componentModels.slice(componentStart, componentEnd),
+          componentWeights: request.operators.componentWeights.slice(componentStart, componentEnd),
+          operatorScales: request.operators.operatorScales.slice(categoryStart, categoryEnd),
+          operatorsPerCategory: 1,
+          collapseWeights: request.operators.collapseWeights.slice(categoryStart, categoryEnd),
+          collapseMode: request.operators.collapseMode,
+        },
+        equilibrium: request.equilibrium,
+        alphaCount,
+        ...(request.interpolation === undefined ? {} : { interpolation: request.interpolation }),
+        ...(request.poissonTerms === undefined ? {} : { poissonTerms: request.poissonTerms }),
+        ...(request.maxLambdaPerStep === undefined ? {} : { maxLambdaPerStep: request.maxLambdaPerStep }),
+      };
+      jobs.push({
+        categoryStart,
+        distributionCount: distributionEnd - distributionStart,
+        result: this.callFlavorInterpolated(pool[index]!, workerRequest),
+      });
+    }
+    let completedDistributions = 0;
+    const pieces = await Promise.all(jobs.map(async (job) => {
+      const piece = await job.result;
+      completedDistributions += job.distributionCount;
+      request.onProgress?.(completedDistributions / distributionCount, {
+        message: `${completedDistributions.toLocaleString()}/${distributionCount.toLocaleString()} shared Gamma transition tables and alpha blocks complete`,
+        current: completedDistributions,
+        total: distributionCount,
+      });
+      return piece;
+    }));
+    request.signal?.throwIfAborted();
+    const logLikelihoods = new Float64Array(request.grid.categoryCount * request.siteCount);
+    for (let index = 0; index < jobs.length; index += 1) {
+      logLikelihoods.set(pieces[index]!, jobs[index]!.categoryStart * request.siteCount);
     }
     return { logLikelihoods, backend: "wasm-parallel", elapsedMs: performance.now() - started, precision: "f64" };
   }

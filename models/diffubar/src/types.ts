@@ -178,6 +178,21 @@ export interface BranchMixtureLikelihoodRequest {
 }
 
 /**
+ * FLAVOR's source-compatible transition interpolation. Every consecutive
+ * `alphaCount` categories must share one component mixture and differ only in
+ * operator scale; this is the ordering emitted by the FLAVOR grid builder.
+ */
+export interface FlavorInterpolatedLikelihoodRequest extends BranchMixtureLikelihoodRequest {
+  readonly alphaCount: number;
+  /** MolecularEvolution.jl defaults: 0.001, 50, and 35. */
+  readonly interpolation?: {
+    readonly timeStep?: number;
+    readonly tablePoints?: number;
+    readonly tableCap?: number;
+  };
+}
+
+/**
  * Flat rooted-tree topology used by the BS-REL all-to-all message kernel.
  * Every non-root node owns exactly one edge (`edgeForNode`); children are
  * stored in CSR form so the WASM pass also handles genuine polytomies.

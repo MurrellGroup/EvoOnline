@@ -30,6 +30,7 @@ import {
   type FameAnalysisResult,
   type FlavorAnalysisOptions,
   type FlavorAnalysisResult,
+  type FlavorTransitionEngine,
 } from "./types.js";
 
 type BameBackend = WasmBackend | ParallelWasmBackend;
@@ -237,7 +238,7 @@ export async function analyzeFame(
     models: built.models,
     operators: built.operators,
     equilibrium: fitted.model.codonEquilibrium,
-    onProgress: (fraction, detail) => stage(options, "branch-mixture-likelihoods", fraction, detail),
+    onProgress: (fraction: number, detail?: ProgressDetail) => stage(options, "branch-mixture-likelihoods", fraction, detail),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
   });
   const likelihoodMs = performance.now() - likelihoodStarted;
@@ -298,6 +299,7 @@ export async function analyzeFlavor(
   options.signal?.throwIfAborted();
   stage(options, "initialization", 1, { message: `${alignment.names.length.toLocaleString()} taxa · ${alignment.codonSites.toLocaleString()} codon sites · untagged tree` });
   const gammaSliceCount = options.gammaSlices ?? 12;
+  const transitionEngine: FlavorTransitionEngine = options.transitionEngine ?? "julia-interpolated";
   const gridPreset = options.gridPreset ?? "fast";
   const grid = createFlavorGrid(gammaSliceCount, gridPreset);
   const operatorCount = grid.categoryCount;
@@ -329,7 +331,7 @@ export async function analyzeFlavor(
     total: grid.categoryCount,
   });
   const likelihoodStarted = performance.now();
-  const likelihood = await backend.evaluateBranchMixture({
+  const likelihoodRequest = {
     tree: compiled,
     tipStates,
     siteCount: alignment.codonSites,
@@ -337,9 +339,16 @@ export async function analyzeFlavor(
     models: built.models,
     operators: built.operators,
     equilibrium: fitted.model.codonEquilibrium,
-    onProgress: (fraction, detail) => stage(options, "branch-mixture-likelihoods", fraction, detail),
+    onProgress: (fraction: number, detail?: ProgressDetail) => stage(options, "branch-mixture-likelihoods", fraction, detail),
     ...(options.signal === undefined ? {} : { signal: options.signal }),
-  });
+  } as const;
+  const likelihood = transitionEngine === "julia-interpolated"
+    ? await backend.evaluateFlavorInterpolated({
+      ...likelihoodRequest,
+      alphaCount: grid.alphaValues.length,
+      interpolation: { timeStep: 0.001, tablePoints: 50, tableCap: 35 },
+    })
+    : await backend.evaluateBranchMixture(likelihoodRequest);
   const likelihoodMs = performance.now() - likelihoodStarted;
   const conditionals = normalizeConditionalLikelihoodsInPlace(likelihood.logLikelihoods, grid.categoryCount, alignment.codonSites);
   normalizeColumnsInPlace(conditionals, grid.categoryCount, alignment.codonSites);
@@ -355,7 +364,7 @@ export async function analyzeFlavor(
   const detectedSites = postprocessed.sites.filter((site) => site.detected).map((site) => site.site);
   const posteriorMs = performance.now() - posteriorStarted;
   stage(options, "tabulation", 1, { message: `${detectedSites.length.toLocaleString()} sites exceed the episodic-positive posterior threshold`, current: alignment.codonSites, total: alignment.codonSites });
-  stage(options, "complete", 1, { message: `FLAVOR finished with ${likelihood.backend} · ${gammaSliceCount}-slice Gamma mixtures` });
+  stage(options, "complete", 1, { message: `FLAVOR finished with ${likelihood.backend} · ${transitionEngine === "julia-interpolated" ? "Julia-style transition interpolation" : "direct uniformization"}` });
   return {
     method: "flavor",
     sites: postprocessed.sites,
@@ -380,8 +389,14 @@ export async function analyzeFlavor(
       inferenceBurnin: inference.burnin,
       inferenceLogLikelihood: inference.logLikelihood,
       modelDraftCommit: MIXTURE_MODELS_COMMIT,
-      numericalEngine: "fused-sparse-or-dense-uniformization",
+      numericalEngine: transitionEngine === "julia-interpolated"
+        ? "julia-matrix-sequence-linear-interpolation"
+        : "fused-sparse-or-dense-uniformization",
       gammaSlices: gammaSliceCount,
+      transitionEngine,
+      interpolationTimeStep: 0.001,
+      interpolationTablePoints: 50,
+      interpolationTableCap: 35,
       cappedGridMultiplicityRetained: true,
       gridPreset,
     },

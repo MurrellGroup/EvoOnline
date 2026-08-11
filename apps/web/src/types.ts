@@ -101,7 +101,7 @@ export interface FameRunResult {
     readonly inferenceBurnin: number;
     readonly inferenceLogLikelihood: number | null;
     readonly modelDraftCommit: string;
-    readonly numericalEngine: "fused-sparse-or-dense-uniformization";
+    readonly numericalEngine: "fused-sparse-or-dense-uniformization" | "julia-matrix-sequence-linear-interpolation";
     readonly weightIntegration: "likelihood-quadrature" | "julia-draft-log-average";
     readonly weightPoints: number;
     readonly gridPreset: "fast" | "julia-draft";
@@ -131,8 +131,12 @@ export interface FlavorRunResult {
     readonly inferenceBurnin: number;
     readonly inferenceLogLikelihood: number | null;
     readonly modelDraftCommit: string;
-    readonly numericalEngine: "fused-sparse-or-dense-uniformization";
+    readonly numericalEngine: "fused-sparse-or-dense-uniformization" | "julia-matrix-sequence-linear-interpolation";
     readonly gammaSlices: number;
+    readonly transitionEngine: "julia-interpolated" | "direct-uniformization";
+    readonly interpolationTimeStep: 0.001;
+    readonly interpolationTablePoints: 50;
+    readonly interpolationTableCap: 35;
     readonly cappedGridMultiplicityRetained: true;
     readonly gridPreset: "fast" | "julia-draft";
   };

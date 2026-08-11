@@ -104,7 +104,7 @@ export function ResultsView({ result, threshold, alignment }: ResultsViewProps) 
         </table>
       </div>
       <ReferenceResultMap modelName="DifFUBAR" alignmentText={alignment} evidenceSites={referenceEvidence} hypotheses={DIFFUBAR_REFERENCE_HYPOTHESES} initialThreshold={posteriorThreshold} />
-      <StructureMappingPanel alignmentText={alignment} sites={structureSites} colorModes={structureColorModes} />
+      <StructureMappingPanel alignmentText={alignment} sites={structureSites} colorModes={structureColorModes} selectionThreshold={posteriorThreshold} />
     </section>
   );
 }

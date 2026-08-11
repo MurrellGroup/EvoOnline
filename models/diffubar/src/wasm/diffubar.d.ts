@@ -115,6 +115,36 @@ declare namespace __AdaptedExports {
    */
   export function evaluateBranchMixtureLikelihood(ops: Uint32Array, edgeLengths: Float64Array, tipStates: Uint8Array, operatorOffsets: Uint32Array, componentModels: Uint32Array, componentWeights: Float64Array, operatorScales: Float64Array, collapseWeights: Float64Array, neighborCount: Uint32Array, neighborIndex: Uint32Array, rDiagonal: Float64Array, rOffDiagonal: Float64Array, mu: Float64Array, equilibrium: Float64Array, siteCount: number, gridCount: number, operatorsPerCategory: number, collapseMode: number, stateCount: number, maxNeighbors: number, slotCount: number, rootSlot: number, poissonTerms: number, maxLambdaPerStep: number): Float64Array;
   /**
+   * assembly/index/evaluateFlavorInterpolatedLikelihood
+   * @param ops `~lib/typedarray/Uint32Array`
+   * @param edgeLengths `~lib/typedarray/Float64Array`
+   * @param tipStates `~lib/typedarray/Uint8Array`
+   * @param operatorOffsets `~lib/typedarray/Uint32Array`
+   * @param componentModels `~lib/typedarray/Uint32Array`
+   * @param componentWeights `~lib/typedarray/Float64Array`
+   * @param operatorScales `~lib/typedarray/Float64Array`
+   * @param neighborCount `~lib/typedarray/Uint32Array`
+   * @param neighborIndex `~lib/typedarray/Uint32Array`
+   * @param rDiagonal `~lib/typedarray/Float64Array`
+   * @param rOffDiagonal `~lib/typedarray/Float64Array`
+   * @param mu `~lib/typedarray/Float64Array`
+   * @param equilibrium `~lib/typedarray/Float64Array`
+   * @param siteCount `i32`
+   * @param categoryCount `i32`
+   * @param alphaCount `i32`
+   * @param stateCount `i32`
+   * @param maxNeighbors `i32`
+   * @param slotCount `i32`
+   * @param rootSlot `i32`
+   * @param poissonTerms `i32`
+   * @param maxLambdaPerStep `f64`
+   * @param timeStep `f64`
+   * @param tablePoints `i32`
+   * @param tableCap `i32`
+   * @returns `~lib/typedarray/Float64Array`
+   */
+  export function evaluateFlavorInterpolatedLikelihood(ops: Uint32Array, edgeLengths: Float64Array, tipStates: Uint8Array, operatorOffsets: Uint32Array, componentModels: Uint32Array, componentWeights: Float64Array, operatorScales: Float64Array, neighborCount: Uint32Array, neighborIndex: Uint32Array, rDiagonal: Float64Array, rOffDiagonal: Float64Array, mu: Float64Array, equilibrium: Float64Array, siteCount: number, categoryCount: number, alphaCount: number, stateCount: number, maxNeighbors: number, slotCount: number, rootSlot: number, poissonTerms: number, maxLambdaPerStep: number, timeStep: number, tablePoints: number, tableCap: number): Float64Array;
+  /**
    * assembly/index/evaluateBranchMixtureLikelihoodDense
    * @param ops `~lib/typedarray/Uint32Array`
    * @param edgeLengths `~lib/typedarray/Float64Array`

@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
   WasmBackend,
+  ParallelWasmBackend,
   buildModelBank,
   codonEquilibriumFromF3x4,
   compileTree,
@@ -139,6 +140,80 @@ test("fused branch-mixture collapse matches explicit atomic likelihood algebra",
     for (let repeat = 0; repeat < repeats; repeat += 1) {
       assert.ok(Math.abs(dense.logLikelihoods[repeat * alignment.codonSites + site]! - expectedMarginal) < 2e-11);
     }
+  }
+});
+
+test("FLAVOR Julia-grid interpolation is exact at table nodes and partitions whole alpha blocks", async () => {
+  const alignment = parseFasta(">a\nATGAAA\n>b\nATGAAG\n");
+  const tree = parseNewick("(a:0.001,b:0.001);");
+  const f3x4 = countF3x4(alignment);
+  const equilibrium = codonEquilibriumFromF3x4(f3x4);
+  const atomicGrid: DifFUBARGrid = {
+    alpha: Float64Array.of(1), omega: Float64Array.of(0.2, 2.5), backgroundOmega: new Float64Array(0),
+    categories: Float64Array.of(1, 0.2, 1, 2.5), categoryCount: 2, parameterCount: 2, hasBackground: false,
+  };
+  const models = buildModelBank(atomicGrid, tree, Float64Array.of(1, 1, 1, 1, 1, 1), f3x4);
+  const first = models.gridModels[0]!;
+  const second = models.gridModels[1]!;
+  const grid: DifFUBARGrid = {
+    alpha: Float64Array.of(1, 2), omega: Float64Array.of(1), backgroundOmega: new Float64Array(0),
+    categories: Float64Array.from([
+      1, 0.5, 1, 0,
+      2, 0.5, 1, 0,
+      1, 1.5, 1, 1,
+      2, 1.5, 1, 1,
+    ]),
+    categoryCount: 4, parameterCount: 4, hasBackground: false,
+  };
+  const operators: BranchMixtureOperators = {
+    operatorCount: 4,
+    operatorOffsets: Uint32Array.of(0, 2, 4, 6, 8),
+    componentModels: Uint32Array.of(first, second, first, second, first, second, first, second),
+    componentWeights: Float64Array.of(0.4, 0.6, 0.4, 0.6, 0.7, 0.3, 0.7, 0.3),
+    operatorScales: Float64Array.of(1, 2, 1, 2),
+    operatorsPerCategory: 1,
+    collapseWeights: Float64Array.of(1, 1, 1, 1),
+    collapseMode: "log-mean-likelihood",
+  };
+  const request = {
+    tree: compileTree(tree),
+    tipStates: encodeCodonTips(alignment, tree),
+    siteCount: alignment.codonSites,
+    grid,
+    models,
+    operators,
+    equilibrium,
+  } as const;
+  const serialBackend = new WasmBackend();
+  const direct = await serialBackend.evaluateBranchMixture(request);
+  const interpolated = await serialBackend.evaluateFlavorInterpolated({ ...request, alphaCount: 2 });
+  for (let index = 0; index < direct.logLikelihoods.length; index += 1) {
+    assert.ok(Math.abs(interpolated.logLikelihoods[index]! - direct.logLikelihoods[index]!) < 3e-11);
+  }
+  const offGridTree = parseNewick("(a:0.137,b:0.083);");
+  const offGridRequest = {
+    ...request,
+    tree: compileTree(offGridTree),
+    tipStates: encodeCodonTips(alignment, offGridTree),
+  };
+  const offGridDirect = await serialBackend.evaluateBranchMixture(offGridRequest);
+  const offGridInterpolated = await serialBackend.evaluateFlavorInterpolated({ ...offGridRequest, alphaCount: 2 });
+  let maximumInterpolationDifference = 0;
+  for (let index = 0; index < offGridDirect.logLikelihoods.length; index += 1) {
+    assert.ok(Number.isFinite(offGridInterpolated.logLikelihoods[index]!));
+    maximumInterpolationDifference = Math.max(
+      maximumInterpolationDifference,
+      Math.abs(offGridInterpolated.logLikelihoods[index]! - offGridDirect.logLikelihoods[index]!),
+    );
+  }
+  assert.ok(maximumInterpolationDifference < 2e-3, `off-grid log-likelihood difference ${maximumInterpolationDifference}`);
+  const parallelBackend = new ParallelWasmBackend(2, 0);
+  try {
+    const parallel = await parallelBackend.evaluateFlavorInterpolated({ ...request, alphaCount: 2 });
+    assert.equal(parallel.backend, "wasm-parallel");
+    assert.deepEqual(parallel.logLikelihoods, interpolated.logLikelihoods);
+  } finally {
+    await parallelBackend.dispose();
   }
 });
 

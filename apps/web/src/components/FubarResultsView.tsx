@@ -84,7 +84,7 @@ export function FubarResultsView({ result, threshold, alignment }: { readonly re
       </div>
       {result.approximateFel !== undefined && <ApproximateFelResults result={result.approximateFel} {...(result.timings.approximateFelMs === undefined ? {} : { elapsedMs: result.timings.approximateFelMs })} />}
       <ReferenceResultMap modelName="FUBAR" alignmentText={alignment} evidenceSites={referenceEvidence} hypotheses={FUBAR_REFERENCE_HYPOTHESES} initialThreshold={posteriorThreshold} />
-      <StructureMappingPanel alignmentText={alignment} sites={structureSites} colorModes={structureColorModes} />
+      <StructureMappingPanel alignmentText={alignment} sites={structureSites} colorModes={structureColorModes} selectionThreshold={posteriorThreshold} />
     </section>
   );
 }

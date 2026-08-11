@@ -62,7 +62,11 @@ scope.onmessage = (event: MessageEvent<BameWorkerRunRequest>): void => {
           transferableBuffer(result.posterior.surfaces), transferableBuffer(result.posterior.alpha), transferableBuffer(result.posterior.omega1), transferableBuffer(result.posterior.omega2),
         ];
       } else {
-        const result = await analyzeFlavor(request.alignment, request.tree, { ...common, gammaSlices: Number(parameters.gammaSlices ?? 12) });
+        const result = await analyzeFlavor(request.alignment, request.tree, {
+          ...common,
+          gammaSlices: Number(parameters.gammaSlices ?? 12),
+          transitionEngine: parameters.transitionEngine === "direct-uniformization" ? "direct-uniformization" : "julia-interpolated",
+        });
         compact = {
           method: "flavor",
           sites: result.sites,

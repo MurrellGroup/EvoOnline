@@ -189,6 +189,17 @@ export const flavorManifest: ModelManifest = {
   category: "selection",
   inputSlots: commonInputs,
   parameters: [
+    {
+      id: "transitionEngine",
+      label: "Transition matrices",
+      description: "Julia-style interpolation shares one 50-node transition table across every alpha value, branch, and site for each Gamma distribution. Direct uniformization is the slower no-interpolation accuracy reference.",
+      type: "select",
+      default: "julia-interpolated",
+      options: [
+        { value: "julia-interpolated", label: "Julia-style interpolated (recommended)" },
+        { value: "direct-uniformization", label: "Direct uniformization reference" },
+      ],
+    },
     ...commonParameters,
     {
       id: "gammaSlices",

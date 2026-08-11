@@ -15,6 +15,7 @@ export type BameInferenceMethod = "dirichlet-em" | "gibbs";
 export type BameBackendKind = Extract<BackendKind, "auto" | "wasm" | "wasm-parallel">;
 export type FameWeightIntegration = "likelihood-quadrature" | "julia-draft-log-average";
 export type BameGridPreset = "fast" | "julia-draft";
+export type FlavorTransitionEngine = "julia-interpolated" | "direct-uniformization";
 
 export interface FameGrid extends DifFUBARGrid {
   readonly alphaValues: Float64Array;
@@ -119,6 +120,7 @@ export interface FameAnalysisOptions extends BameAnalysisOptions {
 export interface FlavorAnalysisOptions extends BameAnalysisOptions {
   readonly gammaSlices?: number;
   readonly gridPreset?: BameGridPreset;
+  readonly transitionEngine?: FlavorTransitionEngine;
 }
 
 export interface BameDiagnostics {
@@ -134,7 +136,7 @@ export interface BameDiagnostics {
   readonly inferenceBurnin: number;
   readonly inferenceLogLikelihood: number | null;
   readonly modelDraftCommit: typeof MIXTURE_MODELS_COMMIT;
-  readonly numericalEngine: "fused-sparse-or-dense-uniformization";
+  readonly numericalEngine: "fused-sparse-or-dense-uniformization" | "julia-matrix-sequence-linear-interpolation";
 }
 
 export interface FameAnalysisResult {
@@ -168,6 +170,10 @@ export interface FlavorAnalysisResult {
   readonly timings: Readonly<Record<string, number>>;
   readonly diagnostics: BameDiagnostics & {
     readonly gammaSlices: number;
+    readonly transitionEngine: FlavorTransitionEngine;
+    readonly interpolationTimeStep: 0.001;
+    readonly interpolationTablePoints: 50;
+    readonly interpolationTableCap: 35;
     readonly cappedGridMultiplicityRetained: true;
     readonly gridPreset: BameGridPreset;
   };

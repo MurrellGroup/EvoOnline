@@ -12,6 +12,11 @@ Browser-parallel f64 WASM ports of the experimental FAME and FLAVOR models on
   likelihood marginal and is therefore not the default.
 - FLAVOR uses the branch's mid-quantile discrete-Gamma approximation, including
   both uncapped and ω≤1-capped category grids.
+- FLAVOR defaults to the source's `matrix_sequence` transition interpolation:
+  one `exp(Q * 0.001)` per atomic ω, the same 50-node/cap-35 semigroup
+  recurrence, and element-wise linear interpolation. One Gamma-mixture table
+  is shared by every α value, branch, and site. Direct uniformization remains
+  selectable as a no-interpolation accuracy reference.
 - Both methods use Dirichlet-EM by default and additionally offer exact Gibbs
   allocation sampling.
 - Browser runs default to a transformed fast grid (512 FAME or 896 FLAVOR
@@ -22,6 +27,14 @@ Atomic MG94 models are represented at α=1 and branch time is scaled per
 mixture operator. This removes redundant rate matrices across the α grid.
 Repeated capped FLAVOR components are combined exactly within each transition
 mixture, without removing the draft's repeated outer grid categories.
+
+FAME deliberately retains direct uniformization. The pinned FAME source does
+not use `InterpolatedDiscreteModel`, and applying FLAVOR's shared table would
+change or duplicate its mixture-weight integration rather than merely port an
+upstream acceleration.
+
+Run `npm run bench:transitions -w @phylo-workbench/model-bame` to compare the
+two FLAVOR transition engines on the bundled demo.
 
 ## Development-source audit
 

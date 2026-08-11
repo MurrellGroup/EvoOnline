@@ -141,13 +141,41 @@ export function alignProfileToReference(
   matchLine.reverse();
   profileIndices.reverse();
   referenceIndices.reverse();
+  let gaps = 0;
+  let positivePairs = 0;
+  let ungappedRun = 0;
+  let positiveRun = 0;
+  let longestUngappedRun = 0;
+  let longestPositiveRun = 0;
+  for (let index = 0; index < profileIndices.length; index += 1) {
+    const profileIndex = profileIndices[index]!;
+    const referenceIndex = referenceIndices[index]!;
+    if (profileIndex < 0 || referenceIndex < 0) {
+      gaps += 1;
+      ungappedRun = 0;
+      positiveRun = 0;
+      continue;
+    }
+    ungappedRun += 1;
+    longestUngappedRun = Math.max(longestUngappedRun, ungappedRun);
+    if (substitutionScore(substitutionScores, profileIndex, referenceSequence[referenceIndex]!) > 0) {
+      positivePairs += 1;
+      positiveRun += 1;
+      longestPositiveRun = Math.max(longestPositiveRun, positiveRun);
+    } else positiveRun = 0;
+  }
   return {
     chainId: "reference",
     score,
     scorePerMappedResidue: score / Math.max(1, mappedResidues),
     identity: identities / Math.max(1, mappedResidues),
+    chainCoverage: mappedResidues / Math.max(1, columns),
     coverage: mappedResidues / Math.max(1, rows),
     mappedResidues,
+    gapFraction: gaps / Math.max(1, profileIndices.length),
+    positiveMatchFraction: positivePairs / Math.max(1, mappedResidues),
+    longestUngappedRun,
+    longestPositiveRun,
     siteToResidue,
     profileIndices: Int32Array.from(profileIndices),
     residueIndices: Int32Array.from(referenceIndices),

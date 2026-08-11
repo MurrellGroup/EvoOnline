@@ -691,6 +691,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .structure-color-panel__body > label > span { color: #667671; font-size: 7px; font-weight: 800; text-transform: uppercase; }
 .structure-color-panel select { min-height: 28px; padding: 4px 6px; color: #2a3d39; background: #fff; border: 1px solid #cbd5cf; border-radius: 4px; font-size: 8px; }
 .structure-color-panel small { grid-column: 1 / -1; color: #7d8a86; font-size: 7px; }
+.structure-threshold-note { min-height: 24px; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0; padding: 1px 12px 6px; color: #71807c; font-size: 7px; line-height: 1.35; }
+.structure-threshold-note strong { color: #365a51; }
+.structure-threshold-note label { flex: 0 0 auto; display: flex; align-items: center; gap: 4px; color: #425c55; font-weight: 800; cursor: pointer; }
+.structure-threshold-note input { width: 12px; height: 12px; margin: 0; accent-color: var(--teal); }
 .structure-legend { display: flex; flex-wrap: wrap; gap: 5px 12px; padding: 6px 8px; color: #5a6c67; background: #fafbfa; border-radius: 5px; font-size: 7px; }
 .structure-legend span { display: flex; align-items: center; gap: 4px; }
 .structure-legend i { width: 11px; height: 7px; border: 1px solid rgba(24, 40, 36, 0.12); border-radius: 1px; }
@@ -711,6 +715,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .structure-chain-row:last-child { border-bottom: 0; }
 .structure-chain-row > div { min-width: 0; display: flex; align-items: baseline; gap: 8px; overflow: hidden; white-space: nowrap; }
 .structure-chain-row > div strong { flex: 0 0 auto; color: #30443f; font-size: 8px; }
+.structure-auto-map-badge { flex: 0 0 auto; padding: 1px 4px; color: #17634f; background: #dff1e9; border-radius: 999px; font-size: 5.5px; font-style: normal; font-weight: 850; letter-spacing: 0.02em; text-transform: uppercase; }
 .structure-chain-row > div span { flex: 0 0 auto; color: #788682; font-size: 6px; font-variant-numeric: tabular-nums; }
 .structure-chain-row > label { display: grid; place-items: center; cursor: pointer; }
 .structure-chain-row input { width: 13px; height: 13px; margin: 0; accent-color: var(--teal); }

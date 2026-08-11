@@ -172,19 +172,87 @@ export function alignProfileToChain(
   matchLine.reverse();
   profileIndices.reverse();
   residueIndices.reverse();
+  let gaps = 0;
+  let positivePairs = 0;
+  let ungappedRun = 0;
+  let positiveRun = 0;
+  let longestUngappedRun = 0;
+  let longestPositiveRun = 0;
+  for (let index = 0; index < profileIndices.length; index += 1) {
+    const profileIndex = profileIndices[index]!;
+    const residueIndex = residueIndices[index]!;
+    if (profileIndex < 0 || residueIndex < 0) {
+      gaps += 1;
+      ungappedRun = 0;
+      positiveRun = 0;
+      continue;
+    }
+    ungappedRun += 1;
+    longestUngappedRun = Math.max(longestUngappedRun, ungappedRun);
+    if (profileScore(substitutionScores, profileIndex, chain.sequence[residueIndex]!) > 0) {
+      positivePairs += 1;
+      positiveRun += 1;
+      longestPositiveRun = Math.max(longestPositiveRun, positiveRun);
+    } else {
+      positiveRun = 0;
+    }
+  }
   return {
     chainId: chain.id,
     score: bestScore,
     scorePerMappedResidue: bestScore / Math.max(1, mappedResidues),
     identity: identities / Math.max(1, mappedResidues),
+    chainCoverage: mappedResidues / Math.max(1, chain.residues.length),
     coverage: mappedResidues / Math.max(1, profile.columns.length),
     mappedResidues,
+    gapFraction: gaps / Math.max(1, profileIndices.length),
+    positiveMatchFraction: positivePairs / Math.max(1, mappedResidues),
+    longestUngappedRun,
+    longestPositiveRun,
     siteToResidue,
     profileIndices: Int32Array.from(profileIndices),
     residueIndices: Int32Array.from(residueIndices),
     alignedProfile: alignedProfile.join(""),
     alignedChain: alignedChain.join(""),
     matchLine: matchLine.join(""),
+  };
+}
+
+export interface StructureAlignmentAssessment {
+  readonly credible: boolean;
+  readonly label: "strong" | "credible" | "weak";
+  readonly reason: string;
+}
+
+/**
+ * Conservative against short random local hits, but deliberately permissive
+ * for cleaved polyprotein chains: good coverage of either the input profile or
+ * the structure chain is sufficient. Long, positive-scoring contiguous runs
+ * can rescue remote homologs with modest exact identity.
+ */
+export function assessStructureAlignment(alignment: ProfileAlignment): StructureAlignmentAssessment {
+  const coverageEvidence = alignment.coverage >= 0.08 || alignment.chainCoverage >= 0.25 || alignment.mappedResidues >= 45;
+  const almostExactShortMatch = alignment.mappedResidues >= 3
+    && alignment.identity >= 0.85
+    && Math.max(alignment.coverage, alignment.chainCoverage) >= 0.65
+    && alignment.longestUngappedRun >= Math.max(3, Math.floor(alignment.mappedResidues * 0.8));
+  if (almostExactShortMatch) return { credible: true, label: "strong", reason: "near-exact covered segment" };
+  const enoughSpan = alignment.mappedResidues >= 8;
+  const cleanRun = alignment.longestUngappedRun >= 8 && alignment.longestPositiveRun >= 5;
+  const boundedGaps = alignment.gapFraction <= 0.45;
+  const scoreEvidence = alignment.score >= Math.max(22, 0.75 * alignment.mappedResidues)
+    && alignment.scorePerMappedResidue >= 0.85;
+  const sequenceEvidence = alignment.identity >= 0.20
+    || (alignment.identity >= 0.14 && alignment.positiveMatchFraction >= 0.62 && alignment.scorePerMappedResidue >= 1.35);
+  const credible = enoughSpan && coverageEvidence && cleanRun && boundedGaps && scoreEvidence && sequenceEvidence;
+  if (!credible) return { credible: false, label: "weak", reason: "insufficient span, coverage, or contiguous sequence evidence" };
+  const strong = alignment.identity >= 0.35
+    || (alignment.positiveMatchFraction >= 0.75 && alignment.longestPositiveRun >= 12)
+    || (Math.max(alignment.coverage, alignment.chainCoverage) >= 0.8 && alignment.identity >= 0.25);
+  return {
+    credible: true,
+    label: strong ? "strong" : "credible",
+    reason: strong ? "strong contiguous sequence match" : "credible contiguous sequence match",
   };
 }
 

@@ -1109,6 +1109,319 @@ function propagateDenseBlock(
   }
 }
 
+/** SIMD row-combination matrix product: destination = left * right. */
+function multiplyDenseMatrices(
+  matrices: Float64Array,
+  leftOffset: i32,
+  rightOffset: i32,
+  destinationOffset: i32,
+  stateCount: i32,
+): void {
+  for (let target = 0; target < stateCount; target += 1) {
+    const leftRow = leftOffset + target * stateCount;
+    const destinationRow = destinationOffset + target * stateCount;
+    let source = 0;
+    for (; source + 1 < stateCount; source += 2) {
+      let total = f64x2.splat(0.0);
+      for (let middle = 0; middle < stateCount; middle += 1) {
+        total = f64x2.add(total, f64x2.mul(
+          f64x2.splat(matrices[leftRow + middle]),
+          loadF64x2(matrices, rightOffset + middle * stateCount + source),
+        ));
+      }
+      storeF64x2(matrices, destinationRow + source, total);
+    }
+    for (; source < stateCount; source += 1) {
+      let total = 0.0;
+      for (let middle = 0; middle < stateCount; middle += 1) {
+        total += matrices[leftRow + middle] * matrices[rightOffset + middle * stateCount + source];
+      }
+      matrices[destinationRow + source] = total;
+    }
+  }
+}
+
+/**
+ * Build one FLAVOR mixed-transition lookup table with MolecularEvolution.jl's
+ * exact matrix_sequence recurrence: one exp(Q * 0.001), followed by semigroup
+ * matrix products on its 50-point non-uniform time grid.
+ */
+function buildFlavorInterpolationTable(
+  matrices: Float64Array,
+  times: Float64Array,
+  recurrenceIndex: Uint32Array,
+  componentMatrices: Float64Array,
+  tableCount: i32,
+  tablePoints: i32,
+  baseOperator: i32,
+  operatorOffsets: Uint32Array,
+  componentModels: Uint32Array,
+  componentWeights: Float64Array,
+  equilibrium: Float64Array,
+  stateCount: i32,
+  maxNeighbors: i32,
+  poissonTerms: i32,
+  maxLambdaPerStep: f64,
+  neighborCount: Uint32Array,
+  neighborIndex: Uint32Array,
+  rDiagonal: Float64Array,
+  rOffDiagonal: Float64Array,
+  mu: Float64Array,
+  matrixWork: Float64Array,
+  workA: Float64Array,
+  workB: Float64Array,
+  accumulator: Float64Array,
+): void {
+  matrices.fill(0.0);
+  const matrixSize = stateCount * stateCount;
+  for (let state = 0; state < stateCount; state += 1) matrices[state * stateCount + state] = 1.0;
+  const start = <i32>operatorOffsets[baseOperator];
+  const end = <i32>operatorOffsets[baseOperator + 1];
+  // The final Julia node is explicitly replaced by equilibrium and therefore
+  // does not need component exponentiation when it is part of this table.
+  const computedCount = tableCount == tablePoints ? tableCount - 1 : tableCount;
+  for (let entry = start; entry < end; entry += 1) {
+    const weight = componentWeights[entry];
+    const model = <i32>componentModels[entry];
+    componentMatrices.fill(0.0);
+    for (let state = 0; state < stateCount; state += 1) componentMatrices[state * stateCount + state] = 1.0;
+    // Only the first small-time transition is exponentiated.
+    for (let columnStart = 0; columnStart < stateCount; columnStart += SITE_BLOCK) {
+      const blockCount = min<i32>(SITE_BLOCK, stateCount - columnStart);
+      for (let state = 0; state < stateCount; state += 1) {
+        const row = state * SITE_BLOCK;
+        for (let lane = 0; lane < blockCount; lane += 1) {
+          matrixWork[row + lane] = state == columnStart + lane ? 1.0 : 0.0;
+        }
+      }
+      propagateBlock(
+        matrixWork, 0, blockCount, times[1], model,
+        stateCount, maxNeighbors, poissonTerms, maxLambdaPerStep,
+        neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu,
+        workA, workB, accumulator,
+      );
+      for (let state = 0; state < stateCount; state += 1) {
+        const row = state * SITE_BLOCK;
+        const destination = matrixSize + state * stateCount + columnStart;
+        for (let lane = 0; lane < blockCount; lane += 1) {
+          componentMatrices[destination + lane] = matrixWork[row + lane];
+        }
+      }
+    }
+    for (let timeIndex = 2; timeIndex < computedCount; timeIndex += 1) {
+      multiplyDenseMatrices(
+        componentMatrices,
+        (timeIndex - 1) * matrixSize,
+        <i32>recurrenceIndex[timeIndex] * matrixSize,
+        timeIndex * matrixSize,
+        stateCount,
+      );
+    }
+    const componentEntries = computedCount * matrixSize;
+    let matrixEntry = matrixSize;
+    const weightVector = f64x2.splat(weight);
+    for (; matrixEntry + 1 < componentEntries; matrixEntry += 2) {
+      storeF64x2(matrices, matrixEntry, f64x2.add(
+        loadF64x2(matrices, matrixEntry),
+        f64x2.mul(weightVector, loadF64x2(componentMatrices, matrixEntry)),
+      ));
+    }
+    for (; matrixEntry < componentEntries; matrixEntry += 1) {
+      matrices[matrixEntry] += weight * componentMatrices[matrixEntry];
+    }
+  }
+  if (tableCount == tablePoints) {
+    const matrixOffset = (tableCount - 1) * matrixSize;
+    // Standard pruning uses P(parent, child), so every infinite-time row is
+    // the child-state equilibrium distribution.
+    for (let target = 0; target < stateCount; target += 1) {
+      const row = matrixOffset + target * stateCount;
+      for (let from = 0; from < stateCount; from += 1) matrices[row + from] = equilibrium[from];
+    }
+  }
+}
+
+/** Apply an element-wise interpolation of two dense transition matrices. */
+function propagateInterpolatedDenseBlock(
+  values: Float64Array,
+  slot: i32,
+  blockCount: i32,
+  lower: i32,
+  fraction: f64,
+  matrices: Float64Array,
+  source: Float64Array,
+  stateCount: i32,
+): void {
+  const valueOffset = slot * stateCount * SITE_BLOCK;
+  for (let state = 0; state < stateCount; state += 1) {
+    copyF64Range(source, state * SITE_BLOCK, values, valueOffset + state * SITE_BLOCK, blockCount);
+  }
+  const matrixSize = stateCount * stateCount;
+  const lowerOffset = lower * matrixSize;
+  const upperOffset = fraction > 0.0 ? lowerOffset + matrixSize : lowerOffset;
+  const inverse = 1.0 - fraction;
+  for (let target = 0; target < stateCount; target += 1) {
+    const destination = valueOffset + target * SITE_BLOCK;
+    const lowerRow = lowerOffset + target * stateCount;
+    const upperRow = upperOffset + target * stateCount;
+    let site = 0;
+    for (; site + 1 < blockCount; site += 2) {
+      let total = f64x2.splat(0.0);
+      for (let from = 0; from < stateCount; from += 1) {
+        const coefficient = inverse * matrices[lowerRow + from] + fraction * matrices[upperRow + from];
+        total = f64x2.add(total, f64x2.mul(f64x2.splat(coefficient), loadF64x2(source, from * SITE_BLOCK + site)));
+      }
+      storeF64x2(values, destination + site, total);
+    }
+    for (; site < blockCount; site += 1) {
+      let total = 0.0;
+      for (let from = 0; from < stateCount; from += 1) {
+        const coefficient = inverse * matrices[lowerRow + from] + fraction * matrices[upperRow + from];
+        total += coefficient * source[from * SITE_BLOCK + site];
+      }
+      values[destination + site] = total;
+    }
+  }
+}
+
+/**
+ * FLAVOR-only likelihood kernel using Julia's 50-node, t=0.001, cap=35
+ * element-wise transition interpolation. Categories must be contiguous alpha
+ * runs for one shared Gamma distribution, exactly as createFlavorGrid emits.
+ */
+export function evaluateFlavorInterpolatedLikelihood(
+  ops: Uint32Array,
+  edgeLengths: Float64Array,
+  tipStates: Uint8Array,
+  operatorOffsets: Uint32Array,
+  componentModels: Uint32Array,
+  componentWeights: Float64Array,
+  operatorScales: Float64Array,
+  neighborCount: Uint32Array,
+  neighborIndex: Uint32Array,
+  rDiagonal: Float64Array,
+  rOffDiagonal: Float64Array,
+  mu: Float64Array,
+  equilibrium: Float64Array,
+  siteCount: i32,
+  categoryCount: i32,
+  alphaCount: i32,
+  stateCount: i32,
+  maxNeighbors: i32,
+  slotCount: i32,
+  rootSlot: i32,
+  poissonTerms: i32,
+  maxLambdaPerStep: f64,
+  timeStep: f64,
+  tablePoints: i32,
+  tableCap: i32,
+): Float64Array {
+  const result = new Float64Array(categoryCount * siteCount);
+  if (categoryCount == 0 || siteCount == 0) return result;
+  const groupCount = categoryCount / alphaCount;
+  const values = new Float64Array(slotCount * stateCount * SITE_BLOCK);
+  const scales = new Float64Array(slotCount * SITE_BLOCK);
+  const source = new Float64Array(stateCount * SITE_BLOCK);
+  const matrixWork = new Float64Array(stateCount * SITE_BLOCK);
+  const workA = new Float64Array(stateCount * SITE_BLOCK);
+  const workB = new Float64Array(stateCount * SITE_BLOCK);
+  const accumulator = new Float64Array(stateCount * SITE_BLOCK);
+  const siteSums = new Float64Array(SITE_BLOCK);
+  const lowerByEdge = new Uint32Array(edgeLengths.length);
+  const fractionByEdge = new Float64Array(edgeLengths.length);
+  const times = new Float64Array(tablePoints);
+  const recurrenceIndex = new Uint32Array(tablePoints);
+  times[0] = 0.0;
+  times[1] = timeStep;
+  let cursor = 1;
+  for (let index = 2; index < tablePoints; index += 1) {
+    recurrenceIndex[index] = <u32>cursor;
+    times[index] = times[index - 1] + times[cursor];
+    const juliaIndex = index + 1;
+    if (juliaIndex % 2 == 0) cursor += 1;
+    else if (juliaIndex > tableCap) cursor = index;
+  }
+  let maximumQuery = 0.0;
+  let maximumScale = 0.0;
+  for (let alpha = 0; alpha < alphaCount; alpha += 1) maximumScale = Math.max(maximumScale, operatorScales[alpha]);
+  for (let edge = 0; edge < edgeLengths.length; edge += 1) maximumQuery = Math.max(maximumQuery, edgeLengths[edge] * maximumScale);
+  let tableCount = 1;
+  while (tableCount < tablePoints && times[tableCount - 1] < maximumQuery) tableCount += 1;
+  if (tableCount < 2) tableCount = 2;
+  const matrices = new Float64Array(tableCount * stateCount * stateCount);
+  const componentMatrices = new Float64Array(tableCount * stateCount * stateCount);
+  const opCount = ops.length >> 2;
+
+  for (let group = 0; group < groupCount; group += 1) {
+    const baseOperator = group * alphaCount;
+    buildFlavorInterpolationTable(
+      matrices, times, recurrenceIndex, componentMatrices, tableCount, tablePoints, baseOperator,
+      operatorOffsets, componentModels, componentWeights, equilibrium,
+      stateCount, maxNeighbors, poissonTerms, maxLambdaPerStep,
+      neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu,
+      matrixWork, workA, workB, accumulator,
+    );
+    for (let alpha = 0; alpha < alphaCount; alpha += 1) {
+      const category = baseOperator + alpha;
+      const scale = operatorScales[category];
+      for (let edge = 0; edge < edgeLengths.length; edge += 1) {
+        const query = edgeLengths[edge] * scale;
+        let upper = 1;
+        while (upper < tableCount && times[upper] < query) upper += 1;
+        if (upper >= tableCount) {
+          lowerByEdge[edge] = <u32>(tableCount - 1);
+          fractionByEdge[edge] = 0.0;
+        } else {
+          const lower = upper - 1;
+          lowerByEdge[edge] = <u32>lower;
+          const width = times[upper] - times[lower];
+          fractionByEdge[edge] = width > 0.0 ? (query - times[lower]) / width : 0.0;
+        }
+      }
+      for (let blockStart = 0; blockStart < siteCount; blockStart += SITE_BLOCK) {
+        const blockCount = min<i32>(SITE_BLOCK, siteCount - blockStart);
+        for (let operation = 0; operation < opCount; operation += 1) {
+          const operationOffset = operation << 2;
+          const opcode = ops[operationOffset];
+          const a = <i32>ops[operationOffset + 1];
+          const b = <i32>ops[operationOffset + 2];
+          const payload = <i32>ops[operationOffset + 3];
+          if (opcode == LOAD_TIP) {
+            const valueOffset = a * stateCount * SITE_BLOCK;
+            for (let state = 0; state < stateCount; state += 1) {
+              const destinationOffset = valueOffset + state * SITE_BLOCK;
+              for (let site = 0; site < blockCount; site += 1) {
+                const observed = tipStates[payload * siteCount + blockStart + site];
+                let compatible = observed == 255 || state == observed;
+                if (observed != 255 && (observed & 128) != 0) compatible = ((<i32>(observed & 15)) & (1 << state)) != 0;
+                values[destinationOffset + site] = compatible ? 1.0 : 0.0;
+              }
+            }
+            const scaleOffset = a * SITE_BLOCK;
+            for (let site = 0; site < blockCount; site += 1) scales[scaleOffset + site] = 0.0;
+          } else if (opcode == TRANSFORM) {
+            propagateInterpolatedDenseBlock(
+              values, a, blockCount, <i32>lowerByEdge[payload], fractionByEdge[payload], matrices, source, stateCount,
+            );
+          } else if (opcode == MULTIPLY_NORMALIZE) {
+            multiplyNormalizeBlock(values, scales, a, b, stateCount, blockCount, siteSums);
+          }
+        }
+        const rootOffset = rootSlot * stateCount * SITE_BLOCK;
+        sumRootBlock(values, equilibrium, rootOffset, stateCount, blockCount, siteSums);
+        const rootScaleOffset = rootSlot * SITE_BLOCK;
+        for (let site = 0; site < blockCount; site += 1) {
+          const rootSum = siteSums[site];
+          result[category * siteCount + blockStart + site] = rootSum > 0.0
+            ? scales[rootScaleOffset + site] + Math.log(rootSum)
+            : -Infinity;
+        }
+      }
+    }
+  }
+  return result;
+}
+
 /**
  * Site-rich branch-mixture evaluator. It constructs one dense mixed P matrix
  * per edge/operator, uses it for every site, then discards it. This converts

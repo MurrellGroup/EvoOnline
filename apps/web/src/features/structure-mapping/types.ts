@@ -35,8 +35,15 @@ export interface ProfileAlignment {
   readonly score: number;
   readonly scorePerMappedResidue: number;
   readonly identity: number;
+  /** Fraction of the structure chain covered by paired alignment columns. */
+  readonly chainCoverage: number;
   readonly coverage: number;
   readonly mappedResidues: number;
+  readonly gapFraction: number;
+  /** Paired columns whose profile-weighted BLOSUM62 score is positive. */
+  readonly positiveMatchFraction: number;
+  readonly longestUngappedRun: number;
+  readonly longestPositiveRun: number;
   readonly siteToResidue: Int32Array;
   /** Profile-column index for every local-alignment column, or -1 for a gap in the profile. */
   readonly profileIndices: Int32Array;

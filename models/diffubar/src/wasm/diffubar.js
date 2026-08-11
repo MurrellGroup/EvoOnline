@@ -153,6 +153,38 @@ export async function instantiate(module, imports = {}) {
         __release(mu);
       }
     },
+    evaluateFlavorInterpolatedLikelihood(ops, edgeLengths, tipStates, operatorOffsets, componentModels, componentWeights, operatorScales, neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu, equilibrium, siteCount, categoryCount, alphaCount, stateCount, maxNeighbors, slotCount, rootSlot, poissonTerms, maxLambdaPerStep, timeStep, tablePoints, tableCap) {
+      // assembly/index/evaluateFlavorInterpolatedLikelihood(~lib/typedarray/Uint32Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Uint8Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, i32, i32, i32, i32, i32, i32, i32, i32, f64, f64, i32, i32) => ~lib/typedarray/Float64Array
+      ops = __retain(__lowerTypedArray(Uint32Array, 5, 2, ops) || __notnull());
+      edgeLengths = __retain(__lowerTypedArray(Float64Array, 7, 3, edgeLengths) || __notnull());
+      tipStates = __retain(__lowerTypedArray(Uint8Array, 4, 0, tipStates) || __notnull());
+      operatorOffsets = __retain(__lowerTypedArray(Uint32Array, 5, 2, operatorOffsets) || __notnull());
+      componentModels = __retain(__lowerTypedArray(Uint32Array, 5, 2, componentModels) || __notnull());
+      componentWeights = __retain(__lowerTypedArray(Float64Array, 7, 3, componentWeights) || __notnull());
+      operatorScales = __retain(__lowerTypedArray(Float64Array, 7, 3, operatorScales) || __notnull());
+      neighborCount = __retain(__lowerTypedArray(Uint32Array, 5, 2, neighborCount) || __notnull());
+      neighborIndex = __retain(__lowerTypedArray(Uint32Array, 5, 2, neighborIndex) || __notnull());
+      rDiagonal = __retain(__lowerTypedArray(Float64Array, 7, 3, rDiagonal) || __notnull());
+      rOffDiagonal = __retain(__lowerTypedArray(Float64Array, 7, 3, rOffDiagonal) || __notnull());
+      mu = __retain(__lowerTypedArray(Float64Array, 7, 3, mu) || __notnull());
+      equilibrium = __lowerTypedArray(Float64Array, 7, 3, equilibrium) || __notnull();
+      try {
+        return __liftTypedArray(Float64Array, exports.evaluateFlavorInterpolatedLikelihood(ops, edgeLengths, tipStates, operatorOffsets, componentModels, componentWeights, operatorScales, neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu, equilibrium, siteCount, categoryCount, alphaCount, stateCount, maxNeighbors, slotCount, rootSlot, poissonTerms, maxLambdaPerStep, timeStep, tablePoints, tableCap) >>> 0);
+      } finally {
+        __release(ops);
+        __release(edgeLengths);
+        __release(tipStates);
+        __release(operatorOffsets);
+        __release(componentModels);
+        __release(componentWeights);
+        __release(operatorScales);
+        __release(neighborCount);
+        __release(neighborIndex);
+        __release(rDiagonal);
+        __release(rOffDiagonal);
+        __release(mu);
+      }
+    },
     evaluateBranchMixtureLikelihoodDense(ops, edgeLengths, tipStates, operatorOffsets, componentModels, componentWeights, operatorScales, collapseWeights, neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu, equilibrium, siteCount, gridCount, operatorsPerCategory, collapseMode, stateCount, maxNeighbors, slotCount, rootSlot, poissonTerms, maxLambdaPerStep) {
       // assembly/index/evaluateBranchMixtureLikelihoodDense(~lib/typedarray/Uint32Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Uint8Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Uint32Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, ~lib/typedarray/Float64Array, i32, i32, i32, i32, i32, i32, i32, i32, i32, f64) => ~lib/typedarray/Float64Array
       ops = __retain(__lowerTypedArray(Uint32Array, 5, 2, ops) || __notnull());

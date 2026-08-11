@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent 
 import { MolstarStructureViewer } from "./MolstarStructureViewer.js";
 import { MOLSTAR_RUNTIME_LABEL } from "./molstar-loader.js";
 import { ProfileChainAlignmentPanel } from "./ProfileChainAlignment.js";
+import { assessStructureAlignment } from "./profile-align.js";
 import { detectStructureFormat } from "./structure-parser.js";
 import type {
   ProfileAlignment,
@@ -20,6 +21,8 @@ interface StructureMappingPanelProps {
   readonly alignmentText: string;
   readonly sites: readonly StructureSiteDatum[];
   readonly colorModes: readonly StructureColorMode[];
+  /** Current results threshold; binary call modes update whenever it changes. */
+  readonly selectionThreshold?: number;
 }
 
 interface StructureSource {
@@ -29,12 +32,45 @@ interface StructureSource {
 }
 
 const MAX_STRUCTURE_BYTES = 50 * 1024 * 1024;
+const UNDETECTED_STRUCTURE_COLOR = "#aeb9b5";
 const DEFAULT_REPRESENTATIONS: StructureRepresentations = Object.freeze({
   cartoon: true,
   atoms: false,
   surface: false,
   surfaceOpacity: 0.68,
 });
+const AUTO_MAPPED_REPRESENTATIONS: StructureRepresentations = Object.freeze({
+  cartoon: false,
+  atoms: false,
+  surface: true,
+  surfaceOpacity: 1,
+});
+
+export function defaultStructureChainSettings(alignments: readonly ProfileAlignment[]): {
+  readonly modes: Readonly<Record<string, StructureChainMode>>;
+  readonly representations: Readonly<Record<string, StructureRepresentations>>;
+} {
+  const modes: Record<string, StructureChainMode> = {};
+  const representations: Record<string, StructureRepresentations> = {};
+  for (const alignment of alignments) {
+    if (!assessStructureAlignment(alignment).credible) continue;
+    modes[alignment.chainId] = "mapped";
+    representations[alignment.chainId] = AUTO_MAPPED_REPRESENTATIONS;
+  }
+  return { modes, representations };
+}
+
+export function thresholdStructureColorMode(mode: StructureColorMode, detectedOnly: boolean): StructureColorMode {
+  if (!detectedOnly) return mode;
+  const hasUndetectedLegend = mode.legend.some((entry) => entry.color.toLowerCase() === UNDETECTED_STRUCTURE_COLOR);
+  return {
+    ...mode,
+    description: `${mode.description} Residues below the current detection threshold are neutral.`,
+    color: (site) => site.detected ? mode.color(site) : UNDETECTED_STRUCTURE_COLOR,
+    valueLabel: (site) => site.detected ? mode.valueLabel(site) : "below the current detection threshold",
+    legend: hasUndetectedLegend ? mode.legend : [...mode.legend, { color: UNDETECTED_STRUCTURE_COLOR, label: "below threshold" }],
+  };
+}
 
 export function normalizeSurfaceOpacity(value: number): number {
   return Math.round(Math.min(1, Math.max(0, value)) * 100) / 100;
@@ -74,7 +110,7 @@ export function updateChainMode(current: StructureChainMode, control: "show" | "
   return current === "mapped" ? "context" : current;
 }
 
-export function StructureMappingPanel({ alignmentText: inputAlignment, sites, colorModes }: StructureMappingPanelProps) {
+export function StructureMappingPanel({ alignmentText: inputAlignment, sites, colorModes, selectionThreshold }: StructureMappingPanelProps) {
   const workerRef = useRef<Worker | undefined>(undefined);
   const activeRequestRef = useRef<string | undefined>(undefined);
   const abortRef = useRef<AbortController | undefined>(undefined);
@@ -86,11 +122,16 @@ export function StructureMappingPanel({ alignmentText: inputAlignment, sites, co
   const [chainRepresentations, setChainRepresentations] = useState<Readonly<Record<string, StructureRepresentations>>>({});
   const [globalSurfaceOpacity, setGlobalSurfaceOpacity] = useState<number>();
   const [colorModeId, setColorModeId] = useState(colorModes[0]?.id ?? "");
+  const [detectedColorsOnly, setDetectedColorsOnly] = useState(true);
   const [progress, setProgress] = useState<string>();
   const [progressCount, setProgressCount] = useState<string>();
   const [error, setError] = useState<string>();
 
   const activeMode = colorModes.find((mode) => mode.id === colorModeId) ?? colorModes[0];
+  const displayMode = useMemo(
+    () => activeMode === undefined ? undefined : thresholdStructureColorMode(activeMode, selectionThreshold !== undefined && detectedColorsOnly),
+    [activeMode, detectedColorsOnly, selectionThreshold],
+  );
   const chainViews = useMemo<readonly StructureChainView[]>(() => {
     if (mapping === undefined) return [];
     return mapping.alignments.flatMap((alignment) => {
@@ -141,9 +182,9 @@ export function StructureMappingPanel({ alignmentText: inputAlignment, sites, co
         setProgressCount(message.current === undefined || message.total === undefined ? "" : `${message.current} / ${message.total} unique chain sequences`);
       } else if (message.type === "result") {
         setMapping(message.result);
-        const bestChainId = message.result.alignments[0]?.chainId;
-        setChainModes(bestChainId === undefined ? {} : { [bestChainId]: "mapped" });
-        setChainRepresentations({});
+        const { modes, representations } = defaultStructureChainSettings(message.result.alignments);
+        setChainModes(modes);
+        setChainRepresentations(representations);
         setGlobalSurfaceOpacity(undefined);
         setProgress(undefined);
         setProgressCount("");
@@ -284,7 +325,7 @@ export function StructureMappingPanel({ alignmentText: inputAlignment, sites, co
           {progress !== undefined && <div className="structure-progress" role="status"><span className="structure-progress__spinner" /><div><strong>{progress}</strong>{progressCount !== "" && <small>{progressCount}</small>}</div></div>}
           {error !== undefined && <div className="structure-error" role="alert">{error}</div>}
 
-          {source !== undefined && mapping !== undefined && activeMode !== undefined && (
+          {source !== undefined && mapping !== undefined && activeMode !== undefined && displayMode !== undefined && (
             <>
               <details className="structure-subpanel structure-summary-panel" open>
                 <summary><strong>Mapping summary</strong><span>{chainViews.length} shown · {mappedViews.length} mapped</span></summary>
@@ -299,11 +340,12 @@ export function StructureMappingPanel({ alignmentText: inputAlignment, sites, co
               </details>
 
               <details className="structure-subpanel structure-color-panel" open>
-                <summary><strong>Residue coloring</strong><span>{activeMode.label}</span></summary>
+                <summary><strong>Residue coloring</strong><span>{activeMode.label}{selectionThreshold === undefined ? "" : ` · threshold ${selectionThreshold.toFixed(3)}`}</span></summary>
                 <div className="structure-color-panel__body">
                   <label><span>Color mapped residues by</span><select value={activeMode.id} onChange={(event) => setColorModeId(event.target.value)}>{colorModes.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}</select><small>{activeMode.description}</small></label>
-                  <div className="structure-legend" aria-label={`${activeMode.label} legend`}>{activeMode.legend.map((entry) => <span key={`${entry.color}-${entry.label}`}><i style={{ background: entry.color }} />{entry.label}</span>)}</div>
+                  <div className="structure-legend" aria-label={`${activeMode.label} legend`}>{displayMode.legend.map((entry) => <span key={`${entry.color}-${entry.label}`}><i style={{ background: entry.color }} />{entry.label}</span>)}</div>
                 </div>
+                {selectionThreshold !== undefined && <div className="structure-threshold-note"><span><strong>Threshold {selectionThreshold.toFixed(3)}:</strong> all colors update live from this value when masking is on.</span><label><input type="checkbox" checked={detectedColorsOnly} onChange={(event) => setDetectedColorsOnly(event.target.checked)} />Color detected sites only</label></div>}
               </details>
 
               <details className="structure-subpanel structure-chain-picker" open>
@@ -334,8 +376,9 @@ export function StructureMappingPanel({ alignmentText: inputAlignment, sites, co
                     const mode = chainModes[alignment.chainId] ?? "hidden";
                     const representations = chainRepresentations[alignment.chainId] ?? DEFAULT_REPRESENTATIONS;
                     const effectiveOpacity = globalSurfaceOpacity ?? representations.surfaceOpacity;
+                    const assessment = assessStructureAlignment(alignment);
                     return <div className="structure-chain-row" key={alignment.chainId}>
-                      <div><strong>Chain {chain.label}</strong><span>{chain.residues.length.toLocaleString()} aa</span><span>{percent(alignment.identity)} identity</span><span>{percent(alignment.coverage)} coverage</span><span>score {alignment.score.toFixed(1)}</span></div>
+                      <div><strong>Chain {chain.label}</strong>{assessment.credible && <em className="structure-auto-map-badge">auto-map</em>}<span>{chain.residues.length.toLocaleString()} aa</span><span>{percent(alignment.identity)} identity</span><span>{percent(alignment.coverage)} profile</span><span>{percent(alignment.chainCoverage)} chain</span><span>{alignment.longestPositiveRun} aa clean run</span><span>score {alignment.score.toFixed(1)}</span></div>
                       <label title={`Show chain ${chain.label}`}><input type="checkbox" checked={mode !== "hidden"} onChange={(event) => changeChainMode(alignment.chainId, "show", event.target.checked)} /><span className="visually-hidden">Show chain {chain.label}</span></label>
                       <label title={`Map results to chain ${chain.label}`}><input type="checkbox" checked={mode === "mapped"} onChange={(event) => changeChainMode(alignment.chainId, "map", event.target.checked)} /><span className="visually-hidden">Map results to chain {chain.label}</span></label>
                       <label title={`Show chain ${chain.label} as cartoon`}><input type="checkbox" checked={representations.cartoon} onChange={(event) => changeRepresentation(alignment.chainId, "cartoon", event.target.checked)} /><span className="visually-hidden">Cartoon representation for chain {chain.label}</span></label>
@@ -362,7 +405,7 @@ export function StructureMappingPanel({ alignmentText: inputAlignment, sites, co
                 </div>
               </details>
 
-              <ProfileChainAlignmentPanel profile={mapping.profile} chainViews={mappedViews} sites={sites} colorMode={activeMode} />
+              <ProfileChainAlignmentPanel profile={mapping.profile} chainViews={mappedViews} sites={sites} colorMode={displayMode} />
               <details className="structure-subpanel structure-viewer-panel" open>
                 <summary><strong>Interactive 3D structure</strong><span>{chainViews.length} shown chain{chainViews.length === 1 ? "" : "s"}</span></summary>
                 {chainViews.length > 0 ? <MolstarStructureViewer
@@ -370,7 +413,7 @@ export function StructureMappingPanel({ alignmentText: inputAlignment, sites, co
                   format={source.format}
                   chainViews={chainViews}
                   sites={sites}
-                  colorMode={activeMode}
+                  colorMode={displayMode}
                 /> : <div className="structure-viewer-empty"><strong>No chains are shown</strong><span>Switch on Show for a context chain, or Map results for a chain that should receive site colors.</span></div>}
               </details>
               {mappedViews.length > 0 && <details className="structure-alignment-detail" open>
@@ -378,7 +421,7 @@ export function StructureMappingPanel({ alignmentText: inputAlignment, sites, co
                 <p>Each translated codon column is scored as an amino-acid frequency profile against each mapped chain. Gaps represent unresolved residues or lineage-specific insertions.</p>
                 <pre>{mappedAlignmentText}</pre>
               </details>}
-              <p className="structure-footnote">The highest-scoring local alignment is mapped by default. Other chains can be mapped independently, retained neutrally for structural context, or hidden. Review chain identity and coverage before interpreting residue colors. {MOLSTAR_RUNTIME_LABEL} is loaded only while this viewer is in use.</p>
+              <p className="structure-footnote">Every credible local match is mapped by default as a 100%-opaque surface; this includes separate chains covering different regions of a polyprotein. Auto-mapping requires sequence score, coverage of either the profile or chain, and a clean contiguous positive-scoring run, so short spurious local hits stay hidden. Every chain can still be mapped independently, retained neutrally for context, or hidden. {MOLSTAR_RUNTIME_LABEL} is loaded only while this viewer is in use.</p>
             </>
           )}
         </div>

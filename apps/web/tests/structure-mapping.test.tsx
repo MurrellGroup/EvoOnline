@@ -6,12 +6,13 @@ import { filterFubarSites, FubarResultsView } from "../src/components/FubarResul
 import { AMINO_ACID_GLYPHS } from "../src/features/structure-mapping/amino-acid-glyphs.js";
 import { layoutLogoSegments, ProfileChainAlignmentPanel, profileLetterColor, rawLogoLetters } from "../src/features/structure-mapping/ProfileChainAlignment.js";
 import { groupSurfaceViews, viewsForRepresentation } from "../src/features/structure-mapping/MolstarStructureViewer.js";
-import { effectiveRepresentations, normalizeSurfaceOpacity, updateChainMode } from "../src/features/structure-mapping/StructureMappingPanel.js";
-import { alignProfileToChain } from "../src/features/structure-mapping/profile-align.js";
+import { defaultStructureChainSettings, effectiveRepresentations, normalizeSurfaceOpacity, thresholdStructureColorMode, updateChainMode } from "../src/features/structure-mapping/StructureMappingPanel.js";
+import { alignProfileToChain, assessStructureAlignment } from "../src/features/structure-mapping/profile-align.js";
+import { bameStructureColorModes, buildBameStructureSites } from "../src/features/structure-mapping/result-colors.js";
 import { buildAminoAcidProfile } from "../src/features/structure-mapping/sequence-profile.js";
 import { parseMmcifChains, parsePdbChains } from "../src/features/structure-mapping/structure-parser.js";
 import type { StructureChainView, StructureColorMode } from "../src/features/structure-mapping/types.js";
-import type { FubarRunResult } from "../src/types.js";
+import type { BameRunResult, FubarRunResult } from "../src/types.js";
 
 const FASTA = `>one
 ATGAAAACT
@@ -45,6 +46,71 @@ test("translated codon columns form an amino-acid profile and locally map to a s
   assert.deepEqual(Array.from(alignment.residueIndices), [1, 2, 3]);
   assert.equal(alignment.alignedProfile, "MKT");
   assert.equal(alignment.alignedChain, "MKT");
+  assert.equal(assessmentLabel(assessStructureAlignment(alignment)), "strong");
+});
+
+function assessmentLabel(assessment: ReturnType<typeof assessStructureAlignment>): string {
+  assert.equal(assessment.credible, true);
+  return assessment.label;
+}
+
+test("all credible chain matches auto-map as fully opaque surfaces while weak local hits stay hidden", () => {
+  const profile = buildAminoAcidProfile(FASTA);
+  const chain = (id: string, sequence: string) => ({
+    id,
+    label: id,
+    sequence,
+    residues: Array.from(sequence, (aminoAcid, index) => ({
+      chainId: id, authChainId: id, labelSeqId: index + 1, authSeqId: index + 1,
+      insertionCode: "", compId: aminoAcid, aminoAcid,
+    })),
+  });
+  const first = alignProfileToChain(profile, chain("A", "MKT"));
+  const second = alignProfileToChain(profile, chain("B", "MKT"));
+  const weak = {
+    ...second,
+    chainId: "junk",
+    score: 7,
+    scorePerMappedResidue: 0.7,
+    identity: 0.1,
+    coverage: 0.02,
+    chainCoverage: 0.02,
+    mappedResidues: 5,
+    positiveMatchFraction: 0.2,
+    longestUngappedRun: 3,
+    longestPositiveRun: 1,
+  };
+  assert.equal(assessStructureAlignment(weak).credible, false);
+  const defaults = defaultStructureChainSettings([first, second, weak]);
+  assert.deepEqual(defaults.modes, { A: "mapped", B: "mapped" });
+  assert.deepEqual(defaults.representations.A, { cartoon: false, atoms: false, surface: true, surfaceOpacity: 1 });
+  assert.deepEqual(defaults.representations.B, defaults.representations.A);
+  assert.equal(defaults.representations.junk, undefined);
+});
+
+test("BAME structure call colors track the live posterior threshold", () => {
+  const result = {
+    method: "flavor",
+    sites: [{
+      site: 1, pPositive: 0.93, pUncapped: 0.96, bayesFactor: 8, meanAlpha: 0.4,
+      meanOmega: 2.2, meanShape: 1.1, meanOmegaStandardDeviation: 1.5,
+      meanPositiveBranchFraction: 0.45, detected: true,
+    }],
+  } as unknown as BameRunResult;
+  const permissive = buildBameStructureSites(result, 0.9);
+  const strict = buildBameStructureSites(result, 0.95);
+  assert.equal(permissive[0]?.detected, true);
+  assert.equal(strict[0]?.detected, false);
+  const permissiveMode = bameStructureColorModes(permissive).find((mode) => mode.id === "episodic-detection")!;
+  const strictMode = bameStructureColorModes(strict).find((mode) => mode.id === "episodic-detection")!;
+  assert.notEqual(permissiveMode.color(permissive[0]!), strictMode.color(strict[0]!));
+  const continuousPermissive = bameStructureColorModes(permissive).find((mode) => mode.id === "positive-posterior")!;
+  const continuousStrict = bameStructureColorModes(strict).find((mode) => mode.id === "positive-posterior")!;
+  assert.equal(continuousPermissive.color(permissive[0]!), continuousStrict.color(strict[0]!));
+  const maskedPermissive = thresholdStructureColorMode(continuousPermissive, true);
+  const maskedStrict = thresholdStructureColorMode(continuousStrict, true);
+  assert.notEqual(maskedPermissive.color(permissive[0]!), maskedStrict.color(strict[0]!));
+  assert.match(maskedStrict.valueLabel(strict[0]!), /below the current detection threshold/);
 });
 
 test("raw profile-logo mass retains gaps in its denominator", () => {

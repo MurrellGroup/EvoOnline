@@ -251,6 +251,7 @@ export const serverModelRegistry: readonly ServerModelRegistration[] = [
         posteriorThreshold: threshold,
         gridPreset: parameters.gridPreset === "julia-draft" ? "julia-draft" : "fast",
         gammaSlices: numberParameter(parameters, "gammaSlices", 12),
+        transitionEngine: parameters.transitionEngine === "direct-uniformization" ? "direct-uniformization" : "julia-interpolated",
         fitMode: parameters.fitMode === "reference-compatible" ? "reference-compatible" : "empirical-fast",
         signal,
         onStage: onProgress,

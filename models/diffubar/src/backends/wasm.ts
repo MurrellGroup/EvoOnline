@@ -3,6 +3,7 @@ import type {
   AlphaBetaSamplerOptions,
   AlphaBetaSamplerResult,
   BranchMixtureLikelihoodRequest,
+  FlavorInterpolatedLikelihoodRequest,
   BsrelKernelRequest,
   BsrelKernelResult,
   LikelihoodRequest,
@@ -23,6 +24,7 @@ type WasmExports = Record<string, any> & {
   Float64Array_ID: WebAssembly.Global;
   evaluateBranchMixtureLikelihoodDense(...args: number[]): number;
   evaluateBranchMixtureLikelihood(...args: number[]): number;
+  evaluateFlavorInterpolatedLikelihood(...args: number[]): number;
   evaluateBsrelAllMessages(...args: number[]): number;
   evaluateLikelihood(...args: number[]): number;
   evaluateLikelihoodCached(...args: number[]): number;
@@ -359,6 +361,106 @@ export class WasmBackend {
       wasm.__unpin(resultPointer);
       request.signal?.throwIfAborted();
       request.onProgress?.(1, { message: "Branch-mixture likelihood grid evaluated", current: totalPairs, total: totalPairs });
+      return { logLikelihoods, backend: "wasm", elapsedMs: performance.now() - started, precision: "f64" };
+    } finally {
+      pinned.release();
+      wasm.__collect();
+    }
+  }
+
+  /** FLAVOR-only Julia-style element-wise transition-matrix interpolation. */
+  async evaluateFlavorInterpolated(request: FlavorInterpolatedLikelihoodRequest): Promise<LikelihoodResult> {
+    request.signal?.throwIfAborted();
+    const operators = request.operators;
+    const alphaCount = request.alphaCount;
+    if (request.tree.classCount !== 1) throw new RangeError("FLAVOR interpolation requires an untagged single-class tree.");
+    if (!Number.isInteger(alphaCount) || alphaCount < 1 || request.grid.categoryCount % alphaCount !== 0) {
+      throw new RangeError("FLAVOR interpolation requires complete contiguous alpha blocks.");
+    }
+    if (
+      operators.operatorsPerCategory !== 1
+      || operators.operatorCount !== request.grid.categoryCount
+      || operators.operatorOffsets.length !== operators.operatorCount + 1
+      || operators.operatorScales.length !== operators.operatorCount
+      || operators.componentModels.length !== operators.componentWeights.length
+      || operators.operatorOffsets[operators.operatorCount] !== operators.componentModels.length
+    ) throw new RangeError("FLAVOR interpolation operator dimensions are inconsistent.");
+    for (let groupStart = 0; groupStart < operators.operatorCount; groupStart += alphaCount) {
+      const referenceStart = operators.operatorOffsets[groupStart]!;
+      const referenceEnd = operators.operatorOffsets[groupStart + 1]!;
+      if (!(referenceEnd > referenceStart)) throw new RangeError("FLAVOR interpolation found an empty Gamma mixture.");
+      let weightTotal = 0;
+      for (let entry = referenceStart; entry < referenceEnd; entry += 1) weightTotal += operators.componentWeights[entry]!;
+      if (Math.abs(weightTotal - 1) > 1e-10) throw new RangeError("FLAVOR Gamma-mixture weights do not sum to one.");
+      for (let alpha = 1; alpha < alphaCount; alpha += 1) {
+        const operator = groupStart + alpha;
+        const start = operators.operatorOffsets[operator]!;
+        const end = operators.operatorOffsets[operator + 1]!;
+        if (end - start !== referenceEnd - referenceStart) throw new RangeError("FLAVOR alpha categories do not share one Gamma mixture.");
+        for (let offset = 0; offset < end - start; offset += 1) {
+          if (
+            operators.componentModels[start + offset] !== operators.componentModels[referenceStart + offset]
+            || Math.abs(operators.componentWeights[start + offset]! - operators.componentWeights[referenceStart + offset]!) > 1e-14
+          ) throw new RangeError("FLAVOR alpha categories do not share one Gamma mixture.");
+        }
+      }
+    }
+    const timeStep = request.interpolation?.timeStep ?? 0.001;
+    const tablePoints = request.interpolation?.tablePoints ?? 50;
+    const tableCap = request.interpolation?.tableCap ?? 35;
+    if (!(timeStep > 0) || !Number.isFinite(timeStep)) throw new RangeError("FLAVOR interpolation time step must be finite and positive.");
+    if (!Number.isInteger(tablePoints) || tablePoints < 3 || tablePoints > 128) throw new RangeError("FLAVOR interpolation table points must be an integer from 3 to 128.");
+    if (!Number.isInteger(tableCap) || tableCap < 2 || tableCap >= tablePoints) throw new RangeError("FLAVOR interpolation cap must lie inside the time table.");
+    const totalPairs = request.grid.categoryCount * request.siteCount;
+    request.onProgress?.(0, {
+      message: `Building shared Julia-style transition tables for ${(request.grid.categoryCount / alphaCount).toLocaleString()} Gamma distributions`,
+      current: 0,
+      total: totalPairs,
+      indeterminate: true,
+    });
+    const wasm = await this.instance();
+    const pinned = new PinnedArrays(wasm);
+    const u8 = globalValue(wasm.Uint8Array_ID);
+    const u32 = globalValue(wasm.Uint32Array_ID);
+    const f64 = globalValue(wasm.Float64Array_ID);
+    const started = performance.now();
+    try {
+      const poissonTerms = request.poissonTerms ?? 0;
+      if (!Number.isInteger(poissonTerms) || poissonTerms < 0) throw new RangeError("Poisson terms must be a non-negative integer.");
+      const maxLambdaPerStep = request.maxLambdaPerStep ?? (poissonTerms > 0 ? 2 : 64);
+      if (!(maxLambdaPerStep > 0) || !Number.isFinite(maxLambdaPerStep)) throw new RangeError("Maximum lambda per step must be finite and positive.");
+      const raw = wasm.evaluateFlavorInterpolatedLikelihood(
+        pinned.add(u32, request.tree.ops),
+        pinned.add(f64, request.tree.edgeLengths),
+        pinned.add(u8, request.tipStates),
+        pinned.add(u32, operators.operatorOffsets),
+        pinned.add(u32, operators.componentModels),
+        pinned.add(f64, operators.componentWeights),
+        pinned.add(f64, operators.operatorScales),
+        pinned.add(u32, request.models.neighborCount),
+        pinned.add(u32, request.models.neighborIndex),
+        pinned.add(f64, request.models.rDiagonal),
+        pinned.add(f64, request.models.rOffDiagonal),
+        pinned.add(f64, request.models.mu),
+        pinned.add(f64, request.equilibrium),
+        request.siteCount,
+        request.grid.categoryCount,
+        alphaCount,
+        request.models.stateCount,
+        request.models.maxNeighbors,
+        request.tree.slotCount,
+        request.tree.rootSlot,
+        poissonTerms,
+        maxLambdaPerStep,
+        timeStep,
+        tablePoints,
+        tableCap,
+      );
+      const resultPointer = wasm.__pin(raw);
+      const logLikelihoods = wasm.__getFloat64Array(resultPointer).slice();
+      wasm.__unpin(resultPointer);
+      request.signal?.throwIfAborted();
+      request.onProgress?.(1, { message: "Interpolated FLAVOR likelihood grid evaluated", current: totalPairs, total: totalPairs });
       return { logLikelihoods, backend: "wasm", elapsedMs: performance.now() - started, precision: "f64" };
     } finally {
       pinned.release();
