@@ -40,7 +40,11 @@ scope.onmessage = (event: MessageEvent<StructureMappingWorkerRequest>): void => 
     alignments.sort((left, right) => right.score - left.score || right.mappedResidues - left.mappedResidues);
     const transfer = new Set<Transferable>();
     for (const column of profile.columns) transfer.add(column.frequencies.buffer);
-    for (const alignment of alignments) transfer.add(alignment.siteToResidue.buffer);
+    for (const alignment of alignments) {
+      transfer.add(alignment.siteToResidue.buffer);
+      transfer.add(alignment.profileIndices.buffer);
+      transfer.add(alignment.residueIndices.buffer);
+    }
     send({ type: "result", id: request.id, result: { profile, chains, alignments } }, Array.from(transfer));
   } catch (error) {
     send({ type: "error", id: request.id, error: error instanceof Error ? error.message : String(error) });

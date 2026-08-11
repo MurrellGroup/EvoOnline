@@ -125,6 +125,8 @@ export function alignProfileToChain(
   const alignedProfile: string[] = [];
   const alignedChain: string[] = [];
   const matchLine: string[] = [];
+  const profileIndices: number[] = [];
+  const residueIndices: number[] = [];
   let mappedResidues = 0;
   let identities = 0;
   let row = bestRow;
@@ -141,6 +143,8 @@ export function alignProfileToChain(
       alignedProfile.push(profileAminoAcid);
       alignedChain.push(chainAminoAcid);
       matchLine.push(profileAminoAcid === chainAminoAcid ? "|" : ".");
+      profileIndices.push(row - 1);
+      residueIndices.push(column - 1);
       row -= 1;
       column -= 1;
       state = encoded & 3;
@@ -148,12 +152,16 @@ export function alignProfileToChain(
       alignedProfile.push(profile.columns[row - 1]!.consensus);
       alignedChain.push("-");
       matchLine.push(" ");
+      profileIndices.push(row - 1);
+      residueIndices.push(-1);
       row -= 1;
       state = (encoded >> 2) & 3;
     } else {
       alignedProfile.push("-");
       alignedChain.push(chain.sequence[column - 1]!);
       matchLine.push(" ");
+      profileIndices.push(-1);
+      residueIndices.push(column - 1);
       column -= 1;
       state = (encoded >> 4) & 3;
     }
@@ -162,6 +170,8 @@ export function alignProfileToChain(
   alignedProfile.reverse();
   alignedChain.reverse();
   matchLine.reverse();
+  profileIndices.reverse();
+  residueIndices.reverse();
   return {
     chainId: chain.id,
     score: bestScore,
@@ -170,6 +180,8 @@ export function alignProfileToChain(
     coverage: mappedResidues / Math.max(1, profile.columns.length),
     mappedResidues,
     siteToResidue,
+    profileIndices: Int32Array.from(profileIndices),
+    residueIndices: Int32Array.from(residueIndices),
     alignedProfile: alignedProfile.join(""),
     alignedChain: alignedChain.join(""),
     matchLine: matchLine.join(""),

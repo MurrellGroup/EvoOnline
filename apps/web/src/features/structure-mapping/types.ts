@@ -38,9 +38,21 @@ export interface ProfileAlignment {
   readonly coverage: number;
   readonly mappedResidues: number;
   readonly siteToResidue: Int32Array;
+  /** Profile-column index for every local-alignment column, or -1 for a gap in the profile. */
+  readonly profileIndices: Int32Array;
+  /** Chain-residue index for every local-alignment column, or -1 for a gap in the structure chain. */
+  readonly residueIndices: Int32Array;
   readonly alignedProfile: string;
   readonly alignedChain: string;
   readonly matchLine: string;
+}
+
+export type StructureChainMode = "mapped" | "context" | "hidden";
+
+export interface StructureChainView {
+  readonly chain: StructureChain;
+  readonly alignment: ProfileAlignment;
+  readonly mode: Exclude<StructureChainMode, "hidden">;
 }
 
 export type SelectionDirection = "positive" | "purifying" | "g1" | "g2" | "none";

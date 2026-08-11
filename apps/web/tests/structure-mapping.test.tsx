@@ -3,9 +3,12 @@ import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { filterFubarSites, FubarResultsView } from "../src/components/FubarResultsView.js";
+import { ProfileChainAlignmentPanel, rawLogoLetters } from "../src/features/structure-mapping/ProfileChainAlignment.js";
+import { updateChainMode } from "../src/features/structure-mapping/StructureMappingPanel.js";
 import { alignProfileToChain } from "../src/features/structure-mapping/profile-align.js";
 import { buildAminoAcidProfile } from "../src/features/structure-mapping/sequence-profile.js";
 import { parseMmcifChains, parsePdbChains } from "../src/features/structure-mapping/structure-parser.js";
+import type { StructureChainView, StructureColorMode } from "../src/features/structure-mapping/types.js";
 import type { FubarRunResult } from "../src/types.js";
 
 const FASTA = `>one
@@ -36,8 +39,62 @@ test("translated codon columns form an amino-acid profile and locally map to a s
   assert.equal(alignment.mappedResidues, 3);
   assert.equal(alignment.identity, 1);
   assert.deepEqual(Array.from(alignment.siteToResidue), [1, 2, 3]);
+  assert.deepEqual(Array.from(alignment.profileIndices), [0, 1, 2]);
+  assert.deepEqual(Array.from(alignment.residueIndices), [1, 2, 3]);
   assert.equal(alignment.alignedProfile, "MKT");
   assert.equal(alignment.alignedChain, "MKT");
+});
+
+test("raw profile-logo mass retains gaps in its denominator", () => {
+  const profile = buildAminoAcidProfile(`>observed\nGCT\n>gap\n---\n`);
+  const letters = rawLogoLetters(profile.columns[0]!, profile.sequenceCount);
+  assert.deepEqual(letters.map((letter) => letter.aminoAcid), ["A"]);
+  assert.equal(letters[0]?.mass, 0.5);
+  assert.equal(letters.reduce((sum, letter) => sum + letter.mass, 0), 0.5);
+});
+
+test("chain checkboxes implement mapped, context, and hidden modes", () => {
+  assert.equal(updateChainMode("hidden", "show", true), "context");
+  assert.equal(updateChainMode("context", "map", true), "mapped");
+  assert.equal(updateChainMode("hidden", "map", true), "mapped");
+  assert.equal(updateChainMode("mapped", "map", false), "context");
+  assert.equal(updateChainMode("mapped", "show", false), "hidden");
+});
+
+test("profile alignment panels render every mapped chain with raw occupancy", () => {
+  const profile = buildAminoAcidProfile(FASTA);
+  const makeChain = (id: string, label: string) => ({
+    id,
+    label,
+    sequence: "MKT",
+    residues: Array.from("MKT", (aminoAcid, index) => ({
+      chainId: label,
+      authChainId: label,
+      labelSeqId: index + 1,
+      authSeqId: index + 1,
+      insertionCode: "",
+      compId: aminoAcid,
+      aminoAcid,
+    })),
+  });
+  const views: StructureChainView[] = [makeChain("A::A", "A"), makeChain("B::B", "B")].map((chain) => ({
+    chain,
+    alignment: alignProfileToChain(profile, chain),
+    mode: "mapped",
+  }));
+  const colorMode: StructureColorMode = {
+    id: "detected",
+    label: "Detected",
+    description: "Detected sites",
+    color: (site) => site.detected ? "#ef5350" : "#dce3df",
+    valueLabel: (site) => site.detected ? "detected" : "not detected",
+    legend: [],
+  };
+  const markup = renderToStaticMarkup(<ProfileChainAlignmentPanel profile={profile} chainViews={views} sites={[{ site: 2, detected: true, direction: "positive", values: {} }]} colorMode={colorMode} />);
+  assert.match(markup, /Chain A/);
+  assert.match(markup, /Chain B/);
+  assert.match(markup, /Raw frequency · no entropy scaling/);
+  assert.match(markup, /data-occupancy="1\.000000"/);
 });
 
 test("PDB and mmCIF parsers retain coordinate residue identifiers", () => {

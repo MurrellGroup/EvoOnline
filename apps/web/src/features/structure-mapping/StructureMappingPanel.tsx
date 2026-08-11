@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { MolstarStructureViewer } from "./MolstarStructureViewer.js";
 import { MOLSTAR_RUNTIME_LABEL } from "./molstar-loader.js";
+import { ProfileChainAlignmentPanel } from "./ProfileChainAlignment.js";
 import { detectStructureFormat } from "./structure-parser.js";
 import type {
   ProfileAlignment,
+  StructureChainMode,
+  StructureChainView,
   StructureColorMode,
   StructureFormat,
   StructureMappingWorkerRequest,
@@ -44,6 +47,12 @@ function alignmentText(alignment: ProfileAlignment): string {
   return lines.join("\n");
 }
 
+export function updateChainMode(current: StructureChainMode, control: "show" | "map", checked: boolean): StructureChainMode {
+  if (control === "show") return checked ? (current === "mapped" ? "mapped" : "context") : "hidden";
+  if (checked) return "mapped";
+  return current === "mapped" ? "context" : current;
+}
+
 export function StructureMappingPanel({ alignmentText: inputAlignment, sites, colorModes }: StructureMappingPanelProps) {
   const workerRef = useRef<Worker | undefined>(undefined);
   const activeRequestRef = useRef<string | undefined>(undefined);
@@ -52,7 +61,7 @@ export function StructureMappingPanel({ alignmentText: inputAlignment, sites, co
   const [pdbId, setPdbId] = useState("");
   const [source, setSource] = useState<StructureSource>();
   const [mapping, setMapping] = useState<Extract<StructureMappingWorkerResponse, { type: "result" }>['result']>();
-  const [selectedChainId, setSelectedChainId] = useState<string>();
+  const [chainModes, setChainModes] = useState<Readonly<Record<string, StructureChainMode>>>({});
   const [colorModeId, setColorModeId] = useState(colorModes[0]?.id ?? "");
   const [showCartoon, setShowCartoon] = useState(true);
   const [showAtoms, setShowAtoms] = useState(false);
@@ -62,9 +71,35 @@ export function StructureMappingPanel({ alignmentText: inputAlignment, sites, co
   const [error, setError] = useState<string>();
 
   const activeMode = colorModes.find((mode) => mode.id === colorModeId) ?? colorModes[0];
-  const selectedAlignment = mapping?.alignments.find((alignment) => alignment.chainId === selectedChainId) ?? mapping?.alignments[0];
-  const selectedChain = selectedAlignment === undefined ? undefined : mapping?.chains.find((chain) => chain.id === selectedAlignment.chainId);
-  const selectedAlignmentText = useMemo(() => selectedAlignment === undefined ? "" : alignmentText(selectedAlignment), [selectedAlignment]);
+  const chainViews = useMemo<readonly StructureChainView[]>(() => {
+    if (mapping === undefined) return [];
+    return mapping.alignments.flatMap((alignment) => {
+      const chain = mapping.chains.find((candidate) => candidate.id === alignment.chainId);
+      const mode = chainModes[alignment.chainId] ?? "hidden";
+      return chain === undefined || mode === "hidden" ? [] : [{ chain, alignment, mode }];
+    });
+  }, [chainModes, mapping]);
+  const mappedViews = useMemo(() => chainViews.filter((view) => view.mode === "mapped"), [chainViews]);
+  const mappedAlignmentText = useMemo(() => mappedViews.map((view) => `CHAIN ${view.chain.label}\n${alignmentText(view.alignment)}`).join("\n"), [mappedViews]);
+  const mappedSummary = useMemo(() => {
+    if (mapping === undefined) return { union: 0, links: 0, identity: 0, coverage: 0 };
+    const mappedSites = new Set<number>();
+    let links = 0;
+    let identityNumerator = 0;
+    for (const view of mappedViews) {
+      links += view.alignment.mappedResidues;
+      identityNumerator += view.alignment.identity * view.alignment.mappedResidues;
+      for (let index = 0; index < view.alignment.siteToResidue.length; index += 1) {
+        if (view.alignment.siteToResidue[index]! >= 0) mappedSites.add(index);
+      }
+    }
+    return {
+      union: mappedSites.size,
+      links,
+      identity: identityNumerator / Math.max(1, links),
+      coverage: mappedSites.size / Math.max(1, mapping.profile.columns.length),
+    };
+  }, [mappedViews, mapping]);
 
   useEffect(() => () => {
     abortRef.current?.abort();
@@ -82,7 +117,8 @@ export function StructureMappingPanel({ alignmentText: inputAlignment, sites, co
         setProgressCount(message.current === undefined || message.total === undefined ? "" : `${message.current} / ${message.total} unique chain sequences`);
       } else if (message.type === "result") {
         setMapping(message.result);
-        setSelectedChainId(message.result.alignments[0]?.chainId);
+        const bestChainId = message.result.alignments[0]?.chainId;
+        setChainModes(bestChainId === undefined ? {} : { [bestChainId]: "mapped" });
         setProgress(undefined);
         setProgressCount("");
       } else {
@@ -98,7 +134,7 @@ export function StructureMappingPanel({ alignmentText: inputAlignment, sites, co
   const mapSource = (nextSource: StructureSource): void => {
     setSource(nextSource);
     setMapping(undefined);
-    setSelectedChainId(undefined);
+    setChainModes({});
     setError(undefined);
     setProgress("Preparing structure mapping…");
     setProgressCount("");
@@ -166,6 +202,13 @@ export function StructureMappingPanel({ alignmentText: inputAlignment, sites, co
     abortRef.current?.abort();
   };
 
+  const changeChainMode = (chainId: string, control: "show" | "map", checked: boolean): void => {
+    setChainModes((current) => ({
+      ...current,
+      [chainId]: updateChainMode(current[chainId] ?? "hidden", control, checked),
+    }));
+  };
+
   return (
     <section className={`structure-mapping ${open ? "is-open" : ""}`} aria-labelledby="structure-mapping-heading">
       <div className="structure-mapping__heading">
@@ -196,22 +239,18 @@ export function StructureMappingPanel({ alignmentText: inputAlignment, sites, co
           {progress !== undefined && <div className="structure-progress" role="status"><span className="structure-progress__spinner" /><div><strong>{progress}</strong>{progressCount !== "" && <small>{progressCount}</small>}</div></div>}
           {error !== undefined && <div className="structure-error" role="alert">{error}</div>}
 
-          {source !== undefined && mapping !== undefined && selectedAlignment !== undefined && selectedChain !== undefined && activeMode !== undefined && (
+          {source !== undefined && mapping !== undefined && activeMode !== undefined && (
             <>
               <div className="structure-mapping-summary">
                 <div><span>Structure</span><strong>{source.label}</strong></div>
-                <div><span>Mapped chain</span><strong>{selectedChain.label}</strong></div>
-                <div><span>Mapped codons</span><strong>{selectedAlignment.mappedResidues.toLocaleString()}</strong></div>
-                <div><span>Profile identity</span><strong>{percent(selectedAlignment.identity)}</strong></div>
-                <div><span>Profile coverage</span><strong>{percent(selectedAlignment.coverage)}</strong></div>
-                <div><span>Local score</span><strong>{selectedAlignment.score.toFixed(1)}</strong></div>
+                <div><span>Shown chains</span><strong>{chainViews.length} · {mappedViews.length} mapped</strong></div>
+                <div><span>Mapped profile codons</span><strong>{mappedSummary.union.toLocaleString()}</strong></div>
+                <div><span>Codon–chain links</span><strong>{mappedSummary.links.toLocaleString()}</strong></div>
+                <div><span>Weighted identity</span><strong>{mappedViews.length === 0 ? "—" : percent(mappedSummary.identity)}</strong></div>
+                <div><span>Combined coverage</span><strong>{mappedViews.length === 0 ? "—" : percent(mappedSummary.coverage)}</strong></div>
               </div>
 
               <div className="structure-controls">
-                <label><span>Aligned chain</span><select value={selectedAlignment.chainId} onChange={(event) => setSelectedChainId(event.target.value)}>{mapping.alignments.map((alignment) => {
-                  const chain = mapping.chains.find((candidate) => candidate.id === alignment.chainId)!;
-                  return <option key={alignment.chainId} value={alignment.chainId}>Chain {chain.label} · {chain.residues.length} aa · {percent(alignment.identity)} identity · {percent(alignment.coverage)} coverage</option>;
-                })}</select></label>
                 <label><span>Color residues by</span><select value={activeMode.id} onChange={(event) => setColorModeId(event.target.value)}>{colorModes.map((mode) => <option key={mode.id} value={mode.id}>{mode.label}</option>)}</select><small>{activeMode.description}</small></label>
                 <fieldset><legend>Representations</legend>
                   <label><input type="checkbox" checked={showCartoon} onChange={(event) => setShowCartoon(event.target.checked)} /> Cartoon</label>
@@ -220,24 +259,43 @@ export function StructureMappingPanel({ alignmentText: inputAlignment, sites, co
                 </fieldset>
               </div>
 
+              <fieldset className="structure-chain-picker">
+                <legend>Structure chains</legend>
+                <p><strong>Show</strong> keeps a chain as structural context. <strong>Map results</strong> also aligns and colors it; switching Map on automatically switches Show on.</p>
+                <div className="structure-chain-picker__labels" aria-hidden="true"><span>Chain and alignment quality</span><span>Show</span><span>Map results</span><span>Mode</span></div>
+                <div className="structure-chain-picker__list">
+                  {mapping.alignments.map((alignment) => {
+                    const chain = mapping.chains.find((candidate) => candidate.id === alignment.chainId);
+                    if (chain === undefined) return null;
+                    const mode = chainModes[alignment.chainId] ?? "hidden";
+                    return <div className="structure-chain-row" key={alignment.chainId}>
+                      <div><strong>Chain {chain.label}</strong><span>{chain.residues.length.toLocaleString()} aa · {percent(alignment.identity)} identity · {percent(alignment.coverage)} coverage · score {alignment.score.toFixed(1)}</span></div>
+                      <label title={`Show chain ${chain.label}`}><input type="checkbox" checked={mode !== "hidden"} onChange={(event) => changeChainMode(alignment.chainId, "show", event.target.checked)} /><span className="visually-hidden">Show chain {chain.label}</span></label>
+                      <label title={`Map results to chain ${chain.label}`}><input type="checkbox" checked={mode === "mapped"} onChange={(event) => changeChainMode(alignment.chainId, "map", event.target.checked)} /><span className="visually-hidden">Map results to chain {chain.label}</span></label>
+                      <span className={`structure-chain-mode structure-chain-mode--${mode}`}>{mode === "mapped" ? "Mapped" : mode === "context" ? "Context" : "Hidden"}</span>
+                    </div>;
+                  })}
+                </div>
+              </fieldset>
+
               <div className="structure-legend" aria-label={`${activeMode.label} legend`}>{activeMode.legend.map((entry) => <span key={`${entry.color}-${entry.label}`}><i style={{ background: entry.color }} />{entry.label}</span>)}</div>
-              <MolstarStructureViewer
+              <ProfileChainAlignmentPanel profile={mapping.profile} chainViews={mappedViews} sites={sites} colorMode={activeMode} />
+              {chainViews.length > 0 ? <MolstarStructureViewer
                 sourceText={source.text}
                 format={source.format}
-                chain={selectedChain}
-                alignment={selectedAlignment}
+                chainViews={chainViews}
                 sites={sites}
                 colorMode={activeMode}
                 showCartoon={showCartoon}
                 showAtoms={showAtoms}
                 showSurface={showSurface}
-              />
-              <details className="structure-alignment-detail">
-                <summary>Inspect profile-to-chain alignment</summary>
-                <p>Each translated codon column is scored as an amino-acid frequency profile against the resolved chain. Gaps represent unresolved residues or lineage-specific insertions.</p>
-                <pre>{selectedAlignmentText}</pre>
-              </details>
-              <p className="structure-footnote">The highest-scoring local alignment is selected automatically; review chain identity and coverage before interpreting residue colors. {MOLSTAR_RUNTIME_LABEL} is loaded only while this viewer is in use.</p>
+              /> : <div className="structure-viewer-empty"><strong>No chains are shown</strong><span>Switch on Show for a context chain, or Map results for a chain that should receive site colors.</span></div>}
+              {mappedViews.length > 0 && <details className="structure-alignment-detail">
+                <summary>Inspect text alignments for {mappedViews.length} mapped chain{mappedViews.length === 1 ? "" : "s"}</summary>
+                <p>Each translated codon column is scored as an amino-acid frequency profile against each mapped chain. Gaps represent unresolved residues or lineage-specific insertions.</p>
+                <pre>{mappedAlignmentText}</pre>
+              </details>}
+              <p className="structure-footnote">The highest-scoring local alignment is mapped by default. Other chains can be mapped independently, retained neutrally for structural context, or hidden. Review chain identity and coverage before interpreting residue colors. {MOLSTAR_RUNTIME_LABEL} is loaded only while this viewer is in use.</p>
             </>
           )}
         </div>
