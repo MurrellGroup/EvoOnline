@@ -287,6 +287,48 @@ export interface GlobalGammaMessageResult {
   readonly precision: "f64";
 }
 
+/**
+ * Additive kernel used by the optional CladeShift model.  Each retained
+ * component is a compressed FUBAR null-posterior category for one site.
+ * `shiftedModels` contains the corresponding omega^K model for every fixed
+ * intensity value.  The kernel scores a persistent regime change on every
+ * candidate edge: that edge and every edge below it use the shifted model,
+ * while the rest of the tree retains the baseline model.
+ */
+export interface CladeShiftKernelRequest {
+  readonly tree: BsrelKernelTree;
+  readonly tipStates: Uint8Array;
+  readonly siteCount: number;
+  readonly branchLengths: Float64Array;
+  /** Site-major retained null-posterior model ids: [site, component]. */
+  readonly baselineModels: Uint32Array;
+  /** Site-major shifted model ids: [site, component, intensity]. */
+  readonly shiftedModels: Uint32Array;
+  /** Renormalized null-posterior weights: [site, component]. */
+  readonly posteriorWeights: Float64Array;
+  readonly componentCount: number;
+  readonly intensityCount: number;
+  /** Edge ids that may initiate a persistent descendant-clade shift. */
+  readonly candidateBranches: Uint32Array;
+  readonly models: ModelBank;
+  readonly equilibrium: Float64Array;
+  readonly poissonTerms?: number;
+  readonly maxLambdaPerStep?: number;
+  readonly signal?: AbortSignal;
+  readonly onProgress?: (fraction: number, detail?: ProgressDetail) => void;
+}
+
+export interface CladeShiftKernelResult {
+  /**
+   * log BF for each fixed intensity and candidate clade, already integrated
+   * over the compressed null posterior. Layout: [site, intensity, candidate].
+   */
+  readonly logLikelihoodRatios: Float64Array;
+  readonly backend: "wasm" | "wasm-parallel";
+  readonly elapsedMs: number;
+  readonly precision: "f64";
+}
+
 export interface SamplerOptions {
   readonly iterations?: number;
   readonly burnin?: number;

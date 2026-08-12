@@ -3,17 +3,20 @@ import { difFubarPlugin } from "@phylo-workbench/model-diffubar/browser-source";
 import { fubarPlugin } from "@phylo-workbench/model-fubar/browser-source";
 import { bsrelPlugin } from "@phylo-workbench/model-bsrel/browser-source";
 import { famePlugin, flavorPlugin, globalGammaPlugin } from "@phylo-workbench/model-bame/browser-source";
+import { cladeShiftPlugin } from "@phylo-workbench/model-cladeshift/browser-source";
 import type { ModelPlugin, ParameterValues } from "@phylo-workbench/model-sdk";
 import { ResultsView } from "./components/ResultsView.js";
 import { FubarResultsView } from "./components/FubarResultsView.js";
 import { BsrelResultsView } from "./components/BsrelResultsView.js";
 import { BameResultsView } from "./components/BameResultsView.js";
 import { GlobalGammaResultsView } from "./components/GlobalGammaResultsView.js";
+import { CladeShiftResultsView } from "./components/CladeShiftResultsView.js";
 import { DifFubarClient, type RunProgress } from "./lib/diffubar-client.js";
 import { FubarClient } from "./lib/fubar-client.js";
 import { BsrelClient } from "./lib/bsrel-client.js";
 import { BameClient } from "./lib/bame-client.js";
-import type { BameRunResult, BsrelRunResult, DifFubarRunResult, FubarRunResult, GlobalGammaRunResult } from "./types.js";
+import { CladeShiftClient } from "./lib/cladeshift-client.js";
+import type { BameRunResult, BsrelRunResult, CladeShiftRunResult, DifFubarRunResult, FubarRunResult, GlobalGammaRunResult } from "./types.js";
 
 export interface BrowserModelExecutor {
   run(
@@ -59,6 +62,10 @@ function BameResult({ result, parameters, alignment }: ResultProps) {
 
 function GlobalGammaResult({ result, parameters, alignment }: ResultProps) {
   return <GlobalGammaResultsView result={result as GlobalGammaRunResult} threshold={Number(parameters.posteriorThreshold ?? 0.9)} alignment={alignment} />;
+}
+
+function CladeShiftResult({ result, parameters, alignment }: ResultProps) {
+  return <CladeShiftResultsView result={result as CladeShiftRunResult} threshold={Number(parameters.posteriorThreshold ?? 0.9)} alignment={alignment} />;
 }
 
 export const modelRegistry: readonly BrowserModelRegistration[] = [
@@ -124,6 +131,17 @@ export const modelRegistry: readonly BrowserModelRegistration[] = [
       const output = result as GlobalGammaRunResult;
       const supported = output.branches.filter((branch) => branch.activationLogBayesFactor >= Math.log(10)).length;
       return `Glamma completed with ${output.backend}: ${supported} branches have activation empirical BF ≥ 10.`;
+    },
+  },
+  {
+    plugin: cladeShiftPlugin,
+    glyph: "KΔ",
+    runtimeLabel: "Parallel WASM",
+    createExecutor: () => new CladeShiftClient(),
+    ResultView: CladeShiftResult,
+    completionMessage: (result) => {
+      const output = result as CladeShiftRunResult;
+      return `CladeShift completed with ${output.backend}: ${output.detectedSites.length} persistent site-wise clade shifts detected.`;
     },
   },
 ];

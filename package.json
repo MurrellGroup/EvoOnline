@@ -12,7 +12,7 @@
     "dev": "vite apps/web",
     "dev:api": "npm run dev --workspace @phylo-workbench/api",
     "build:shared": "npm run build --workspace @phylo-workbench/domain && npm run build --workspace @phylo-workbench/model-sdk && npm run build --workspace @phylo-workbench/viewer-bridge",
-    "build:models": "npm run build --workspace @phylo-workbench/model-diffubar && npm run build --workspace @phylo-workbench/model-fubar && npm run build --workspace @phylo-workbench/model-bsrel && npm run build --workspace @phylo-workbench/model-bame",
+    "build:models": "npm run build --workspace @phylo-workbench/model-diffubar && npm run build --workspace @phylo-workbench/model-fubar && npm run build --workspace @phylo-workbench/model-bsrel && npm run build --workspace @phylo-workbench/model-bame && npm run build --workspace @phylo-workbench/model-cladeshift",
     "build": "npm run build:shared && npm run build:models && npm run build --workspace @phylo-workbench/api && npm run build --workspace @phylo-workbench/web",
     "typecheck": "npm run build:shared && npm run build:models && npm run typecheck --workspaces --if-present",
     "test": "npm run build:shared && npm run build:models && npm run test --workspaces --if-present"

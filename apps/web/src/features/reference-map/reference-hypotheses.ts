@@ -1,4 +1,4 @@
-import type { BameRunResult, DifFubarRunResult, FubarRunResult, GlobalGammaRunResult } from "../../types.js";
+import type { BameRunResult, CladeShiftRunResult, DifFubarRunResult, FubarRunResult, GlobalGammaRunResult } from "../../types.js";
 import type { ReferenceEvidenceSite, ReferenceHypothesis } from "./types.js";
 
 export const DIFFUBAR_REFERENCE_HYPOTHESES: readonly ReferenceHypothesis[] = Object.freeze([
@@ -20,6 +20,13 @@ export const BAME_REFERENCE_HYPOTHESES: readonly ReferenceHypothesis[] = Object.
 export const GLOBAL_GAMMA_REFERENCE_HYPOTHESES: readonly ReferenceHypothesis[] = Object.freeze([
   { id: "capped-site-support", label: "Equal-prior support for full vs all-branches ω>1→1 null", shortLabel: "Full vs site null", color: "#e64b50" },
   { id: "maximum-branch-tail", label: "Maximum branch P(omega > 1) at site", shortLabel: "Max branch tail", color: "#d88916" },
+]);
+
+export const CLADE_SHIFT_REFERENCE_HYPOTHESES: readonly ReferenceHypothesis[] = Object.freeze([
+  { id: "persistent-shift", label: "P(any persistent descendant-clade shift)", shortLabel: "Any shift", color: "#d88916" },
+  { id: "relaxation", label: "P(persistent relaxation toward omega=1)", shortLabel: "Relaxation", color: "#4267d5" },
+  { id: "intensification", label: "P(persistent intensification away from omega=1)", shortLabel: "Intensification", color: "#df4652" },
+  { id: "map-branch", label: "Posterior of the MAP initiating branch", shortLabel: "MAP branch", color: "#16867a" },
 ]);
 
 export function buildDifFubarReferenceEvidence(result: Pick<DifFubarRunResult, "sites">): readonly ReferenceEvidenceSite[] {
@@ -51,6 +58,18 @@ export function buildGlobalGammaReferenceEvidence(result: Pick<GlobalGammaRunRes
     probabilities: {
       "capped-site-support": site.conditionalSupport,
       "maximum-branch-tail": site.maximumBranchPosterior,
+    },
+  }));
+}
+
+export function buildCladeShiftReferenceEvidence(result: Pick<CladeShiftRunResult, "sites">): readonly ReferenceEvidenceSite[] {
+  return result.sites.map((site) => ({
+    site: site.site,
+    probabilities: {
+      "persistent-shift": site.pShift,
+      relaxation: site.pRelaxation,
+      intensification: site.pIntensification,
+      "map-branch": site.mapBranchPosterior,
     },
   }));
 }

@@ -1127,6 +1127,306 @@ export function evaluateGlobalGammaAllMessages(
   return result;
 }
 
+/** Propagate one child likelihood through one edge and normalize it. */
+function propagateCladeShiftEdge(
+  edgeValues: Float64Array,
+  edgeScales: Float64Array,
+  edge: i32,
+  sourceValues: Float64Array,
+  sourceScales: Float64Array,
+  sourceNode: i32,
+  branchLength: f64,
+  model: i32,
+  stateCount: i32,
+  maxNeighbors: i32,
+  poissonTerms: i32,
+  maxLambdaPerStep: f64,
+  neighborCount: Uint32Array,
+  neighborIndex: Uint32Array,
+  rDiagonal: Float64Array,
+  rOffDiagonal: Float64Array,
+  mu: Float64Array,
+  workA: Float64Array,
+  workB: Float64Array,
+  accumulator: Float64Array,
+  siteSums: Float64Array,
+): void {
+  copySlot(edgeValues, edge, sourceValues, sourceNode, stateCount, 1);
+  copyScale(edgeScales, edge, sourceScales, sourceNode, 1);
+  propagateBlock(
+    edgeValues, edge, 1, branchLength, model,
+    stateCount, maxNeighbors, poissonTerms, maxLambdaPerStep,
+    neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu,
+    workA, workB, accumulator,
+  );
+  normalizeSlot(edgeValues, edgeScales, edge, stateCount, 1, siteSums);
+}
+
+/** Reversible parent-to-child propagation for a single MG94 model. */
+function propagateForwardCladeShift(
+  outsideValues: Float64Array,
+  outsideScales: Float64Array,
+  childNode: i32,
+  contextValues: Float64Array,
+  contextScales: Float64Array,
+  edge: i32,
+  branchLength: f64,
+  model: i32,
+  equilibrium: Float64Array,
+  scratch: Float64Array,
+  stateCount: i32,
+  maxNeighbors: i32,
+  poissonTerms: i32,
+  maxLambdaPerStep: f64,
+  neighborCount: Uint32Array,
+  neighborIndex: Uint32Array,
+  rDiagonal: Float64Array,
+  rOffDiagonal: Float64Array,
+  mu: Float64Array,
+  workA: Float64Array,
+  workB: Float64Array,
+  accumulator: Float64Array,
+  siteSums: Float64Array,
+): void {
+  const contextOffset = edge * stateCount * SITE_BLOCK;
+  for (let state = 0; state < stateCount; state += 1) {
+    scratch[state * SITE_BLOCK] = contextValues[contextOffset + state * SITE_BLOCK] / equilibrium[state];
+  }
+  propagateBlock(
+    scratch, 0, 1, branchLength, model,
+    stateCount, maxNeighbors, poissonTerms, maxLambdaPerStep,
+    neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu,
+    workA, workB, accumulator,
+  );
+  const destinationOffset = childNode * stateCount * SITE_BLOCK;
+  for (let state = 0; state < stateCount; state += 1) {
+    outsideValues[destinationOffset + state * SITE_BLOCK] = equilibrium[state] * scratch[state * SITE_BLOCK];
+  }
+  outsideScales[childNode * SITE_BLOCK] = contextScales[edge * SITE_BLOCK];
+  normalizeSlot(outsideValues, outsideScales, childNode, stateCount, 1, siteSums);
+}
+
+/**
+ * Score every persistent descendant-clade selection-intensity shift.
+ *
+ * For one baseline component, a standard upward/downward pass constructs the
+ * baseline context outside every candidate edge.  For each K value, a second
+ * upward pass constructs the all-shifted likelihood inside every subtree.
+ * Contracting the two messages at edge e is therefore exactly the likelihood
+ * where e and every descendant edge are shifted, with no candidate-wise
+ * re-pruning.  The returned likelihood ratios are integrated over each site's
+ * compressed FUBAR null posterior inside this kernel.
+ */
+export function evaluateCladeShiftAllClades(
+  childOffsets: Uint32Array,
+  children: Uint32Array,
+  tipForNode: Int32Array,
+  edgeForNode: Int32Array,
+  nodeForEdge: Uint32Array,
+  postorder: Uint32Array,
+  preorder: Uint32Array,
+  tipStates: Uint8Array,
+  branchLengths: Float64Array,
+  baselineModels: Uint32Array,
+  shiftedModels: Uint32Array,
+  posteriorWeights: Float64Array,
+  candidateBranches: Uint32Array,
+  neighborCount: Uint32Array,
+  neighborIndex: Uint32Array,
+  rDiagonal: Float64Array,
+  rOffDiagonal: Float64Array,
+  mu: Float64Array,
+  equilibrium: Float64Array,
+  siteCount: i32,
+  componentCount: i32,
+  intensityCount: i32,
+  nodeCount: i32,
+  edgeCount: i32,
+  stateCount: i32,
+  maxNeighbors: i32,
+  root: i32,
+  poissonTerms: i32,
+  maxLambdaPerStep: f64,
+): Float64Array {
+  const candidateCount = candidateBranches.length;
+  const result = new Float64Array(siteCount * intensityCount * candidateCount);
+  for (let index = 0; index < result.length; index += 1) result[index] = -Infinity;
+
+  const upValues = new Float64Array(nodeCount * stateCount * SITE_BLOCK);
+  const upScales = new Float64Array(nodeCount * SITE_BLOCK);
+  const edgeValues = new Float64Array(edgeCount * stateCount * SITE_BLOCK);
+  const edgeScales = new Float64Array(edgeCount * SITE_BLOCK);
+  const outsideValues = new Float64Array(nodeCount * stateCount * SITE_BLOCK);
+  const outsideScales = new Float64Array(nodeCount * SITE_BLOCK);
+  const contextValues = new Float64Array(edgeCount * stateCount * SITE_BLOCK);
+  const contextScales = new Float64Array(edgeCount * SITE_BLOCK);
+  const shiftedUpValues = new Float64Array(nodeCount * stateCount * SITE_BLOCK);
+  const shiftedUpScales = new Float64Array(nodeCount * SITE_BLOCK);
+  const shiftedEdgeValues = new Float64Array(edgeCount * stateCount * SITE_BLOCK);
+  const shiftedEdgeScales = new Float64Array(edgeCount * SITE_BLOCK);
+  const totalValues = new Float64Array(stateCount * SITE_BLOCK);
+  const totalScales = new Float64Array(SITE_BLOCK);
+  const scratch = new Float64Array(stateCount * SITE_BLOCK);
+  const workA = new Float64Array(stateCount * SITE_BLOCK);
+  const workB = new Float64Array(stateCount * SITE_BLOCK);
+  const accumulator = new Float64Array(stateCount * SITE_BLOCK);
+  const siteSums = new Float64Array(SITE_BLOCK);
+
+  for (let siteIndex = 0; siteIndex < siteCount; siteIndex += 1) {
+    for (let component = 0; component < componentCount; component += 1) {
+      const componentIndex = siteIndex * componentCount + component;
+      const weight = posteriorWeights[componentIndex];
+      if (!(weight > 0.0)) continue;
+      const baselineModel = <i32>baselineModels[componentIndex];
+
+      // Baseline upward pass for this retained null-posterior component.
+      for (let order = 0; order < postorder.length; order += 1) {
+        const node = <i32>postorder[order];
+        const start = <i32>childOffsets[node];
+        const end = <i32>childOffsets[node + 1];
+        if (start == end) {
+          const tip = tipForNode[node];
+          const observed = tipStates[tip * siteCount + siteIndex];
+          const valueOffset = node * stateCount * SITE_BLOCK;
+          for (let state = 0; state < stateCount; state += 1) {
+            upValues[valueOffset + state * SITE_BLOCK] = observed == 255 || observed == state ? 1.0 : 0.0;
+          }
+          upScales[node * SITE_BLOCK] = 0.0;
+        } else {
+          const firstChild = <i32>children[start];
+          const firstEdge = edgeForNode[firstChild];
+          copySlot(upValues, node, edgeValues, firstEdge, stateCount, 1);
+          copyScale(upScales, node, edgeScales, firstEdge, 1);
+          for (let childIndex = start + 1; childIndex < end; childIndex += 1) {
+            const child = <i32>children[childIndex];
+            const edge = edgeForNode[child];
+            multiplyExternalNormalize(upValues, upScales, node, edgeValues, edgeScales, edge, stateCount, 1, siteSums);
+          }
+        }
+        const edge = edgeForNode[node];
+        if (edge >= 0) propagateCladeShiftEdge(
+          edgeValues, edgeScales, edge, upValues, upScales, node,
+          branchLengths[edge], baselineModel,
+          stateCount, maxNeighbors, poissonTerms, maxLambdaPerStep,
+          neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu,
+          workA, workB, accumulator, siteSums,
+        );
+      }
+
+      let baselineRootSum = 0.0;
+      const rootOffset = root * stateCount * SITE_BLOCK;
+      for (let state = 0; state < stateCount; state += 1) {
+        baselineRootSum += equilibrium[state] * upValues[rootOffset + state * SITE_BLOCK];
+      }
+      if (!(baselineRootSum > 0.0)) continue;
+      const baselineLogLikelihood = upScales[root * SITE_BLOCK] + Math.log(baselineRootSum);
+
+      // Baseline root-to-tip pass exposes the outside context of every edge.
+      const outsideRootOffset = root * stateCount * SITE_BLOCK;
+      for (let state = 0; state < stateCount; state += 1) {
+        outsideValues[outsideRootOffset + state * SITE_BLOCK] = equilibrium[state];
+      }
+      outsideScales[root * SITE_BLOCK] = 0.0;
+      for (let order = 0; order < preorder.length; order += 1) {
+        const parentNode = <i32>preorder[order];
+        const start = <i32>childOffsets[parentNode];
+        const end = <i32>childOffsets[parentNode + 1];
+        if (start == end) continue;
+        copySlot(totalValues, 0, outsideValues, parentNode, stateCount, 1);
+        copyScale(totalScales, 0, outsideScales, parentNode, 1);
+        for (let childIndex = start; childIndex < end; childIndex += 1) {
+          const child = <i32>children[childIndex];
+          const edge = edgeForNode[child];
+          multiplyExternalNormalize(totalValues, totalScales, 0, edgeValues, edgeScales, edge, stateCount, 1, siteSums);
+        }
+        for (let childIndex = start; childIndex < end; childIndex += 1) {
+          const child = <i32>children[childIndex];
+          const edge = edgeForNode[child];
+          if (!divideBlanket(
+            contextValues, contextScales, edge,
+            totalValues, totalScales, edgeValues, edgeScales,
+            stateCount, 1, siteSums,
+          )) buildBlanketFallback(
+            contextValues, contextScales, edge, parentNode,
+            childOffsets, children, edgeForNode,
+            outsideValues, outsideScales, edgeValues, edgeScales,
+            stateCount, 1, siteSums,
+          );
+          propagateForwardCladeShift(
+            outsideValues, outsideScales, child,
+            contextValues, contextScales, edge,
+            branchLengths[edge], baselineModel, equilibrium, scratch,
+            stateCount, maxNeighbors, poissonTerms, maxLambdaPerStep,
+            neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu,
+            workA, workB, accumulator, siteSums,
+          );
+        }
+      }
+
+      for (let intensity = 0; intensity < intensityCount; intensity += 1) {
+        const shiftedModel = <i32>shiftedModels[(componentIndex * intensityCount) + intensity];
+        // One shifted upward pass produces the likelihood of every possible
+        // shifted descendant subtree for this K value simultaneously.
+        for (let order = 0; order < postorder.length; order += 1) {
+          const node = <i32>postorder[order];
+          const start = <i32>childOffsets[node];
+          const end = <i32>childOffsets[node + 1];
+          if (start == end) {
+            const tip = tipForNode[node];
+            const observed = tipStates[tip * siteCount + siteIndex];
+            const valueOffset = node * stateCount * SITE_BLOCK;
+            for (let state = 0; state < stateCount; state += 1) {
+              shiftedUpValues[valueOffset + state * SITE_BLOCK] = observed == 255 || observed == state ? 1.0 : 0.0;
+            }
+            shiftedUpScales[node * SITE_BLOCK] = 0.0;
+          } else {
+            const firstChild = <i32>children[start];
+            const firstEdge = edgeForNode[firstChild];
+            copySlot(shiftedUpValues, node, shiftedEdgeValues, firstEdge, stateCount, 1);
+            copyScale(shiftedUpScales, node, shiftedEdgeScales, firstEdge, 1);
+            for (let childIndex = start + 1; childIndex < end; childIndex += 1) {
+              const child = <i32>children[childIndex];
+              const edge = edgeForNode[child];
+              multiplyExternalNormalize(
+                shiftedUpValues, shiftedUpScales, node,
+                shiftedEdgeValues, shiftedEdgeScales, edge,
+                stateCount, 1, siteSums,
+              );
+            }
+          }
+          const edge = edgeForNode[node];
+          if (edge >= 0) propagateCladeShiftEdge(
+            shiftedEdgeValues, shiftedEdgeScales, edge,
+            shiftedUpValues, shiftedUpScales, node,
+            branchLengths[edge], shiftedModel,
+            stateCount, maxNeighbors, poissonTerms, maxLambdaPerStep,
+            neighborCount, neighborIndex, rDiagonal, rOffDiagonal, mu,
+            workA, workB, accumulator, siteSums,
+          );
+        }
+
+        for (let candidate = 0; candidate < candidateCount; candidate += 1) {
+          const edge = <i32>candidateBranches[candidate];
+          const contextOffset = edge * stateCount * SITE_BLOCK;
+          const shiftedOffset = edge * stateCount * SITE_BLOCK;
+          let dot = 0.0;
+          for (let state = 0; state < stateCount; state += 1) {
+            dot += contextValues[contextOffset + state * SITE_BLOCK]
+              * shiftedEdgeValues[shiftedOffset + state * SITE_BLOCK];
+          }
+          if (!(dot > 0.0)) continue;
+          const shiftedLogLikelihood = contextScales[edge * SITE_BLOCK]
+            + shiftedEdgeScales[edge * SITE_BLOCK] + Math.log(dot);
+          const logRatio = shiftedLogLikelihood - baselineLogLikelihood;
+          const output = (siteIndex * intensityCount + intensity) * candidateCount + candidate;
+          result[output] = logAddExp(result[output], Math.log(weight) + logRatio);
+        }
+      }
+    }
+  }
+  return result;
+}
+
 /** Exact f64 CPU/WASM pruning backend, output in category-major order. */
 export function evaluateLikelihood(
   ops: Uint32Array,

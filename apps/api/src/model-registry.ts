@@ -38,6 +38,14 @@ import {
   type FlavorAnalysisResult,
   type GlobalGammaAnalysisResult,
 } from "@phylo-workbench/model-bame";
+import {
+  analyzeCladeShift,
+  cladeShiftBranchesToCsv,
+  cladeShiftManifest,
+  cladeShiftSitesToCsv,
+  validateCladeShiftWorkspace,
+  type CladeShiftAnalysisResult,
+} from "@phylo-workbench/model-cladeshift";
 
 export interface ServerRunContext {
   readonly alignment: string;
@@ -180,6 +188,39 @@ function serialiseGlobalGammaResult(result: GlobalGammaAnalysisResult) {
   };
 }
 
+function serialiseCladeShiftResult(result: CladeShiftAnalysisResult) {
+  return {
+    method: result.method,
+    sites: result.sites,
+    branches: result.branches,
+    detectedSites: result.detectedSites,
+    posterior: {
+      siteCount: result.posterior.siteCount,
+      branchCount: result.posterior.branchCount,
+      intensities: [...result.posterior.intensities],
+      branchPosterior: [...result.posterior.branchPosterior],
+      branchRelaxation: [...result.posterior.branchRelaxation],
+      branchIntensification: [...result.posterior.branchIntensification],
+      intensityPosterior: [...result.posterior.intensityPosterior],
+    },
+    intensities: [...result.intensities],
+    shiftPrior: result.shiftPrior,
+    backend: result.backend,
+    timings: result.timings,
+    diagnostics: result.diagnostics,
+    fittedModel: {
+      gtrRates: [...result.fittedModel.gtrRates],
+      f3x4: [...result.fittedModel.f3x4],
+      globalAlpha: result.fittedModel.globalAlpha,
+      globalBeta: result.fittedModel.globalBeta,
+      logLikelihood: result.fittedModel.logLikelihood,
+      fitKind: result.fittedModel.fitKind,
+    },
+    siteCsv: cladeShiftSitesToCsv(result.sites),
+    branchCsv: cladeShiftBranchesToCsv(result.branches),
+  };
+}
+
 export const serverModelRegistry: readonly ServerModelRegistration[] = [
   {
     manifest: difFubarManifest,
@@ -311,6 +352,28 @@ export const serverModelRegistry: readonly ServerModelRegistration[] = [
         onStage: onProgress,
       });
       return serialiseGlobalGammaResult(result);
+    },
+  },
+  {
+    manifest: cladeShiftManifest,
+    validate: validateCladeShiftWorkspace,
+    run: async ({ alignment, tree, parameters, signal, onProgress }) => {
+      const result = await analyzeCladeShift(alignment, tree, {
+        backend: "wasm",
+        gridPoints: numberParameter(parameters, "gridPoints", 16),
+        posteriorComponents: numberParameter(parameters, "posteriorComponents", 96),
+        posteriorMassTarget: numberParameter(parameters, "posteriorMassTarget", 0.9),
+        intensityPreset: parameters.intensityPreset === "thorough" ? "thorough" : "fast",
+        shiftPrior: numberParameter(parameters, "shiftPrior", 0.2),
+        posteriorThreshold: numberParameter(parameters, "posteriorThreshold", 0.9),
+        minimumDescendantTips: numberParameter(parameters, "minimumDescendantTips", 1),
+        inferenceIterations: numberParameter(parameters, "inferenceIterations", 1000),
+        concentration: numberParameter(parameters, "concentration", 0.5),
+        fitMode: parameters.fitMode === "reference-compatible" ? "reference-compatible" : "empirical-fast",
+        signal,
+        onStage: onProgress,
+      });
+      return serialiseCladeShiftResult(result);
     },
   },
 ];

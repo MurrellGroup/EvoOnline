@@ -2,6 +2,11 @@ import type { PosteriorMarginals, ProgressDetail, SiteResult } from "@phylo-work
 import type { ApproximateFelProducts, FubarPosteriorProducts, FubarSiteResult } from "@phylo-workbench/model-fubar/browser-source";
 import type { BsrelBranchResult } from "@phylo-workbench/model-bsrel/browser-source";
 import type {
+  CladeShiftBranchResult,
+  CladeShiftPosteriorProducts,
+  CladeShiftSiteResult,
+} from "@phylo-workbench/model-cladeshift/browser-source";
+import type {
   FamePosteriorProducts,
   FameSiteResult,
   FlavorPosteriorProducts,
@@ -184,6 +189,42 @@ export interface GlobalGammaRunResult {
   readonly branchCsv: string;
 }
 
+export interface CladeShiftRunResult {
+  readonly method: "clade-shift";
+  readonly sites: readonly CladeShiftSiteResult[];
+  readonly branches: readonly CladeShiftBranchResult[];
+  readonly detectedSites: readonly number[];
+  readonly posterior: CladeShiftPosteriorProducts;
+  readonly intensities: Float64Array;
+  readonly shiftPrior: number;
+  readonly backend: "wasm" | "wasm-parallel";
+  readonly timings: Readonly<Record<string, number>>;
+  readonly diagnostics: {
+    readonly taxa: number;
+    readonly codonSites: number;
+    readonly branches: number;
+    readonly candidateClades: number;
+    readonly gridPoints: number;
+    readonly baselineCategories: number;
+    readonly posteriorComponents: number;
+    readonly meanPosteriorComponents: number;
+    readonly posteriorMassTarget: number;
+    readonly intensityStates: number;
+    readonly intensityPreset: "fast" | "thorough";
+    readonly minimumDescendantTips: number;
+    readonly minimumCapturedPosteriorMass: number;
+    readonly meanCapturedPosteriorMass: number;
+    readonly nullIntegration: "compressed-fubar-posterior-identity";
+    readonly cladeAlgorithm: "baseline-outside-plus-shifted-subtree-inside";
+    readonly evidenceCalibration: "fixed-prior-empirical-bayes";
+    readonly validatedMethod: false;
+    readonly precision: "f64";
+  };
+  readonly tree: string;
+  readonly siteCsv: string;
+  readonly branchCsv: string;
+}
+
 export interface BameWorkerRunRequest extends WorkerRunRequest {
   readonly method: "fame" | "flavor" | "glamma";
 }
@@ -206,4 +247,9 @@ export type BsrelWorkerResponse =
 export type BameWorkerResponse =
   | { readonly type: "progress"; readonly id: string; readonly stage: string; readonly fraction: number; readonly detail?: ProgressDetail }
   | { readonly type: "result"; readonly id: string; readonly result: BameRunResult | GlobalGammaRunResult }
+  | { readonly type: "error"; readonly id: string; readonly error: string };
+
+export type CladeShiftWorkerResponse =
+  | { readonly type: "progress"; readonly id: string; readonly stage: string; readonly fraction: number; readonly detail?: ProgressDetail }
+  | { readonly type: "result"; readonly id: string; readonly result: CladeShiftRunResult }
   | { readonly type: "error"; readonly id: string; readonly error: string };

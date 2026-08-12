@@ -96,6 +96,40 @@ declare namespace __AdaptedExports {
    */
   export function evaluateGlobalGammaAllMessages(childOffsets: Uint32Array, children: Uint32Array, tipForNode: Int32Array, edgeForNode: Int32Array, nodeForEdge: Uint32Array, postorder: Uint32Array, preorder: Uint32Array, tipStates: Uint8Array, branchLengths: Float64Array, omegaModels: Uint32Array, omegaWeights: Float64Array, positiveMask: Uint8Array, neutralModel: number, alphaValues: Float64Array, alphaWeights: Float64Array, neighborCount: Uint32Array, neighborIndex: Uint32Array, rDiagonal: Float64Array, rOffDiagonal: Float64Array, mu: Float64Array, equilibrium: Float64Array, siteCount: number, nodeCount: number, edgeCount: number, stateCount: number, maxNeighbors: number, root: number, poissonTerms: number, maxLambdaPerStep: number): Float64Array;
   /**
+   * assembly/index/evaluateCladeShiftAllClades
+   * @param childOffsets `~lib/typedarray/Uint32Array`
+   * @param children `~lib/typedarray/Uint32Array`
+   * @param tipForNode `~lib/typedarray/Int32Array`
+   * @param edgeForNode `~lib/typedarray/Int32Array`
+   * @param nodeForEdge `~lib/typedarray/Uint32Array`
+   * @param postorder `~lib/typedarray/Uint32Array`
+   * @param preorder `~lib/typedarray/Uint32Array`
+   * @param tipStates `~lib/typedarray/Uint8Array`
+   * @param branchLengths `~lib/typedarray/Float64Array`
+   * @param baselineModels `~lib/typedarray/Uint32Array`
+   * @param shiftedModels `~lib/typedarray/Uint32Array`
+   * @param posteriorWeights `~lib/typedarray/Float64Array`
+   * @param candidateBranches `~lib/typedarray/Uint32Array`
+   * @param neighborCount `~lib/typedarray/Uint32Array`
+   * @param neighborIndex `~lib/typedarray/Uint32Array`
+   * @param rDiagonal `~lib/typedarray/Float64Array`
+   * @param rOffDiagonal `~lib/typedarray/Float64Array`
+   * @param mu `~lib/typedarray/Float64Array`
+   * @param equilibrium `~lib/typedarray/Float64Array`
+   * @param siteCount `i32`
+   * @param componentCount `i32`
+   * @param intensityCount `i32`
+   * @param nodeCount `i32`
+   * @param edgeCount `i32`
+   * @param stateCount `i32`
+   * @param maxNeighbors `i32`
+   * @param root `i32`
+   * @param poissonTerms `i32`
+   * @param maxLambdaPerStep `f64`
+   * @returns `~lib/typedarray/Float64Array`
+   */
+  export function evaluateCladeShiftAllClades(childOffsets: Uint32Array, children: Uint32Array, tipForNode: Int32Array, edgeForNode: Int32Array, nodeForEdge: Uint32Array, postorder: Uint32Array, preorder: Uint32Array, tipStates: Uint8Array, branchLengths: Float64Array, baselineModels: Uint32Array, shiftedModels: Uint32Array, posteriorWeights: Float64Array, candidateBranches: Uint32Array, neighborCount: Uint32Array, neighborIndex: Uint32Array, rDiagonal: Float64Array, rOffDiagonal: Float64Array, mu: Float64Array, equilibrium: Float64Array, siteCount: number, componentCount: number, intensityCount: number, nodeCount: number, edgeCount: number, stateCount: number, maxNeighbors: number, root: number, poissonTerms: number, maxLambdaPerStep: number): Float64Array;
+  /**
    * assembly/index/evaluateLikelihood
    * @param ops `~lib/typedarray/Uint32Array`
    * @param edgeLengths `~lib/typedarray/Float64Array`

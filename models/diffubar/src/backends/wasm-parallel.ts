@@ -1,5 +1,7 @@
 import type {
   BranchMixtureLikelihoodRequest,
+  CladeShiftKernelRequest,
+  CladeShiftKernelResult,
   FlavorInterpolatedLikelihoodRequest,
   BsrelKernelRequest,
   BsrelKernelResult,
@@ -18,6 +20,7 @@ interface WorkerMessage {
   readonly logLikelihoods?: Float64Array;
   readonly objectives?: Float64Array;
   readonly globalGammaValues?: Float64Array;
+  readonly cladeShiftValues?: Float64Array;
   readonly error?: string;
 }
 
@@ -253,6 +256,27 @@ export class ParallelWasmBackend {
       worker.addEventListener?.("message", receiveEvent);
       worker.on?.("message", receive);
       worker.postMessage({ id, kind: "global-gamma", request });
+    });
+  }
+
+  private callCladeShift(worker: WorkerLike, request: CladeShiftKernelRequest): Promise<Float64Array> {
+    const id = this.nextMessageId++;
+    return new Promise((resolve, reject) => {
+      const receive = (message: WorkerMessage): void => {
+        if (message.id !== id) return;
+        cleanup();
+        if (message.error !== undefined) reject(new Error(message.error));
+        else if (message.cladeShiftValues === undefined) reject(new Error("Parallel WASM worker returned no CladeShift likelihood ratios."));
+        else resolve(message.cladeShiftValues);
+      };
+      const receiveEvent = (event: MessageEvent<WorkerMessage>): void => receive(event.data);
+      const cleanup = (): void => {
+        worker.removeEventListener?.("message", receiveEvent);
+        worker.off?.("message", receive);
+      };
+      worker.addEventListener?.("message", receiveEvent);
+      worker.on?.("message", receive);
+      worker.postMessage({ id, kind: "clade-shift", request });
     });
   }
 
@@ -615,6 +639,75 @@ export class ParallelWasmBackend {
       siteLogLikelihoods,
       cappedEdgeLogLikelihoods,
       positiveEdgeLogLikelihoods,
+      backend: "wasm-parallel",
+      elapsedMs: performance.now() - started,
+      precision: "f64",
+    };
+  }
+
+  async evaluateCladeShift(request: CladeShiftKernelRequest): Promise<CladeShiftKernelResult> {
+    request.signal?.throwIfAborted();
+    if (this.workerCount <= 1 || request.siteCount < 16) return this.local.evaluateCladeShift(request);
+    const started = performance.now();
+    const pool = await this.workers();
+    const activeCount = Math.min(pool.length, Math.max(1, Math.ceil(request.siteCount / 8)));
+    request.onProgress?.(0, {
+      message: `Starting ${activeCount.toLocaleString()} site-parallel CladeShift workers`,
+      current: 0,
+      total: request.siteCount,
+      indeterminate: true,
+    });
+    const jobs: Array<{ readonly start: number; readonly count: number; readonly result: Promise<Float64Array> }> = [];
+    const componentCount = request.componentCount;
+    const intensityCount = request.intensityCount;
+    for (let index = 0; index < activeCount; index += 1) {
+      const start = Math.floor(index * request.siteCount / activeCount);
+      const end = Math.floor((index + 1) * request.siteCount / activeCount);
+      const count = end - start;
+      const tips = new Uint8Array(request.tree.tipCount * count);
+      for (let tip = 0; tip < request.tree.tipCount; tip += 1) {
+        tips.set(request.tipStates.subarray(tip * request.siteCount + start, tip * request.siteCount + end), tip * count);
+      }
+      const baselineStart = start * componentCount;
+      const baselineEnd = end * componentCount;
+      const shiftedStart = baselineStart * intensityCount;
+      const shiftedEnd = baselineEnd * intensityCount;
+      const sourceModels = new Uint32Array((baselineEnd - baselineStart) + (shiftedEnd - shiftedStart));
+      sourceModels.set(request.baselineModels.subarray(baselineStart, baselineEnd));
+      sourceModels.set(request.shiftedModels.subarray(shiftedStart, shiftedEnd), baselineEnd - baselineStart);
+      const compact = compactModelBank(request.models, sourceModels);
+      const baselineLength = baselineEnd - baselineStart;
+      const { signal: _signal, onProgress: _onProgress, ...workerSafeRequest } = request;
+      const workerRequest: CladeShiftKernelRequest = {
+        ...workerSafeRequest,
+        tipStates: tips,
+        siteCount: count,
+        baselineModels: compact.componentModels.slice(0, baselineLength),
+        shiftedModels: compact.componentModels.slice(baselineLength),
+        posteriorWeights: request.posteriorWeights.slice(baselineStart, baselineEnd),
+        models: compact.models,
+      };
+      jobs.push({ start, count, result: this.callCladeShift(pool[index]!, workerRequest) });
+    }
+    let completedSites = 0;
+    const pieces = await Promise.all(jobs.map(async (job) => {
+      const piece = await job.result;
+      completedSites += job.count;
+      request.onProgress?.(completedSites / request.siteCount, {
+        message: `${completedSites.toLocaleString()}/${request.siteCount.toLocaleString()} codon sites scanned across every eligible clade`,
+        current: completedSites,
+        total: request.siteCount,
+      });
+      return piece;
+    }));
+    const stride = intensityCount * request.candidateBranches.length;
+    const logLikelihoodRatios = new Float64Array(request.siteCount * stride);
+    for (let index = 0; index < jobs.length; index += 1) {
+      logLikelihoodRatios.set(pieces[index]!, jobs[index]!.start * stride);
+    }
+    request.signal?.throwIfAborted();
+    return {
+      logLikelihoodRatios,
       backend: "wasm-parallel",
       elapsedMs: performance.now() - started,
       precision: "f64",

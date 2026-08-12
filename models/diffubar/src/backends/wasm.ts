@@ -3,6 +3,8 @@ import type {
   AlphaBetaSamplerOptions,
   AlphaBetaSamplerResult,
   BranchMixtureLikelihoodRequest,
+  CladeShiftKernelRequest,
+  CladeShiftKernelResult,
   FlavorInterpolatedLikelihoodRequest,
   BsrelKernelRequest,
   BsrelKernelResult,
@@ -28,6 +30,7 @@ type WasmExports = Record<string, any> & {
   evaluateBranchMixtureLikelihood(...args: number[]): number;
   evaluateFlavorInterpolatedLikelihood(...args: number[]): number;
   evaluateBsrelAllMessages(...args: number[]): number;
+  evaluateCladeShiftAllClades(...args: number[]): number;
   evaluateGlobalGammaAllMessages(...args: number[]): number;
   evaluateLikelihood(...args: number[]): number;
   evaluateLikelihoodCached(...args: number[]): number;
@@ -639,6 +642,103 @@ export class WasmBackend {
         elapsedMs: performance.now() - started,
         precision: "f64",
       };
+    } finally {
+      pinned.release();
+      wasm.__collect();
+    }
+  }
+
+  /** Score all persistent descendant-clade shifts for compressed site posteriors. */
+  async evaluateCladeShift(request: CladeShiftKernelRequest): Promise<CladeShiftKernelResult> {
+    request.signal?.throwIfAborted();
+    const candidateCount = request.candidateBranches.length;
+    const componentEntries = request.siteCount * request.componentCount;
+    const shiftedEntries = componentEntries * request.intensityCount;
+    if (
+      request.branchLengths.length !== request.tree.edgeCount
+      || request.componentCount < 1
+      || request.intensityCount < 1
+      || request.baselineModels.length !== componentEntries
+      || request.posteriorWeights.length !== componentEntries
+      || request.shiftedModels.length !== shiftedEntries
+      || candidateCount < 1
+    ) throw new RangeError("CladeShift kernel array dimensions are inconsistent.");
+    for (let site = 0; site < request.siteCount; site += 1) {
+      let total = 0;
+      for (let component = 0; component < request.componentCount; component += 1) {
+        const index = site * request.componentCount + component;
+        const weight = request.posteriorWeights[index]!;
+        if (!(weight >= 0) || !Number.isFinite(weight)) throw new RangeError("CladeShift posterior weights must be finite and non-negative.");
+        if (request.baselineModels[index]! >= request.models.modelCount) throw new RangeError("CladeShift baseline model id is outside the model bank.");
+        total += weight;
+      }
+      if (Math.abs(total - 1) > 1e-8) throw new RangeError(`CladeShift posterior weights at site ${site + 1} must sum to one.`);
+    }
+    for (const model of request.shiftedModels) {
+      if (model >= request.models.modelCount) throw new RangeError("CladeShift shifted model id is outside the model bank.");
+    }
+    for (const edge of request.candidateBranches) {
+      if (edge >= request.tree.edgeCount) throw new RangeError("CladeShift candidate edge is outside the tree.");
+    }
+    request.onProgress?.(0, {
+      message: `${request.candidateBranches.length.toLocaleString()} candidate clades × ${request.intensityCount.toLocaleString()} fixed intensity states · ${request.componentCount.toLocaleString()} retained posterior components`,
+      current: 0,
+      total: request.siteCount,
+      indeterminate: true,
+    });
+    const wasm = await this.instance();
+    const pinned = new PinnedArrays(wasm);
+    const u8 = globalValue(wasm.Uint8Array_ID);
+    const u32 = globalValue(wasm.Uint32Array_ID);
+    const i32 = globalValue(wasm.Int32Array_ID);
+    const f64 = globalValue(wasm.Float64Array_ID);
+    const started = performance.now();
+    try {
+      const poissonTerms = request.poissonTerms ?? 0;
+      const maxLambdaPerStep = request.maxLambdaPerStep ?? (poissonTerms > 0 ? 2 : 64);
+      const raw = wasm.evaluateCladeShiftAllClades(
+        pinned.add(u32, request.tree.childOffsets),
+        pinned.add(u32, request.tree.children),
+        pinned.add(i32, request.tree.tipForNode),
+        pinned.add(i32, request.tree.edgeForNode),
+        pinned.add(u32, request.tree.nodeForEdge),
+        pinned.add(u32, request.tree.postorder),
+        pinned.add(u32, request.tree.preorder),
+        pinned.add(u8, request.tipStates),
+        pinned.add(f64, request.branchLengths),
+        pinned.add(u32, request.baselineModels),
+        pinned.add(u32, request.shiftedModels),
+        pinned.add(f64, request.posteriorWeights),
+        pinned.add(u32, request.candidateBranches),
+        pinned.add(u32, request.models.neighborCount),
+        pinned.add(u32, request.models.neighborIndex),
+        pinned.add(f64, request.models.rDiagonal),
+        pinned.add(f64, request.models.rOffDiagonal),
+        pinned.add(f64, request.models.mu),
+        pinned.add(f64, request.equilibrium),
+        request.siteCount,
+        request.componentCount,
+        request.intensityCount,
+        request.tree.nodeCount,
+        request.tree.edgeCount,
+        request.models.stateCount,
+        request.models.maxNeighbors,
+        request.tree.root,
+        poissonTerms,
+        maxLambdaPerStep,
+      );
+      const pointer = wasm.__pin(raw);
+      const logLikelihoodRatios = wasm.__getFloat64Array(pointer).slice();
+      wasm.__unpin(pointer);
+      const expected = request.siteCount * request.intensityCount * candidateCount;
+      if (logLikelihoodRatios.length !== expected) throw new Error("CladeShift WASM kernel returned an invalid result length.");
+      request.signal?.throwIfAborted();
+      request.onProgress?.(1, {
+        message: "Every persistent clade-shift hypothesis evaluated",
+        current: request.siteCount,
+        total: request.siteCount,
+      });
+      return { logLikelihoodRatios, backend: "wasm", elapsedMs: performance.now() - started, precision: "f64" };
     } finally {
       pinned.release();
       wasm.__collect();

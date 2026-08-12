@@ -1,6 +1,6 @@
 # EvoOnline
 
-An extensible phylogenetic analysis workbench with a static browser application, a shared artifact/model SDK, an optional job API, and independently packaged model runners. DifFUBAR, regular FUBAR, fixed-complexity BS-REL, the experimental FAME/FLAVOR models, and the exploratory Glamma branch–site scan are currently registered.
+An extensible phylogenetic analysis workbench with a static browser application, a shared artifact/model SDK, an optional job API, and independently packaged model runners. DifFUBAR, regular FUBAR, fixed-complexity BS-REL, the experimental FAME/FLAVOR models, and the exploratory Glamma and CladeShift scans are currently registered.
 
 The browser workflow currently supports:
 
@@ -9,7 +9,7 @@ The browser workflow currently supports:
 3. Uploading a Newick/NEXUS tree or inferring one with bioWASM FastTree directly from the main workflow.
 4. Viewing a tree, and tagging G1/G2 foreground branches when DifFUBAR requires them, in **phylotagger**.
 5. Validating each method's alignment/tree/tip-name/tag requirements.
-6. Running DifFUBAR, FUBAR, fixed three-rate BS-REL, FAME, FLAVOR, or Glamma in a dedicated browser worker. Exact parallel WASM is the default; DifFUBAR and regular FUBAR also retain selectable WebGPU.
+6. Running DifFUBAR, FUBAR, fixed three-rate BS-REL, FAME, FLAVOR, Glamma, or CladeShift in a dedicated browser worker. Exact parallel WASM is the default; DifFUBAR and regular FUBAR also retain selectable WebGPU.
 7. Choosing deterministic Dirichlet-EM or exact Gibbs inference for FUBAR, FAME, and FLAVOR.
 8. Optionally deriving separate approximate-FEL likelihood-ratio tests from the already-computed FUBAR grid.
 9. Exploring model-owned, linked interactive SVG figures, editing publication labels, and exporting lossless SVG or CSV.
@@ -32,6 +32,7 @@ models/
   fubar/                Regular FUBAR grid, inference and model plugin
   bsrel/                Fixed three-rate branch-wise test and message optimizer
   bame/                 FAME/FLAVOR plus the exploratory Glamma scan
+  cladeshift/           Exploratory untagged persistent clade-shift scan
 docs/
   ARCHITECTURE.md
   ADDING_A_MODEL.md
@@ -66,7 +67,7 @@ npm test
 npm run build
 ```
 
-The DifFUBAR package retains its Julia/SciPy parity scripts, benchmark, WGSL validation, and exact WASM tests under `models/diffubar`. Regular FUBAR adds exact grid-transform, analytical Dirichlet-EM, Gibbs-allocation, posterior-product, ordinary-tree, exact-spline, known-optimum, and directional-LRT tests under `models/fubar`. BS-REL tests the all-to-all message identity directly: a local edge replacement must match a complete tree re-prune in f64, including in the site-parallel worker pool. FAME/FLAVOR tests pin the development-branch grid dimensions, extreme Gamma quantiles, quadrature moments, sparse/dense kernel equivalence, the exact latent branch-state expansion of a mixed transition operator, and FLAVOR interpolation parity at every lookup-table node. Glamma tests additionally enumerate all branchwise ω assignments inside each site-level α category and require the optimized message kernel to match the explicit alternative, capped-edge likelihood, and positive-tail numerator.
+The DifFUBAR package retains its Julia/SciPy parity scripts, benchmark, WGSL validation, and exact WASM tests under `models/diffubar`. Regular FUBAR adds exact grid-transform, analytical Dirichlet-EM, Gibbs-allocation, posterior-product, ordinary-tree, exact-spline, known-optimum, and directional-LRT tests under `models/fubar`. BS-REL tests the all-to-all message identity directly: a local edge replacement must match a complete tree re-prune in f64, including in the site-parallel worker pool. FAME/FLAVOR tests pin the development-branch grid dimensions, extreme Gamma quantiles, quadrature moments, sparse/dense kernel equivalence, the exact latent branch-state expansion of a mixed transition operator, and FLAVOR interpolation parity at every lookup-table node. Glamma tests additionally enumerate all branchwise ω assignments inside each site-level α category and require the optimized message kernel to match the explicit alternative, capped-edge likelihood, and positive-tail numerator. CladeShift tests its fixed-prior integration and requires each all-clade message contraction to equal a complete two-class reprune for both internal and terminal change points at f64 precision.
 
 ## DifFUBAR figure studio
 
@@ -105,6 +106,14 @@ The interactive defaults use transformed 512-category FAME and 896-category FLAV
 This model fits one Gamma distribution for ω globally across branch–site cells and an independent mean-one Gamma distribution for synonymous rate α across sites. The likelihood hierarchy is deliberate: for a fixed α category, the same α applies to every branch at that site while every branch independently marginalizes the weighted ω categories; only complete-tree site likelihoods are then averaged over α. A threshold-aware ω quadrature preserves the continuous Gamma mass above and below ω=1, while conditional-mean α categories have an exact discrete mean of one. The interactive fit uses a 64-point logarithmic parameter design followed by two local refinements; the thorough preset retains a dense 1,100-point starting scan. Julia-style transition interpolation is used during fitting, while final evidence uses direct f64 uniformization with branch lengths and nucleotide parameters fixed after the global codon fit.
 
 The site contrast caps all ω>1 categories on every branch without re-optimization. One upward/downward message pass exposes every edge blanket, so the exact branch contrast—every site on just that branch capped—requires only a local contraction and is always reported. The same per-site capped-edge ratios feed a Beta-integrated branch activation empirical Bayes factor. Per branch/site positive-tail responsibilities color the phylogeny when a codon is selected and form an alignment track when a branch is selected. Results include linked editable SVG tree/site figures, two CSVs, branch and site tables, and the optional amino-acid profile/reference map. Literal branch-level P(any positive site) and its empirical-Bayes odds are reported alongside expected positive-site burden; the interface warns through its method description that “any” can saturate on long alignments.
+
+## Exploratory CladeShift
+
+CladeShift asks whether one unknown branch initiated a persistent codon-specific change in selective stringency across its descendant clade. It needs no foreground tags. The null is the ordinary whole-tree FUBAR α–β process; under a candidate change point, that edge and every descendant edge use `ω′ = ω^K`. Fixed `K < 1` states represent relaxation toward neutrality and fixed `K > 1` states represent intensification away from neutrality. Direction, K, and every eligible initiating branch are integrated under explicit priors rather than selected by an unpenalized maximum.
+
+The computational trick turns an apparently branch-by-branch scan into two reusable message families. One null upward/downward pass supplies the outside context of every edge. For each K, one all-shifted upward pass supplies the shifted inside likelihood of every descendant subtree. Their local contractions score all candidate clades exactly for each retained baseline category. Baseline α–β uncertainty is integrated through `BF = E_q_null[L_shift/L_null]`; categories are retained adaptively in descending FUBAR posterior order until the requested mass target or hard cap is reached, and every site's actual captured mass is exposed as an approximation audit. Sites parallelize across the persistent f64 WASM pool.
+
+The linked result studio separates relaxation and intensification, links codons to initiating-branch posterior colors on the tree, exposes the K posterior and branch burdens, exports two CSVs and editable SVGs, and connects to the optional reference/profile and structure mappers. This is a numerically tested but **not simulation-validated** method prototype: its posteriors are empirical-Bayes quantities, not calibrated p-values, and the interface labels that status prominently. The package is isolated under `models/cladeshift` so it can be removed without altering another model's contracts or results.
 
 ## Selection-on-profile result maps
 

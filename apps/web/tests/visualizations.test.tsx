@@ -19,6 +19,8 @@ import { BameVisualizations } from "../src/components/BameVisualizations.js";
 import type { FameRunResult, FlavorRunResult } from "../src/types.js";
 import { GlobalGammaResultsView } from "../src/components/GlobalGammaResultsView.js";
 import type { GlobalGammaRunResult } from "../src/types.js";
+import { CladeShiftResultsView } from "../src/components/CladeShiftResultsView.js";
+import type { CladeShiftRunResult } from "../src/types.js";
 
 test("deferred number fields accept replacement text and validate only when committed", () => {
   assert.equal(normalizeCommittedNumberDraft("", 17, 1, 100), 17);
@@ -144,6 +146,46 @@ test("Glamma results link full/null evidence, activation evidence, sites, and tr
   assert.match(markup, /Full vs branch-null evidence/);
   assert.match(markup, /Selected-site tail posterior/);
   assert.match(markup, /Codon alignment evidence track/);
+  assert.ok((markup.match(/Export SVG/g) ?? []).length >= 2);
+});
+
+test("CladeShift keeps its exploratory scan isolated while linking sites, clades, reference, and structure views", () => {
+  const result: CladeShiftRunResult = {
+    method: "clade-shift",
+    sites: [
+      { site: 1, pShift: 0.96, pRelaxation: 0.91, pIntensification: 0.05, logBayesFactor: 5.1, relaxationLogBayesFactor: 5.7, intensificationLogBayesFactor: -0.2, direction: "relaxation", detected: true, mapBranch: 1, mapBranchName: "N", mapBranchPosterior: 0.79, mapIntensity: 0.5, meanIntensityGivenShift: 0.57, capturedNullPosteriorMass: 0.97, baselineMeanAlpha: 0.8, baselineMeanBeta: 0.2 },
+      { site: 2, pShift: 0.92, pRelaxation: 0.08, pIntensification: 0.84, logBayesFactor: 4.3, relaxationLogBayesFactor: -0.1, intensificationLogBayesFactor: 5, direction: "intensification", detected: true, mapBranch: 4, mapBranchName: "c", mapBranchPosterior: 0.68, mapIntensity: 2, meanIntensityGivenShift: 1.8, capturedNullPosteriorMass: 0.94, baselineMeanAlpha: 0.7, baselineMeanBeta: 1.4 },
+    ],
+    branches: [
+      { branch: 1, nodeId: 1, nodeIndex: 1, name: "N", parentName: "root", terminal: false, descendantTips: 2, eligible: true, expectedShiftedSites: 0.8, expectedRelaxedSites: 0.75, expectedIntensifiedSites: 0.05, maximumSitePosterior: 0.79, mapSite: 1 },
+      { branch: 2, nodeId: 2, nodeIndex: 2, name: "a", parentName: "N", terminal: true, descendantTips: 1, eligible: true, expectedShiftedSites: 0.1, expectedRelaxedSites: 0.08, expectedIntensifiedSites: 0.02, maximumSitePosterior: 0.07, mapSite: 1 },
+      { branch: 3, nodeId: 3, nodeIndex: 3, name: "b", parentName: "N", terminal: true, descendantTips: 1, eligible: true, expectedShiftedSites: 0.1, expectedRelaxedSites: 0.07, expectedIntensifiedSites: 0.03, maximumSitePosterior: 0.06, mapSite: 1 },
+      { branch: 4, nodeId: 4, nodeIndex: 4, name: "c", parentName: "root", terminal: true, descendantTips: 1, eligible: true, expectedShiftedSites: 0.7, expectedRelaxedSites: 0.04, expectedIntensifiedSites: 0.66, maximumSitePosterior: 0.68, mapSite: 2 },
+    ],
+    detectedSites: [1, 2],
+    posterior: {
+      siteCount: 2, branchCount: 4, intensities: Float64Array.of(0.5, 2),
+      branchPosterior: Float32Array.of(0.79, 0.03, 0.07, 0.03, 0.06, 0.02, 0.04, 0.68),
+      branchRelaxation: Float32Array.of(0.75, 0.02, 0.06, 0.01, 0.05, 0.01, 0.03, 0.02),
+      branchIntensification: Float32Array.of(0.04, 0.01, 0.01, 0.02, 0.01, 0.01, 0.01, 0.66),
+      intensityPosterior: Float32Array.of(0.91, 0.05, 0.08, 0.84),
+    },
+    intensities: Float64Array.of(0.5, 2),
+    shiftPrior: 0.2,
+    backend: "wasm-parallel",
+    timings: { totalMs: 2100 },
+    diagnostics: { taxa: 3, codonSites: 2, branches: 4, candidateClades: 4, gridPoints: 16, baselineCategories: 256, posteriorComponents: 18, meanPosteriorComponents: 15.5, posteriorMassTarget: 0.9, intensityStates: 2, intensityPreset: "fast", minimumDescendantTips: 1, minimumCapturedPosteriorMass: 0.94, meanCapturedPosteriorMass: 0.955, nullIntegration: "compressed-fubar-posterior-identity", cladeAlgorithm: "baseline-outside-plus-shifted-subtree-inside", evidenceCalibration: "fixed-prior-empirical-bayes", validatedMethod: false, precision: "f64" },
+    tree: "((a:0.1,b:0.1)N:0.2,c:0.3)root;",
+    siteCsv: "Codon site\n1\n2\n",
+    branchCsv: "Branch\n1\n2\n3\n4\n",
+  };
+  const markup = renderToStaticMarkup(<CladeShiftResultsView result={result} threshold={0.9} alignment=">a\nATGAAA\n>b\nATGAAG\n>c\nATGAAA\n" />);
+  assert.match(markup, /CladeShift/);
+  assert.match(markup, /Exploratory and not simulation-validated/);
+  assert.match(markup, /none is selected by an unpenalized maximum/);
+  assert.match(markup, /Where did the persistent shift begin/);
+  assert.match(markup, /Map selection onto a protein structure/);
+  assert.match(markup, /Optional selection-on-profile visualization/);
   assert.ok((markup.match(/Export SVG/g) ?? []).length >= 2);
 });
 

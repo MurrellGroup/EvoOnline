@@ -1,4 +1,4 @@
-import type { BameRunResult, DifFubarRunResult, FubarRunResult, GlobalGammaRunResult } from "../../types.js";
+import type { BameRunResult, CladeShiftRunResult, DifFubarRunResult, FubarRunResult, GlobalGammaRunResult } from "../../types.js";
 import type { StructureColorMode, StructureSiteDatum } from "./types.js";
 
 const RED = "#e74652";
@@ -339,6 +339,112 @@ export function glammaStructureColorModes(
       color: (site) => diverging(site.values.selectedBranchLogEvidence ?? 0, branchEvidenceDomain),
       valueLabel: (site) => `local log ER = ${(site.values.selectedBranchLogEvidence ?? 0).toFixed(3)}`,
       legend: [{ color: BLUE, label: "branch null" }, { color: "#f0f2f1", label: "ER=1" }, { color: RED, label: "full" }],
+    },
+  );
+  return modes;
+}
+
+export function buildCladeShiftStructureSites(
+  result: CladeShiftRunResult,
+  threshold: number,
+  selectedBranch: number | null,
+): readonly StructureSiteDatum[] {
+  return result.sites.map((site, index) => {
+    const branchIndex = selectedBranch === null ? -1 : (selectedBranch - 1) * result.posterior.siteCount + index;
+    const branchRelaxation = branchIndex < 0 ? 0 : result.posterior.branchRelaxation[branchIndex] ?? 0;
+    const branchIntensification = branchIndex < 0 ? 0 : result.posterior.branchIntensification[branchIndex] ?? 0;
+    const detected = site.pShift >= threshold;
+    return {
+      site: site.site,
+      detected,
+      direction: detected ? (site.pIntensification >= site.pRelaxation ? "positive" : "purifying") : "none",
+      values: {
+        pShift: site.pShift,
+        pRelaxation: site.pRelaxation,
+        pIntensification: site.pIntensification,
+        signedDirection: site.pIntensification - site.pRelaxation,
+        logBayesFactor: site.logBayesFactor,
+        mapBranchPosterior: site.mapBranchPosterior,
+        meanIntensity: site.meanIntensityGivenShift,
+        capturedMass: site.capturedNullPosteriorMass,
+        selectedBranchPosterior: branchRelaxation + branchIntensification,
+        selectedBranchDirection: branchIntensification - branchRelaxation,
+      },
+    };
+  });
+}
+
+export function cladeShiftStructureColorModes(
+  sites: readonly StructureSiteDatum[],
+  selectedBranchName?: string,
+): readonly StructureColorMode[] {
+  const logDomain = maximumAbsoluteValue(sites, "logBayesFactor");
+  const modes: StructureColorMode[] = [
+    {
+      id: "clade-shift-direction",
+      label: "Persistent-shift direction",
+      description: "Blue is relaxation toward neutrality; red is intensification away from neutrality at the live posterior threshold.",
+      color: (site) => site.direction === "positive" ? RED : site.direction === "purifying" ? BLUE : NEUTRAL,
+      valueLabel: (site) => site.direction === "positive" ? "intensification" : site.direction === "purifying" ? "relaxation" : "not detected",
+      legend: [{ color: BLUE, label: "relaxation" }, { color: NEUTRAL, label: "not detected" }, { color: RED, label: "intensification" }],
+    },
+    {
+      id: "clade-shift-detected",
+      label: "Shift detected / not detected",
+      description: "Binary status using P(any persistent clade shift) and the live threshold.",
+      color: (site) => site.detected ? GOLD : NEUTRAL,
+      valueLabel: (site) => site.detected ? "detected" : "not detected",
+      legend: [{ color: GOLD, label: "detected" }, { color: NEUTRAL, label: "not detected" }],
+    },
+    {
+      id: "clade-shift-signed",
+      label: "Signed direction posterior",
+      description: "P(intensification) minus P(relaxation).",
+      color: (site) => diverging(site.values.signedDirection ?? 0),
+      valueLabel: (site) => `P(intense) - P(relax) = ${(site.values.signedDirection ?? 0).toFixed(3)}`,
+      legend: [{ color: BLUE, label: "relaxation" }, { color: "#f0f2f1", label: "balanced" }, { color: RED, label: "intensification" }],
+    },
+    {
+      id: "clade-shift-posterior",
+      label: "P(any persistent shift)",
+      description: "Posterior probability integrated over direction, K, and every eligible initiating branch.",
+      color: (site) => interpolateColor("#f0f2f1", GOLD, site.values.pShift ?? 0),
+      valueLabel: (site) => `P(shift) = ${(site.values.pShift ?? 0).toFixed(3)}`,
+      legend: [{ color: "#f0f2f1", label: "0" }, { color: GOLD, label: "1" }],
+    },
+    {
+      id: "clade-shift-log-bf",
+      label: "Shift log Bayes factor",
+      description: "Evidence for one persistent descendant-clade shift versus no shift.",
+      color: (site) => diverging(site.values.logBayesFactor ?? 0, logDomain),
+      valueLabel: (site) => `log BF = ${(site.values.logBayesFactor ?? 0).toFixed(3)}`,
+      legend: [{ color: BLUE, label: "no shift" }, { color: "#f0f2f1", label: "BF=1" }, { color: RED, label: "shift" }],
+    },
+    {
+      id: "clade-shift-map-branch",
+      label: "MAP initiating-branch posterior",
+      description: "Unconditional posterior assigned to the most likely initiating branch at each codon.",
+      color: (site) => interpolateColor("#e9f2ef", TEAL, site.values.mapBranchPosterior ?? 0),
+      valueLabel: (site) => `P(MAP branch) = ${(site.values.mapBranchPosterior ?? 0).toFixed(3)}`,
+      legend: [{ color: "#e9f2ef", label: "0" }, { color: TEAL, label: "1" }],
+    },
+  ];
+  if (selectedBranchName !== undefined) modes.push(
+    {
+      id: "clade-shift-selected-branch",
+      label: `${selectedBranchName}: initiating posterior`,
+      description: "Posterior that the branch selected in the tree initiated the site's persistent shift.",
+      color: (site) => interpolateColor("#f0f2f1", GOLD, site.values.selectedBranchPosterior ?? 0),
+      valueLabel: (site) => `branch posterior = ${(site.values.selectedBranchPosterior ?? 0).toFixed(3)}`,
+      legend: [{ color: "#f0f2f1", label: "0" }, { color: GOLD, label: "1" }],
+    },
+    {
+      id: "clade-shift-selected-direction",
+      label: `${selectedBranchName}: direction`,
+      description: "Signed posterior direction conditional only through the selected branch's joint mass.",
+      color: (site) => diverging(site.values.selectedBranchDirection ?? 0),
+      valueLabel: (site) => `intense - relax = ${(site.values.selectedBranchDirection ?? 0).toFixed(3)}`,
+      legend: [{ color: BLUE, label: "relaxation" }, { color: "#f0f2f1", label: "balanced" }, { color: RED, label: "intensification" }],
     },
   );
   return modes;

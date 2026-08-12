@@ -1,16 +1,22 @@
 import { parentPort, workerData } from "node:worker_threads";
 import { WasmBackend } from "./wasm.js";
-import type { BranchMixtureLikelihoodRequest, BsrelKernelRequest, FlavorInterpolatedLikelihoodRequest, GlobalGammaMessageRequest, LikelihoodRequest } from "../types.js";
+import type { BranchMixtureLikelihoodRequest, BsrelKernelRequest, CladeShiftKernelRequest, FlavorInterpolatedLikelihoodRequest, GlobalGammaMessageRequest, LikelihoodRequest } from "../types.js";
 
 const backend = new WasmBackend((workerData as { readonly wasmModule?: WebAssembly.Module }).wasmModule);
 parentPort?.on("message", (message: {
   readonly id: number;
-  readonly kind?: "likelihood" | "branch-mixture" | "flavor-interpolated" | "bsrel" | "global-gamma";
-  readonly request: LikelihoodRequest | BranchMixtureLikelihoodRequest | FlavorInterpolatedLikelihoodRequest | BsrelKernelRequest | GlobalGammaMessageRequest;
+  readonly kind?: "likelihood" | "branch-mixture" | "flavor-interpolated" | "bsrel" | "global-gamma" | "clade-shift";
+  readonly request: LikelihoodRequest | BranchMixtureLikelihoodRequest | FlavorInterpolatedLikelihoodRequest | BsrelKernelRequest | GlobalGammaMessageRequest | CladeShiftKernelRequest;
 }) => {
   void (async () => {
     try {
-      if (message.kind === "global-gamma") {
+      if (message.kind === "clade-shift") {
+        const result = await backend.evaluateCladeShift(message.request as CladeShiftKernelRequest);
+        parentPort?.postMessage(
+          { id: message.id, cladeShiftValues: result.logLikelihoodRatios, elapsedMs: result.elapsedMs },
+          [result.logLikelihoodRatios.buffer as ArrayBuffer],
+        );
+      } else if (message.kind === "global-gamma") {
         const result = await backend.evaluateGlobalGammaMessages(message.request as GlobalGammaMessageRequest);
         const values = new Float64Array(result.siteLogLikelihoods.length + result.cappedEdgeLogLikelihoods.length + result.positiveEdgeLogLikelihoods.length);
         values.set(result.siteLogLikelihoods, 0);

@@ -60,6 +60,7 @@ test("lists models and completes a small DifFUBAR job", async () => {
   assert.ok(models.body.models.some((model: { id: string }) => model.id === "fame"));
   assert.ok(models.body.models.some((model: { id: string }) => model.id === "flavor"));
   assert.ok(models.body.models.some((model: { id: string }) => model.id === "glamma"));
+  assert.ok(models.body.models.some((model: { id: string }) => model.id === "clade-shift"));
 
   const alignment = await readFile(new URL("../../../examples/diffubar-demo.fasta", import.meta.url), "utf8");
   const tree = await readFile(new URL("../../../examples/diffubar-demo.nwk", import.meta.url), "utf8");
@@ -160,4 +161,35 @@ test("completes a small fixed-complexity BS-REL branch test", async () => {
   assert.equal(job.result.branches.length, job.result.diagnostics.branches);
   assert.ok(job.result.branches.every((branch: { pValueHolm: number | null }) => branch.pValueHolm !== null));
   assert.match(job.result.csv, /Holm p-value/);
+});
+
+test("completes an isolated CladeShift job and ignores stale foreground tags", async () => {
+  const alignment = await readFile(new URL("../../../examples/diffubar-demo.fasta", import.meta.url), "utf8");
+  const taggedTree = await readFile(new URL("../../../examples/diffubar-demo.nwk", import.meta.url), "utf8");
+  const submitted = await requestJson("POST", "/v1/jobs", {
+    modelId: "clade-shift",
+    alignment: { name: "demo.fasta", text: alignment },
+    tree: { name: "tagged-demo.nwk", text: taggedTree },
+    parameters: {
+      gridPoints: 8,
+      posteriorComponents: 2,
+      posteriorMassTarget: 0.5,
+      inferenceIterations: 100,
+      intensityPreset: "fast",
+    },
+  });
+  assert.equal(submitted.status, 202);
+  let job = submitted.body;
+  for (let attempt = 0; attempt < 200 && ["queued", "running"].includes(job.status); attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    job = (await requestJson("GET", `/v1/jobs/${submitted.body.id}`)).body;
+  }
+  assert.equal(job.status, "succeeded", job.error);
+  assert.equal(job.result.method, "clade-shift");
+  assert.equal(job.result.sites.length, 12);
+  assert.equal(job.result.diagnostics.cladeAlgorithm, "baseline-outside-plus-shifted-subtree-inside");
+  assert.equal(job.result.diagnostics.validatedMethod, false);
+  assert.ok(job.result.branches.every((branch: { name: string }) => !branch.name.includes("{")));
+  assert.match(job.result.siteCsv, /P\(any persistent clade shift\)/);
+  assert.match(job.result.branchCsv, /Expected shifted sites/);
 });

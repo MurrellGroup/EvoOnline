@@ -456,6 +456,41 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
   from { transform: translateX(-120%); }
   to { transform: translateX(560%); }
 }
+.clade-shift-k-grid {
+  display: grid;
+  gap: 0.35rem;
+  margin-top: 0.8rem;
+  max-width: 760px;
+}
+
+.clade-shift-k-grid > div {
+  display: grid;
+  grid-template-columns: 5.4rem minmax(120px, 1fr) 4.5rem;
+  align-items: center;
+  gap: 0.55rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.clade-shift-k-grid > div > div {
+  height: 0.42rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #edf1ef;
+}
+
+.clade-shift-k-grid i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.clade-shift-k-grid strong {
+  color: var(--ink);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .run-progress__bar.is-indeterminate > span { animation-duration: 2.8s; }
   .run-progress__bar:not(.is-indeterminate)::after { animation-duration: 3.8s; }
