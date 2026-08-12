@@ -15,7 +15,7 @@ export const fsartManifest: ModelManifest = {
   version: "0.1.0",
   title: "Fast Stepwise Approximate Recombination Test",
   shortTitle: "FSART",
-  description: "Aggregate pair-covered informative-triplet scans into consensus boundaries, fit a segment/pair/triplet tree family, and rapidly search its cached site likelihoods with a topology HMM.",
+  description: "Aggregate pair-covered informative-triplet scans into consensus boundaries, fit a segment/pair/triplet tree family, and explore its cached site likelihoods with conservative or sparse topology HMMs.",
   category: "recombination",
   inputSlots: [{
     id: "alignment",
@@ -48,7 +48,7 @@ export const fsartManifest: ModelManifest = {
     { id: "refinementBoundaryTolerance", label: "Boundary convergence tolerance", description: "Maximum aligned-site shift considered stable when the selected topology set is unchanged.", type: "integer", default: 3, minimum: 0, maximum: 30, step: 1, advanced: true },
   ],
   runtimes: ["browser-wasm"],
-  outputKinds: ["breakpoint-table", "breakpoint-uncertainty", "triplet-topology-trace", "tree-family", "viterbi-partition", "segment-trees", "tree-hmm", "switch-posterior", "svg", "csv"],
+  outputKinds: ["breakpoint-table", "breakpoint-uncertainty", "triplet-topology-trace", "tree-family", "viterbi-partition", "segment-trees", "linked-tanglegram", "tree-hmm", "interactive-switch-prior", "sparse-dirichlet-em", "switch-posterior", "svg", "csv"],
   citation: "Informative-triplet scan inspired by RDP/RDP5 (Martin et al.); a CHMMera-inspired linear-time topology HMM searches cached FastTree site likelihoods under an information criterion. FSART remains an independent EvoOnline method, not exact RDP, BURT, or GARD software.",
 };
 

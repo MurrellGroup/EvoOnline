@@ -64,15 +64,40 @@ export function decodeTreeHmmViterbi(
   const sites = result.sites;
   const rate = result.switchingRates.slice().sort((a, b) => b.posterior - a.posterior)[0];
   const transition = states <= 1 ? 0 : rate?.transitionProbability ?? 0;
-  const stay = 1 - transition;
   const weights = Float64Array.from(result.states, (state) => Math.max(1e-12, state.weight));
+  return decodeTreeHmmViterbiParameters(
+    selected,
+    weights,
+    transition,
+    minimumRunLength,
+    rate?.expectedResets ?? 0,
+  );
+}
+
+/** Decode a sticky/reset HMM with T_ij=(1-q)I(i=j)+q*w_j in O(LK). */
+export function decodeTreeHmmViterbiParameters(
+  profiles: readonly TreeEmissionProfile[],
+  rawWeights: ArrayLike<number>,
+  transitionProbability: number,
+  minimumRunLength = 1,
+  expectedResets = 0,
+): TreeHmmViterbiResult {
+  if (profiles.length === 0) throw new Error("Viterbi decoding requires at least one tree-emission profile.");
+  const sites = profiles[0]!.siteLogLikelihoods.length;
+  if (sites === 0 || profiles.some((profile) => profile.siteLogLikelihoods.length !== sites)) {
+    throw new Error("Viterbi tree-emission profiles must have one common, non-empty alignment length.");
+  }
+  const states = profiles.length;
+  const transition = states <= 1 ? 0 : Math.max(0, Math.min(1 - Number.EPSILON, transitionProbability));
+  const stay = 1 - transition;
+  const weights = Float64Array.from({ length: states }, (_value, state) => Math.max(1e-300, Number(rawWeights[state] ?? 0)));
   const weightTotal = weights.reduce((sum, value) => sum + value, 0);
   for (let state = 0; state < states; state += 1) weights[state] = weights[state]! / weightTotal;
   let previous = new Float64Array(states);
   let current = new Float64Array(states);
   const back = new Uint16Array(states * sites);
   for (let state = 0; state < states; state += 1) {
-    previous[state] = Math.log(weights[state]!) + Number(selected[state]!.siteLogLikelihoods[0]);
+    previous[state] = Math.log(weights[state]!) + Number(profiles[state]!.siteLogLikelihoods[0]);
   }
   for (let site = 1; site < sites; site += 1) {
     let firstState = 0;
@@ -93,7 +118,7 @@ export function decodeTreeHmmViterbi(
         ? -Infinity
         : previous[otherState]! + Math.log(transition * weights[destination]!);
       const from = same >= change ? destination : otherState;
-      current[destination] = Math.max(same, change) + Number(selected[destination]!.siteLogLikelihoods[site]);
+      current[destination] = Math.max(same, change) + Number(profiles[destination]!.siteLogLikelihoods[site]);
       back[destination * sites + site] = from;
     }
     [previous, current] = [current, previous];
@@ -105,14 +130,15 @@ export function decodeTreeHmmViterbi(
   statePath[sites - 1] = terminal;
   for (let site = sites - 1; site > 0; site -= 1) statePath[site - 1] = back[statePath[site]! * sites + site]!;
   const constrainedMinimum = Math.max(1, Math.min(Math.floor(sites / 2), Math.round(minimumRunLength)));
-  coalesceShortRuns(statePath, selected, result.states.map((state) => state.id), constrainedMinimum);
-  const runs = runsFromPath(statePath, result.states.map((state) => state.id));
+  const treeIds = profiles.map((profile) => profile.id);
+  coalesceShortRuns(statePath, profiles, treeIds, constrainedMinimum);
+  const runs = runsFromPath(statePath, treeIds);
   return {
     statePath,
     runs,
     breakpoints: runs.slice(0, -1).map((run) => run.end),
     logProbability: rawLogProbability,
-    expectedResets: rate?.expectedResets ?? 0,
+    expectedResets,
     minimumRunLength: constrainedMinimum,
   };
 }

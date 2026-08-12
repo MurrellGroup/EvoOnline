@@ -91,3 +91,5 @@ Every job identifies:
 - eventually the runner image digest and numerical-kernel revision.
 
 Result artifacts should be append-only. A changed input, tag assignment, parameter, model version, or precision mode produces another job identity.
+
+FSART is the deliberate browser-memory exception to immediately discarding large per-site likelihood arrays. Its pre-search tree-emission bank is retained in the analysis result and copied once to a dedicated exploration worker. Interactive switching-rate and sparse-Dirichlet updates then exchange scalar settings and compact HMM results only; no adjustment invokes FastTree, the triplet scanner, or another emission fit.

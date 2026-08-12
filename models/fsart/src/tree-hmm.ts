@@ -13,7 +13,7 @@ import type {
 
 const COLORS = ["#176b87", "#d5673f", "#6e56cf", "#25856f", "#bd4668", "#8a6a1f", "#5072b8", "#7d5685", "#4f7b3a", "#b65c2f"] as const;
 
-interface ForwardBackwardResult {
+export interface ForwardBackwardResult {
   readonly logLikelihood: number;
   readonly posterior: Float32Array;
   readonly switchPosterior: Float32Array;
@@ -48,7 +48,7 @@ function logSumExp(values: readonly number[]): number {
   return maximum + Math.log(total);
 }
 
-function normalizedEmissions(profiles: readonly TreeEmissionProfile[], sites: number): {
+export function normalizedEmissions(profiles: readonly TreeEmissionProfile[], sites: number): {
   readonly values: Float64Array;
   readonly offsets: Float64Array;
 } {
@@ -76,7 +76,7 @@ function normalizedEmissions(profiles: readonly TreeEmissionProfile[], sites: nu
  * same algebraic shortcut used by CHMMera's symmetric topology HMM, extended
  * to fitted stationary tree weights without materializing a K-by-K matrix.
  */
-function forwardBackward(
+export function forwardBackward(
   emissions: Float64Array,
   offsets: Float64Array,
   sites: number,

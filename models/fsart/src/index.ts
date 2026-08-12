@@ -7,6 +7,7 @@ export * from "./scanner.js";
 export * from "./stepwise.js";
 export * from "./tree-discordance.js";
 export * from "./tree-hmm.js";
+export * from "./tree-hmm-explore.js";
 export * from "./tree-hmm-search.js";
 export * from "./tree-hmm-viterbi.js";
 export * from "./tree-bank.js";

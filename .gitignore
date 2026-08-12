@@ -4,5 +4,4 @@ coverage/
 *.log
 .DS_Store
 apps/web/dist/
-models/fsart/.tmp/
 models/diffubar/src/wasm/*.wat

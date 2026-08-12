@@ -121,6 +121,7 @@ export function assembleScanResult(
     tripletSignals,
     partition,
     treeHmm: skippedTreeHmm("Tree-HMM scoring is performed after local FastTree-WASM has generated fixed-topology site likelihoods.", options.criterion),
+    treeHmmProfiles: [],
     discordantClades: [],
     diagnostics,
     timings: { scanMs, hmmMs, mergeMs, totalMs: scanMs + hmmMs + mergeMs },

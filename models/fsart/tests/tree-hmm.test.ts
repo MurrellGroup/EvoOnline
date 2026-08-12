@@ -4,6 +4,7 @@ import {
   buildTopologyDictionary,
   consensusBreakpointSignals,
   effectiveMinimumTreeSpan,
+  exploreTreeHmm,
   fitTreeHmm,
   selectTreeBankBreakpoints,
   treeBankWindows,
@@ -48,6 +49,51 @@ test("tree HMM recovers a topology transition and a local switch interval", () =
   assert.ok(result.switchIntervals[0]!.intervalHigh - result.switchIntervals[0]!.intervalLow < 30);
   assert.deepEqual(result.viterbi?.breakpoints, [100]);
   assert.ok((result.subsetSearch?.evaluatedSubsets ?? 0) >= 3);
+});
+
+test("fixed low-switch exploration removes draft trees absent from the stabilized Viterbi path", () => {
+  const sites = 240;
+  const first = Array.from({ length: sites }, (_value, site) => site < 120 ? 0 : -5);
+  const second = Array.from({ length: sites }, (_value, site) => site < 120 ? -5 : 0);
+  const decoy = Array.from({ length: sites }, () => -9);
+  const result = exploreTreeHmm([
+    profile("T1", first),
+    profile("T2", second),
+    { ...profile("T3", decoy), tree: "((a,d),(b,c));" },
+  ], {
+    mode: "fixed-low-switch",
+    expectedResets: 1,
+    minimumRunLength: 20,
+  });
+  assert.equal(result.status, "complete");
+  assert.deepEqual(result.states.map((state) => state.id), ["T1", "T2"]);
+  assert.deepEqual(result.droppedTreeIds, ["T3"]);
+  assert.ok(result.viterbi.breakpoints.some((value) => Math.abs(value - 120) <= 1));
+  assert.equal(result.statePosterior.length, 2 * sites);
+});
+
+test("sparse Dirichlet variational EM annihilates an unsupported topology without a subset search", () => {
+  const sites = 200;
+  const first = Array.from({ length: sites }, (_value, site) => site < 100 ? 0 : -4);
+  const second = Array.from({ length: sites }, (_value, site) => site < 100 ? -4 : 0);
+  const decoy = Array.from({ length: sites }, () => -12);
+  const result = exploreTreeHmm([
+    profile("T1", first),
+    profile("T2", second),
+    { ...profile("T3", decoy), tree: "((a,d),(b,c));" },
+  ], {
+    mode: "sparse-dirichlet",
+    expectedResets: 2,
+    dirichletConcentration: 0.03,
+    minimumRunLength: 15,
+    maximumIterations: 50,
+  });
+  assert.equal(result.status, "complete");
+  assert.ok(result.converged);
+  assert.deepEqual(result.states.map((state) => state.id), ["T1", "T2"]);
+  assert.ok(result.droppedTreeIds.includes("T3"));
+  assert.ok(result.states.every((state) => state.weight > 0));
+  assert.ok(result.iterations > 0);
 });
 
 test("IC pruning removes a redundant topology emission profile", () => {

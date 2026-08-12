@@ -328,6 +328,8 @@ export class FsartClient {
         }
       }
       activeFastTreeFraction = 1;
+      completed = { ...completed, treeHmmProfiles: profiles };
+      familyCompleted = completed;
       onProgress({ stage: "tree-hmm-emissions", fraction: 1, message: `${profiles.length} fixed topologies scored at every aligned site`, current: profiles.length, total: profiles.length });
       onProgress({ stage: "tree-hmm", fraction: 0, message: `Rapid joint search across ${profiles.length} precomputed topology likelihood profiles`, current: 0, total: profiles.length });
       const initialTreeHmm = await this.fitTreeHmmInWorker(

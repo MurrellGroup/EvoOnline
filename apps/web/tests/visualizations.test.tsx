@@ -22,6 +22,7 @@ import type { GlobalGammaRunResult } from "../src/types.js";
 import { CladeShiftResultsView } from "../src/components/CladeShiftResultsView.js";
 import type { CladeShiftRunResult } from "../src/types.js";
 import { FsartResultsView } from "../src/components/FsartResultsView.js";
+import { alignComparisonTrees, countOrderCrossings } from "../src/lib/tree-comparison.js";
 import type { FsartAnalysisResult } from "@phylo-workbench/model-fsart/browser-source";
 
 test("deferred number fields accept replacement text and validate only when committed", () => {
@@ -29,6 +30,18 @@ test("deferred number fields accept replacement text and validate only when comm
   assert.equal(normalizeCommittedNumberDraft("42", 17, 1, 100), 42);
   assert.equal(normalizeCommittedNumberDraft("999", 17, 1, 100), 100);
   assert.equal(normalizeCommittedNumberDraft("4.9", 17, 1, 100), 4);
+});
+
+test("linked FSART trees are rerooted and flipped to eliminate avoidable taxon crossings", () => {
+  const aligned = alignComparisonTrees([
+    "(((a:1,b:1):1,c:1):1,(d:1,e:1):1);",
+    "((e:1,d:1):1,(c:1,(b:1,a:1):1):1);",
+  ]);
+  assert.equal(aligned.length, 2);
+  assert.equal(countOrderCrossings(aligned[0]!.tipOrder, aligned[1]!.tipOrder), 0);
+  assert.deepEqual(aligned[0]!.tipOrder.slice().sort(), ["a", "b", "c", "d", "e"]);
+  assert.ok(aligned.every((layout) => layout.rerootedOn.length === 2));
+  assert.throws(() => alignComparisonTrees(["((a,b),c);", "((a,b),d);"]), /same uniquely named taxa/);
 });
 
 test("FSART renders consensus proposals, triplet topology evidence, topology HMM, and Viterbi trees as SVG", () => {
@@ -49,7 +62,7 @@ test("FSART renders consensus proposals, triplet topology evidence, topology HMM
   };
   const result: FsartAnalysisResult = {
     method: "fsart",
-    breakpoints: [{ id: "BP1", rank: 1, breakpoint: 13, intervalLow: 11, intervalHigh: 16, supportLow: 10, supportHigh: 18, evidence: 2.699, adjustedP: 0.002, supportTriplets: 3, supportTaxa: 4, representative, memberIndexes: [0] }],
+    breakpoints: [{ id: "BP1", rank: 1, breakpoint: 13, intervalLow: 11, intervalHigh: 16, supportLow: 10, supportHigh: 18, evidence: 2.699, consensusScore: 5.2, strengthScore: 4.1, adjustedP: 0.002, supportTriplets: 3, supportTaxa: 4, representative, memberIndexes: [0] }],
     tripletSignals: [representative],
     partition: {
       status: "complete", criterion: "aicc", criterionValue: 210.4,
@@ -79,6 +92,10 @@ test("FSART renders consensus proposals, triplet topology evidence, topology HMM
       switchingRates: [{ expectedResets: 1, transitionProbability: 0.04, logLikelihood: -70, posterior: 1 }],
       expectedSwitches: 1.02, searchSteps: [], fastTreeMs: 10, hmmMs: 2,
     },
+    treeHmmProfiles: [
+      { id: "T1", sourceStart: 1, sourceEnd: 13, tree: "((a:0.1,b:0.1):0.1,c:0.2);", topologySignature: "t1", logLikelihood: -70, siteLogLikelihoods: Float64Array.from([...Array(12).fill(-1), ...Array(12).fill(-5)]), elapsedMs: 2 },
+      { id: "T2", sourceStart: 14, sourceEnd: 24, tree: "((a:0.1,c:0.1):0.1,b:0.2);", topologySignature: "t2", logLikelihood: -70, siteLogLikelihoods: Float64Array.from([...Array(12).fill(-5), ...Array(12).fill(-1)]), elapsedMs: 2 },
+    ],
     discordantClades: [{ betweenSegments: ["segment-1-13", "segment-14-24"], direction: "lost", taxa: ["a", "b"], size: 2 }],
     diagnostics: { taxa: 3, sites: 24, variableSites: 18, totalTriplets: 1, scannedTriplets: 1, tripletSampling: "exhaustive", pairCoverageGuaranteed: true, totalTaxonPairs: 3, informativeTriplets: 1, testedBoundaries: 10, scanWindow: 4, minimumTreeSpan: 12, expectedVariableSitesPerMinimumSpan: 9, parallelWorkers: 1, multipleTesting: "none-ranked-candidate-generation", breakpointUncertainty: "three-state-burt-style-hmm-rate-marginalization", intervalConditioning: "candidate-window-local-posterior-basin", exactBurtParity: false, baumWelch: false, scanner: "bitset-informative-event-g-test", pairEqualityCache: true, bitsetWords: 1 },
     timings: { totalMs: 120 }, breakpointCsv: "Rank\n1\n", partitionCsv: "Breakpoint\n13\n", treeHmmCsv: "Site\n1\n",
@@ -88,12 +105,14 @@ test("FSART renders consensus proposals, triplet topology evidence, topology HMM
   assert.match(markup, /without a multiple-comparisons admission gate/);
   assert.match(markup, /Credible interval/);
   assert.match(markup, /Approximate GARD competitor/);
-  assert.match(markup, /Topology-HMM posterior along the alignment/);
+  assert.match(markup, /Conservative IC search: topology posterior and switching path/);
+  assert.match(markup, /Low-switch Viterbi retention/);
+  assert.match(markup, /linked topology comparison/);
   assert.match(markup, /Triplet topology trace/);
   assert.match(markup, /Refined Viterbi tree reconstruction/);
   assert.match(markup, /Exploratory participating-subtree candidates/);
   assert.match(markup, /FastTree 2.1.11 bioWASM/);
-  assert.ok((markup.match(/Export SVG/g) ?? []).length >= 4);
+  assert.ok((markup.match(/Export SVG/g) ?? []).length >= 5);
 });
 
 test("DifFUBAR result studio renders a native SVG overview and export control", () => {

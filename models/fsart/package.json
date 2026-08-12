@@ -17,6 +17,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "benchmark": "node --import tsx benchmarks/scan.ts",
+    "benchmark:explore": "node --import tsx benchmarks/explore.ts",
     "simulate": "node --import tsx simulations/run.ts",
     "test": "node --import tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit"

@@ -2,6 +2,7 @@
 import {
   assembleScanResult,
   effectiveMinimumTreeSpan,
+  exploreTreeHmm,
   fitTreeHmm,
   parseFsartFasta,
   scanTripletShard,
@@ -11,6 +12,8 @@ import {
   type ScanShardResult,
   type TreeEmissionProfile,
   type TreeHmmResult,
+  type TreeHmmExplorationOptions,
+  type TreeHmmExplorationResult,
   type InformationCriterion,
 } from "@phylo-workbench/model-fsart/browser-source";
 import type { ParameterValues } from "@phylo-workbench/model-sdk";
@@ -49,17 +52,32 @@ interface TreeHmmRequest {
   readonly stage?: string;
 }
 
-type Request = ScanRequest | RefineRequest | TreeHmmRequest;
+interface TreeHmmExploreInitRequest {
+  readonly type: "tree-hmm-explore-init";
+  readonly id: string;
+  readonly profiles: readonly TreeEmissionProfile[];
+}
+
+interface TreeHmmExploreRequest {
+  readonly type: "tree-hmm-explore";
+  readonly id: string;
+  readonly options: TreeHmmExplorationOptions;
+}
+
+type Request = ScanRequest | RefineRequest | TreeHmmRequest | TreeHmmExploreInitRequest | TreeHmmExploreRequest;
 type Response =
   | { readonly type: "progress"; readonly id: string; readonly stage: string; readonly fraction: number; readonly detail: { readonly message: string; readonly current?: number; readonly total?: number; readonly metricLabel?: string; readonly metricValue?: number; readonly indeterminate?: boolean } }
   | { readonly type: "shard"; readonly id: string; readonly shard: ScanShardResult }
   | { readonly type: "result"; readonly id: string; readonly result: FsartAnalysisResult }
   | { readonly type: "tree-hmm-result"; readonly id: string; readonly result: TreeHmmResult }
+  | { readonly type: "tree-hmm-explore-ready"; readonly id: string; readonly profileCount: number }
+  | { readonly type: "tree-hmm-explore-result"; readonly id: string; readonly result: TreeHmmExplorationResult }
   | { readonly type: "error"; readonly id: string; readonly error: string };
 
 const scope = self as DedicatedWorkerGlobalScope;
 let cachedText = "";
 let cachedAlignment: FsartAlignment | undefined;
+let cachedExploreProfiles: readonly TreeEmissionProfile[] = [];
 
 function alignmentFor(text: string): FsartAlignment {
   if (cachedAlignment === undefined || cachedText !== text) {
@@ -97,6 +115,18 @@ scope.onmessage = (event: MessageEvent<Request>): void => {
   const request = event.data;
   void (async () => {
     try {
+      if (request.type === "tree-hmm-explore-init") {
+        cachedExploreProfiles = request.profiles;
+        const response: Response = { type: "tree-hmm-explore-ready", id: request.id, profileCount: cachedExploreProfiles.length };
+        scope.postMessage(response);
+        return;
+      }
+      if (request.type === "tree-hmm-explore") {
+        const result = exploreTreeHmm(cachedExploreProfiles, request.options);
+        const response: Response = { type: "tree-hmm-explore-result", id: request.id, result };
+        scope.postMessage(response);
+        return;
+      }
       if (request.type === "tree-hmm") {
         const result = fitTreeHmm(request.profiles, {
           taxa: request.taxa,

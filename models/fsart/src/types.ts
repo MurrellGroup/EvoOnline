@@ -322,6 +322,47 @@ export interface TreeHmmResult {
   readonly message?: string;
 }
 
+export type TreeHmmExplorationMode = "fixed-low-switch" | "sparse-dirichlet";
+
+/**
+ * Interactive topology-HMM reconstruction over the already-scored draft tree
+ * family. These fits never call FastTree and never perform a combinatorial
+ * subset search: every update is O(alignment sites x active trees).
+ */
+export interface TreeHmmExplorationResult {
+  readonly status: "complete" | "failed";
+  readonly mode: TreeHmmExplorationMode;
+  readonly sites: number;
+  readonly draftStateCount: number;
+  readonly states: readonly TreeHmmState[];
+  /** State-major posterior matrix: state * sites + site. */
+  readonly statePosterior: Float32Array;
+  readonly mapState: Uint16Array;
+  readonly switchPosterior: Float32Array;
+  readonly expectedSwitches: number;
+  readonly expectedResets: number;
+  readonly transitionProbability: number;
+  readonly logLikelihood: number;
+  readonly viterbi: TreeHmmViterbiResult;
+  readonly iterations: number;
+  readonly converged: boolean;
+  readonly droppedTreeIds: readonly string[];
+  readonly dirichletConcentration?: number;
+  readonly elapsedMs: number;
+  readonly message: string;
+}
+
+export interface TreeHmmExplorationOptions {
+  readonly mode: TreeHmmExplorationMode;
+  /** Prior expected reset opportunities over the complete alignment. */
+  readonly expectedResets: number;
+  /** Symmetric per-tree Dirichlet concentration used by variational EM. */
+  readonly dirichletConcentration?: number;
+  readonly maximumIterations?: number;
+  readonly minimumRunLength?: number;
+  readonly pruningWeight?: number;
+}
+
 export interface DiscordantClade {
   readonly betweenSegments: readonly [string, string];
   readonly direction: "lost" | "gained";
@@ -360,6 +401,12 @@ export interface FsartAnalysisResult {
   readonly tripletSignals: readonly RefinedTripletSignal[];
   readonly partition: StepwisePartitionResult;
   readonly treeHmm: TreeHmmResult;
+  /**
+   * Full pre-search fixed-topology emission bank. It is intentionally retained
+   * so switching priors and sparse tree weights can be explored instantly
+   * without rerunning FastTree.
+   */
+  readonly treeHmmProfiles: readonly TreeEmissionProfile[];
   readonly discordantClades: readonly DiscordantClade[];
   readonly diagnostics: FsartDiagnostics;
   readonly timings: Readonly<Record<string, number>>;
