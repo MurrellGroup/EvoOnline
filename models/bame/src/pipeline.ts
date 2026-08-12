@@ -5,10 +5,12 @@ import {
   compileTree,
   encodeCodonTips,
   fitGlobalModel,
+  getGeneticCode,
   normalizeConditionalLikelihoodsInPlace,
   parseFasta,
   parseNewick,
   type FittedModel,
+  type GeneticCode,
   type ParsedTree,
   type ProgressDetail,
   type TreeNode,
@@ -63,10 +65,11 @@ function cloneSingleClassTree(tree: ParsedTree): ParsedTree {
   };
 }
 
-function validateFittedModel(model: FittedModel): void {
-  if (model.gtrRates.length !== 6 || model.f3x4.length !== 12 || model.codonEquilibrium.length !== 61) {
+function validateFittedModel(model: FittedModel, geneticCode: GeneticCode): void {
+  if (model.gtrRates.length !== 6 || model.f3x4.length !== 12 || model.codonEquilibrium.length !== geneticCode.senseCodons.length) {
     throw new DifFUBARError("INVALID_FITTED_MODEL", "Provided fitted model has invalid array dimensions.");
   }
+  if (model.geneticCodeId !== geneticCode.id) throw new DifFUBARError("GENETIC_CODE_MISMATCH", `Provided model uses NCBI code ${model.geneticCodeId}, but this analysis requested code ${geneticCode.id}.`);
   if (!(model.globalAlpha > 0) || !Number.isFinite(model.globalAlpha)) throw new DifFUBARError("INVALID_FITTED_MODEL", "Provided global alpha must be finite and positive.");
 }
 
@@ -98,10 +101,11 @@ async function fitModel(
   tree: ParsedTree,
   backend: BameBackend,
   options: BameAnalysisOptions,
+  geneticCode: GeneticCode,
 ): Promise<{ readonly model: FittedModel; readonly milliseconds: number }> {
   const started = performance.now();
   if (options.fittedModel !== undefined) {
-    validateFittedModel(options.fittedModel);
+    validateFittedModel(options.fittedModel, geneticCode);
     options.onStage?.("global-fit", 1, { message: "Using the supplied fitted model" });
     return { model: options.fittedModel, milliseconds: performance.now() - started };
   }
@@ -113,6 +117,7 @@ async function fitModel(
     options.fitMode ?? "empirical-fast",
     (fraction, detail) => options.onStage?.("global-fit", fraction, detail),
     options.signal,
+    geneticCode,
   );
   return { model, milliseconds: performance.now() - started };
 }
@@ -192,6 +197,7 @@ export async function analyzeFame(
 ): Promise<FameAnalysisResult> {
   const started = performance.now();
   const { alignment, tree } = parsedInputs(fasta, newick);
+  const geneticCode = getGeneticCode(options.geneticCode ?? 1);
   options.signal?.throwIfAborted();
   stage(options, "initialization", 1, { message: `${alignment.names.length.toLocaleString()} taxa · ${alignment.codonSites.toLocaleString()} codon sites · untagged tree` });
   const gridPreset = options.gridPreset ?? "fast";
@@ -211,7 +217,7 @@ export async function analyzeFame(
   await inferenceBackend.prepare({ categoryCount: grid.categoryCount, siteCount: alignment.codonSites });
   const runtimeMs = performance.now() - runtimeStarted;
   stage(options, "runtime-initialization", 1, { message: "Parallel f64 branch-mixture runtime ready" });
-  const fitted = await fitModel(alignment, tree, backend, options);
+  const fitted = await fitModel(alignment, tree, backend, options, geneticCode);
   for (const node of tree.nodes) node.branchLength *= fitted.model.globalAlpha;
   const compiled = compileTree(tree);
   const preparationStarted = performance.now();
@@ -221,8 +227,8 @@ export async function analyzeFame(
     total: operatorCount,
     indeterminate: true,
   });
-  const built = buildFameBranchMixtures(grid, tree, fitted.model.gtrRates, fitted.model.f3x4, integration, weightPoints);
-  const tipStates = encodeCodonTips(alignment, tree);
+  const built = buildFameBranchMixtures(grid, tree, fitted.model.gtrRates, fitted.model.f3x4, integration, weightPoints, geneticCode);
+  const tipStates = encodeCodonTips(alignment, tree, geneticCode);
   const preparationMs = performance.now() - preparationStarted;
   stage(options, "branch-mixture-preparation", 1, {
     message: `${built.operators.operatorCount.toLocaleString()} branch-mixture operators · ${built.models.modelCount.toLocaleString()} unique atomic ω models`,
@@ -269,6 +275,9 @@ export async function analyzeFame(
     backend: likelihood.backend === "wasm-parallel" ? "wasm-parallel" : "wasm",
     timings: { runtimeMs, fitMs: fitted.milliseconds, preparationMs, likelihoodMs, inferenceMs, posteriorMs, totalMs: performance.now() - started },
     diagnostics: {
+      geneticCodeId: geneticCode.id,
+      geneticCodeName: geneticCode.name,
+      codonStates: geneticCode.senseCodons.length,
       taxa: tree.tips.length,
       codonSites: alignment.codonSites,
       categories: grid.categoryCount,
@@ -296,6 +305,7 @@ export async function analyzeFlavor(
 ): Promise<FlavorAnalysisResult> {
   const started = performance.now();
   const { alignment, tree } = parsedInputs(fasta, newick);
+  const geneticCode = getGeneticCode(options.geneticCode ?? 1);
   options.signal?.throwIfAborted();
   stage(options, "initialization", 1, { message: `${alignment.names.length.toLocaleString()} taxa · ${alignment.codonSites.toLocaleString()} codon sites · untagged tree` });
   const gammaSliceCount = options.gammaSlices ?? 12;
@@ -312,7 +322,7 @@ export async function analyzeFlavor(
   await inferenceBackend.prepare({ categoryCount: grid.categoryCount, siteCount: alignment.codonSites });
   const runtimeMs = performance.now() - runtimeStarted;
   stage(options, "runtime-initialization", 1, { message: "Parallel f64 branch-mixture runtime ready" });
-  const fitted = await fitModel(alignment, tree, backend, options);
+  const fitted = await fitModel(alignment, tree, backend, options, geneticCode);
   for (const node of tree.nodes) node.branchLength *= fitted.model.globalAlpha;
   const compiled = compileTree(tree);
   const preparationStarted = performance.now();
@@ -322,8 +332,8 @@ export async function analyzeFlavor(
     total: grid.categoryCount,
     indeterminate: true,
   });
-  const built = buildFlavorBranchMixtures(grid, tree, fitted.model.gtrRates, fitted.model.f3x4, gammaSliceCount);
-  const tipStates = encodeCodonTips(alignment, tree);
+  const built = buildFlavorBranchMixtures(grid, tree, fitted.model.gtrRates, fitted.model.f3x4, gammaSliceCount, geneticCode);
+  const tipStates = encodeCodonTips(alignment, tree, geneticCode);
   const preparationMs = performance.now() - preparationStarted;
   stage(options, "branch-mixture-preparation", 1, {
     message: `${grid.categoryCount.toLocaleString()} Gamma-mixture categories · ${built.models.modelCount.toLocaleString()} unique atomic ω models`,
@@ -377,6 +387,9 @@ export async function analyzeFlavor(
     backend: likelihood.backend === "wasm-parallel" ? "wasm-parallel" : "wasm",
     timings: { runtimeMs, fitMs: fitted.milliseconds, preparationMs, likelihoodMs, inferenceMs, posteriorMs, totalMs: performance.now() - started },
     diagnostics: {
+      geneticCodeId: geneticCode.id,
+      geneticCodeName: geneticCode.name,
+      codonStates: geneticCode.senseCodons.length,
       taxa: tree.tips.length,
       codonSites: alignment.codonSites,
       categories: grid.categoryCount,

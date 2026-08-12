@@ -53,6 +53,7 @@ export function FubarResultsView({ result, threshold, alignment }: { readonly re
       </div>
       <div className="result-stats">
         <div><span>Codon sites</span><strong>{result.diagnostics.codonSites.toLocaleString()}</strong></div>
+        <div><span>Genetic code</span><strong>NCBI {result.diagnostics.geneticCodeId}</strong><small>{result.diagnostics.geneticCodeName}</small></div>
         <div><span>Positive at {posteriorThreshold.toFixed(3)}</span><strong className="positive-text">{positive.size.toLocaleString()}</strong></div>
         <div><span>Purifying at {posteriorThreshold.toFixed(3)}</span><strong className="purifying-text">{purifying.size.toLocaleString()}</strong></div>
         <div><span>Posterior inference</span><strong>{result.diagnostics.inferenceMethod === "gibbs" ? "Gibbs" : "Dirichlet-EM"}</strong></div>
@@ -83,8 +84,8 @@ export function FubarResultsView({ result, threshold, alignment }: { readonly re
         </table>
       </div>
       {result.approximateFel !== undefined && <ApproximateFelResults result={result.approximateFel} {...(result.timings.approximateFelMs === undefined ? {} : { elapsedMs: result.timings.approximateFelMs })} />}
-      <ReferenceResultMap modelName="FUBAR" alignmentText={alignment} evidenceSites={referenceEvidence} hypotheses={FUBAR_REFERENCE_HYPOTHESES} initialThreshold={posteriorThreshold} />
-      <StructureMappingPanel alignmentText={alignment} sites={structureSites} colorModes={structureColorModes} selectionThreshold={posteriorThreshold} />
+      <ReferenceResultMap modelName="FUBAR" alignmentText={alignment} geneticCodeId={result.diagnostics.geneticCodeId} evidenceSites={referenceEvidence} hypotheses={FUBAR_REFERENCE_HYPOTHESES} initialThreshold={posteriorThreshold} />
+      <StructureMappingPanel alignmentText={alignment} geneticCodeId={result.diagnostics.geneticCodeId} sites={structureSites} colorModes={structureColorModes} selectionThreshold={posteriorThreshold} />
     </section>
   );
 }

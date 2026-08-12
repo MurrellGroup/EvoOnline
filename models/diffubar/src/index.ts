@@ -4,12 +4,23 @@ export { normalizeDifFubarTreeText, parseNewick, parseTaggedNewick } from "./io/
 export { createDifFUBARGrid } from "./model/grid.js";
 export {
   CODON_COUNT,
+  CODON_TOPOLOGY,
+  CONTEXT_DEPENDENT_GENETIC_CODE_IDS,
+  GENETIC_CODES,
+  GENETIC_CODE_OPTIONS,
   SENSE_CODONS,
+  STANDARD_GENETIC_CODE,
   buildCodonTopology,
   buildModelBank,
   codonEquilibriumFromF3x4,
   countF3x4,
   encodeCodonTips,
+  getGeneticCode,
+  translateCodon,
+  type CodonTopology,
+  type GeneticCode,
+  type GeneticCodeId,
+  type GeneticCodeInput,
 } from "./model/genetic-code.js";
 export { compileTree } from "./tree/compiler.js";
 export {

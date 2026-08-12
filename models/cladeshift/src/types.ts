@@ -1,6 +1,7 @@
 import type {
   FastaAlignment,
   FittedModel,
+  GeneticCodeId,
   ParsedTree,
   ProgressDetail,
 } from "@phylo-workbench/model-diffubar";
@@ -59,6 +60,7 @@ export interface CladeShiftPosteriorProducts {
 }
 
 export interface CladeShiftAnalysisOptions {
+  readonly geneticCode?: GeneticCodeId;
   readonly backend?: CladeShiftBackendKind;
   readonly gridPoints?: number;
   /** Hard cap on retained null-posterior categories per codon. */
@@ -89,6 +91,9 @@ export interface CladeShiftAnalysisResult {
   readonly backend: "wasm" | "wasm-parallel";
   readonly timings: Readonly<Record<string, number>>;
   readonly diagnostics: {
+    readonly geneticCodeId: GeneticCodeId;
+    readonly geneticCodeName: string;
+    readonly codonStates: number;
     readonly taxa: number;
     readonly codonSites: number;
     readonly branches: number;

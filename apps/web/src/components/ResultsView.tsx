@@ -58,6 +58,7 @@ export function ResultsView({ result, threshold, alignment }: ResultsViewProps) 
 
       <div className="result-stats">
         <div><span>Codon sites</span><strong>{result.diagnostics.codonSites.toLocaleString()}</strong></div>
+        <div><span>Genetic code</span><strong>NCBI {result.diagnostics.geneticCodeId}</strong><small>{result.diagnostics.geneticCodeName}</small></div>
         <div><span>Detected at {posteriorThreshold.toFixed(3)}</span><strong>{detectedSites.length.toLocaleString()}</strong></div>
         <div><span>Backend</span><strong>{result.backend.replace("wasm-parallel", "parallel WASM")}</strong></div>
         <div><span>Total time</span><strong>{((result.timings.totalMs ?? 0) / 1000).toFixed(2)} s</strong></div>
@@ -103,8 +104,8 @@ export function ResultsView({ result, threshold, alignment }: ResultsViewProps) 
           </tbody>
         </table>
       </div>
-      <ReferenceResultMap modelName="DifFUBAR" alignmentText={alignment} evidenceSites={referenceEvidence} hypotheses={DIFFUBAR_REFERENCE_HYPOTHESES} initialThreshold={posteriorThreshold} />
-      <StructureMappingPanel alignmentText={alignment} sites={structureSites} colorModes={structureColorModes} selectionThreshold={posteriorThreshold} />
+      <ReferenceResultMap modelName="DifFUBAR" alignmentText={alignment} geneticCodeId={result.diagnostics.geneticCodeId} evidenceSites={referenceEvidence} hypotheses={DIFFUBAR_REFERENCE_HYPOTHESES} initialThreshold={posteriorThreshold} />
+      <StructureMappingPanel alignmentText={alignment} geneticCodeId={result.diagnostics.geneticCodeId} sites={structureSites} colorModes={structureColorModes} selectionThreshold={posteriorThreshold} />
     </section>
   );
 }

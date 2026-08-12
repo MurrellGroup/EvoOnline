@@ -5,6 +5,7 @@ import {
   compileTree,
   encodeCodonTips,
   fitGlobalModel,
+  getGeneticCode,
   parseFasta,
   parseNewick,
   type FittedModel,
@@ -27,10 +28,11 @@ import type {
 
 type Backend = WasmBackend | ParallelWasmBackend;
 
-function validateFittedModel(model: FittedModel): void {
-  if (model.gtrRates.length !== 6 || model.f3x4.length !== 12 || model.codonEquilibrium.length !== 61) {
+function validateFittedModel(model: FittedModel, geneticCodeId: FittedModel["geneticCodeId"], stateCount: number): void {
+  if (model.gtrRates.length !== 6 || model.f3x4.length !== 12 || model.codonEquilibrium.length !== stateCount) {
     throw new DifFUBARError("INVALID_FITTED_MODEL", "Provided fitted model has invalid array dimensions.");
   }
+  if (model.geneticCodeId !== geneticCodeId) throw new DifFUBARError("GENETIC_CODE_MISMATCH", `Provided model uses NCBI code ${model.geneticCodeId}, but this analysis requested code ${geneticCodeId}.`);
   if (!(model.globalAlpha > 0) || !Number.isFinite(model.globalAlpha)) {
     throw new DifFUBARError("INVALID_FITTED_MODEL", "Provided global alpha must be finite and positive.");
   }
@@ -119,6 +121,7 @@ export async function analyzeBsrel(
   const started = performance.now();
   const alignment = typeof fasta === "string" ? parseFasta(fasta) : fasta;
   const tree = typeof newick === "string" ? parseNewick(newick) : cloneSingleClassTree(newick);
+  const geneticCode = getGeneticCode(options.geneticCode ?? 1);
   options.signal?.throwIfAborted();
   const compiledMessages = compileBsrelTree(tree);
   if (compiledMessages.edgeNodes.length === 0) throw new DifFUBARError("NO_BRANCHES", "BS-REL requires at least one phylogenetic branch.");
@@ -154,7 +157,7 @@ export async function analyzeBsrel(
   const fitStarted = performance.now();
   let fittedModel: FittedModel;
   if (options.fittedModel !== undefined) {
-    validateFittedModel(options.fittedModel);
+    validateFittedModel(options.fittedModel, geneticCode.id, geneticCode.senseCodons.length);
     fittedModel = options.fittedModel;
     options.onStage?.("global-fit", 1, { message: "Using the supplied global codon fit" });
   } else {
@@ -166,6 +169,7 @@ export async function analyzeBsrel(
       options.fitMode ?? "empirical-fast",
       (fraction, detail) => options.onStage?.("global-fit", fraction, detail),
       options.signal,
+      geneticCode,
     );
   }
   const fitMs = performance.now() - fitStarted;
@@ -174,7 +178,7 @@ export async function analyzeBsrel(
   // branch-specific optimizer then adjusts a bounded log multiplier per edge.
   for (const node of tree.nodes) node.branchLength *= fittedModel.globalAlpha;
   const baseLengths = Float64Array.from(compiledMessages.edgeNodes, (node) => Math.max(1e-8, node.branchLength));
-  const tipStates = encodeCodonTips(alignment, tree);
+  const tipStates = encodeCodonTips(alignment, tree, geneticCode);
   const likelihood = new BsrelLikelihood(
     analysisBackend,
     compiledMessages,
@@ -272,6 +276,9 @@ export async function analyzeBsrel(
     backend: analysisBackend.kind,
     timings: { runtimeMs, fitMs, alternativeMs, nullMs, totalMs },
     diagnostics: {
+      geneticCodeId: geneticCode.id,
+      geneticCodeName: geneticCode.name,
+      codonStates: geneticCode.senseCodons.length,
       taxa: alignment.names.length,
       codonSites: alignment.codonSites,
       branches: branches.length,

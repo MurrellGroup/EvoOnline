@@ -2,6 +2,7 @@ import {
   buildModelBank,
   type BranchMixtureOperators,
   type DifFUBARGrid,
+  type GeneticCodeInput,
   type ParsedTree,
 } from "@phylo-workbench/model-diffubar";
 import { gammaSlices } from "../math/gamma.js";
@@ -84,6 +85,7 @@ function buildAtomicModels(
   tree: ParsedTree,
   gtrRates: ArrayLike<number>,
   f3x4: ArrayLike<number>,
+  geneticCode: GeneticCodeInput,
 ) {
   const categories = new Float64Array(catalog.values.length * 2);
   for (let index = 0; index < catalog.values.length; index += 1) {
@@ -99,7 +101,7 @@ function buildAtomicModels(
     parameterCount: 2,
     hasBackground: false,
   };
-  return buildModelBank(atomicGrid, tree, gtrRates, f3x4);
+  return buildModelBank(atomicGrid, tree, gtrRates, f3x4, geneticCode);
 }
 
 function mapAtomicIds(ids: readonly number[], modelMap: Uint32Array): Uint32Array {
@@ -113,6 +115,7 @@ export function buildFameBranchMixtures(
   f3x4: ArrayLike<number>,
   integration: FameWeightIntegration,
   points: number,
+  geneticCode: GeneticCodeInput = 1,
 ): BuiltBranchMixtureGrid<FameGrid> {
   const rule = integration === "julia-draft-log-average" ? draftRule(points) : gaussLegendreUnit(points);
   const operatorCount = grid.categoryCount * points;
@@ -153,7 +156,7 @@ export function buildFameBranchMixtures(
     }
   }
   offsets[operatorCount] = componentIds.length;
-  const models = buildAtomicModels(catalog, tree, gtrRates, f3x4);
+  const models = buildAtomicModels(catalog, tree, gtrRates, f3x4, geneticCode);
   const operators: BranchMixtureOperators = {
     operatorCount,
     operatorOffsets: offsets,
@@ -173,6 +176,7 @@ export function buildFlavorBranchMixtures(
   gtrRates: ArrayLike<number>,
   f3x4: ArrayLike<number>,
   sliceCount: number,
+  geneticCode: GeneticCodeInput = 1,
 ): BuiltBranchMixtureGrid<FlavorGrid> {
   const operatorCount = grid.categoryCount;
   const offsets = new Uint32Array(operatorCount + 1);
@@ -208,7 +212,7 @@ export function buildFlavorBranchMixtures(
     operatorScales[category] = grid.categories[category * 4]!;
   }
   offsets[operatorCount] = componentIds.length;
-  const models = buildAtomicModels(catalog, tree, gtrRates, f3x4);
+  const models = buildAtomicModels(catalog, tree, gtrRates, f3x4, geneticCode);
   const operators: BranchMixtureOperators = {
     operatorCount,
     operatorOffsets: offsets,

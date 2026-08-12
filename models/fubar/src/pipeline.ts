@@ -7,6 +7,7 @@ import {
   compileTree,
   encodeCodonTips,
   fitGlobalModel,
+  getGeneticCode,
   normalizeConditionalLikelihoodsInPlace,
   parseFasta,
   parseNewick,
@@ -66,10 +67,11 @@ function chooseBackend(kind: FubarAnalysisOptions["backend"], minimumParallelWor
   return new ParallelWasmBackend(undefined, minimumParallelWork);
 }
 
-function validateFittedModel(model: FittedModel): void {
-  if (model.gtrRates.length !== 6 || model.f3x4.length !== 12 || model.codonEquilibrium.length !== 61) {
+function validateFittedModel(model: FittedModel, geneticCodeId: FittedModel["geneticCodeId"], stateCount: number): void {
+  if (model.gtrRates.length !== 6 || model.f3x4.length !== 12 || model.codonEquilibrium.length !== stateCount) {
     throw new DifFUBARError("INVALID_FITTED_MODEL", "Provided fitted model has invalid array dimensions.");
   }
+  if (model.geneticCodeId !== geneticCodeId) throw new DifFUBARError("GENETIC_CODE_MISMATCH", `Provided model uses NCBI code ${model.geneticCodeId}, but this analysis requested code ${geneticCodeId}.`);
   if (!(model.globalAlpha > 0) || !Number.isFinite(model.globalAlpha)) {
     throw new DifFUBARError("INVALID_FITTED_MODEL", "Provided global alpha must be finite and positive.");
   }
@@ -125,6 +127,7 @@ export async function analyzeFubar(
   const started = performance.now();
   const alignment = typeof fasta === "string" ? parseFasta(fasta) : fasta;
   const tree = typeof newick === "string" ? parseNewick(newick) : cloneSingleClassTree(newick);
+  const geneticCode = getGeneticCode(options.geneticCode ?? 1);
   options.signal?.throwIfAborted();
   options.onStage?.("initialization", 1, {
     message: `${alignment.names.length.toLocaleString()} taxa · ${alignment.codonSites.toLocaleString()} codon sites · one branch class`,
@@ -147,7 +150,7 @@ export async function analyzeFubar(
   const fitStarted = performance.now();
   let fittedModel: FittedModel;
   if (options.fittedModel !== undefined) {
-    validateFittedModel(options.fittedModel);
+    validateFittedModel(options.fittedModel, geneticCode.id, geneticCode.senseCodons.length);
     fittedModel = options.fittedModel;
     options.onStage?.("global-fit", 1, { message: "Using the supplied fitted model" });
   } else {
@@ -159,6 +162,7 @@ export async function analyzeFubar(
       options.fitMode ?? "empirical-fast",
       (fraction, detail) => options.onStage?.("global-fit", fraction, detail),
       options.signal,
+      geneticCode,
     );
   }
   const fitMs = performance.now() - fitStarted;
@@ -171,8 +175,8 @@ export async function analyzeFubar(
   // every branch length before evaluating the fixed alpha-beta surface.
   for (const node of tree.nodes) node.branchLength *= fittedModel.globalAlpha;
   const compiled = compileTree(tree);
-  const models = buildModelBank(grid, tree, fittedModel.gtrRates, fittedModel.f3x4);
-  const tipStates = encodeCodonTips(alignment, tree);
+  const models = buildModelBank(grid, tree, fittedModel.gtrRates, fittedModel.f3x4, geneticCode);
+  const tipStates = encodeCodonTips(alignment, tree, geneticCode);
   options.onStage?.("grid-preparation", 1, {
     message: `${grid.categoryCount.toLocaleString()} α–β categories · ${models.modelCount.toLocaleString()} unique MG94 models`,
     current: grid.categoryCount,
@@ -287,6 +291,9 @@ export async function analyzeFubar(
       totalMs: performance.now() - started,
     },
     diagnostics: {
+      geneticCodeId: geneticCode.id,
+      geneticCodeName: geneticCode.name,
+      codonStates: geneticCode.senseCodons.length,
       taxa: tree.tips.length,
       codonSites: alignment.codonSites,
       categories: grid.categoryCount,

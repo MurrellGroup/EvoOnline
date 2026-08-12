@@ -72,6 +72,7 @@ test("small end-to-end CladeShift analysis returns auditable posterior products"
   const fasta = ">a\nATGAAAGCTTTCGGA\n>b\nATGAAGGCTTTCGGA\n>c\nATGAAAGCCTTTGGA\n>d\nATGAAGGCTTTTGGT\n";
   const tree = "(((a{old-foreground}:0.08,b{old-foreground}:0.11)n{old-foreground}:0.17,c:0.13)m:0.21,d:0.19)root;";
   const result = await analyzeCladeShift(fasta, tree, {
+    geneticCode: 6,
     backend: "wasm",
     gridPoints: 8,
     posteriorComponents: 2,
@@ -79,6 +80,8 @@ test("small end-to-end CladeShift analysis returns auditable posterior products"
     inferenceIterations: 100,
   });
   assert.equal(result.method, "clade-shift");
+  assert.equal(result.diagnostics.geneticCodeId, 6);
+  assert.equal(result.diagnostics.codonStates, 63);
   assert.equal(result.sites.length, 5);
   assert.equal(result.posterior.branchPosterior.length, result.sites.length * result.branches.length);
   assert.ok(result.branches.every((branch) => !branch.name.includes("{")));

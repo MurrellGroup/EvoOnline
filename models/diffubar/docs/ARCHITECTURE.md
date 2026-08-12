@@ -20,12 +20,12 @@ The parser builds a multifurcating tree. `compileTree` sorts child evaluation by
 
 | Opcode | Meaning |
 |---|---|
-| `LoadTip` | Load a 61-state compatible-tip vector |
+| `LoadTip` | Load a dynamic 60–63-state compatible-tip vector |
 | `Transform` | Apply `exp(Qt)` over one edge |
 | `MultiplyNormalize` | Combine two child messages and accumulate `log(sum)` |
 | `LoadCache` | Load a dependency-cache entry in the WASM program |
 
-Only `registerNumber × 61` states are live in the flat evaluator, rather than `nodeCount × 61`. The GPU limit is 24 registers; ordinary binary and modest multifurcating trees require far fewer.
+Only `registerNumber × stateCount` states are live in the flat evaluator, rather than `nodeCount × stateCount`. The GPU limit is 24 registers; ordinary binary and modest multifurcating trees require far fewer.
 
 ## MG94 model bank
 
@@ -47,8 +47,8 @@ The diagonal is the negative row sum. Models are deduplicated by `(alpha, omega)
 
 Dispatch dimensions are `(site chunk, grid category, 1)`. A workgroup has 64 invocations:
 
-- lanes 0–60 own codon states;
-- lanes 61–63 contribute zero and complete barriers/reductions;
+- lanes `0..stateCount-1` own codon states;
+- remaining lanes contribute zero and complete barriers/reductions;
 - sparse row propagation is parallel across states;
 - the tree register file lives in workgroup memory;
 - likelihood normalization uses a 64-lane workgroup reduction;
@@ -60,7 +60,7 @@ Standard WebGPU does not provide portable f64 shader arithmetic. The GPU result 
 
 ## WASM kernel
 
-The WASM backend keeps sites contiguous inside a 16-site cache block. Explicit `f64x2` SIMD handles the uniformization recurrence, while the sparse neighbor topology avoids 61-by-61 zero work. Large jobs are split by site across a persistent worker pool; small jobs stay in the calling worker to avoid startup overhead. A compiled `WebAssembly.Module` is structured-cloned into the pool so workers do not compile the same binary independently.
+The WASM backend keeps sites contiguous inside a 16-site cache block. Explicit `f64x2` SIMD handles the uniformization recurrence, while the selected code's sparse neighbor topology avoids dense 60–63-state zero work. Large jobs are split by site across a persistent worker pool; small jobs stay in the calling worker to avoid startup overhead. A compiled `WebAssembly.Module` is structured-cloned into the pool so workers do not compile the same binary independently.
 
 ### Hierarchical dependency cache
 
@@ -74,7 +74,7 @@ For every edge-subtree, the compiler computes a branch-class dependency bitmask.
 The cache is evaluated one 16-site block at a time, so memory is independent of total alignment length. Its f64 working memory is
 
 \[
-8 \times 16 \times (61 + 1) \times \sum_c N_c \text{ bytes},
+8 \times 16 \times (\mathrm{stateCount} + 1) \times \sum_c N_c \text{ bytes},
 \]
 
 where `N_c` is the number of distinct model tuples for cache node `c`. A 192 MiB safety cap selects the flat register program when a topology would require too much cache memory.

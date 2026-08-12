@@ -7,7 +7,7 @@ import {
   type ModelValidation,
   type ValidationIssue,
 } from "@phylo-workbench/model-sdk";
-import { normalizeDifFubarTreeText, parseFasta, parseNewick } from "@phylo-workbench/model-diffubar";
+import { GENETIC_CODE_OPTIONS, normalizeDifFubarTreeText, parseFasta, parseNewick } from "@phylo-workbench/model-diffubar";
 import { cladeShiftSitesToCsv } from "./pipeline.js";
 import type { CladeShiftAnalysisResult } from "./types.js";
 
@@ -35,6 +35,14 @@ export const cladeShiftManifest: ModelManifest = {
     },
   ],
   parameters: [
+    {
+      id: "geneticCode",
+      label: "Genetic code",
+      description: "NCBI translation table used for sense-codon states, stop filtering, and synonymous/nonsynonymous changes.",
+      type: "select",
+      default: "1",
+      options: GENETIC_CODE_OPTIONS,
+    },
     {
       id: "backend",
       label: "Compute backend",

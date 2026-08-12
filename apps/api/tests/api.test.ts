@@ -61,6 +61,14 @@ test("lists models and completes a small DifFUBAR job", async () => {
   assert.ok(models.body.models.some((model: { id: string }) => model.id === "flavor"));
   assert.ok(models.body.models.some((model: { id: string }) => model.id === "glamma"));
   assert.ok(models.body.models.some((model: { id: string }) => model.id === "clade-shift"));
+  for (const model of models.body.models) {
+    const parameter = model.parameters.find((candidate: { id: string }) => candidate.id === "geneticCode");
+    assert.ok(parameter, `${model.id} does not expose a genetic-code selector`);
+    assert.equal(parameter.default, "1");
+    assert.equal(parameter.options.length, 24);
+    assert.ok(parameter.options.some((option: { value: string }) => option.value === "2"));
+    assert.ok(!parameter.options.some((option: { value: string }) => ["27", "28", "31"].includes(option.value)));
+  }
 
   const alignment = await readFile(new URL("../../../examples/diffubar-demo.fasta", import.meta.url), "utf8");
   const tree = await readFile(new URL("../../../examples/diffubar-demo.nwk", import.meta.url), "utf8");
@@ -68,7 +76,7 @@ test("lists models and completes a small DifFUBAR job", async () => {
     modelId: "diffubar",
     alignment: { name: "demo.fasta", text: alignment },
     tree: { name: "demo.nwk", text: tree },
-    parameters: { foregroundGrid: 2, backgroundGrid: 2, iterations: 250, burnin: 50, seed: 7 },
+    parameters: { geneticCode: "2", foregroundGrid: 2, backgroundGrid: 2, iterations: 250, burnin: 50, seed: 7 },
   });
   assert.equal(submitted.status, 202);
 
@@ -80,6 +88,8 @@ test("lists models and completes a small DifFUBAR job", async () => {
   assert.equal(job.status, "succeeded", job.error);
   assert.equal(job.result.sites.length, 12);
   assert.equal(job.result.backend, "wasm");
+  assert.equal(job.result.diagnostics.geneticCodeId, 2);
+  assert.equal(job.result.diagnostics.codonStates, 60);
 });
 
 test("completes a small untagged FUBAR job with separate optional FEL results", async () => {
@@ -90,7 +100,7 @@ test("completes a small untagged FUBAR job with separate optional FEL results", 
     modelId: "fubar",
     alignment: { name: "demo.fasta", text: alignment },
     tree: { name: "demo.nwk", text: tree },
-    parameters: { gridPoints: 4, iterations: 100, posteriorThreshold: 0.8, approximateFel: true },
+    parameters: { geneticCode: "6", gridPoints: 4, iterations: 100, posteriorThreshold: 0.8, approximateFel: true },
   });
   assert.equal(submitted.status, 202);
   let job = submitted.body;
@@ -108,6 +118,8 @@ test("completes a small untagged FUBAR job with separate optional FEL results", 
   assert.equal(job.result.approximateFel.relativeLogLikelihoods.length, 12 * 16);
   assert.match(job.result.approximateFel.csv, /FEL p-value \(positive\)/);
   assert.doesNotMatch(job.result.csv, /FEL p-value/);
+  assert.equal(job.result.diagnostics.geneticCodeId, 6);
+  assert.equal(job.result.diagnostics.codonStates, 63);
 
   const gibbsSubmitted = await requestJson("POST", "/v1/jobs", {
     modelId: "fubar",
@@ -144,6 +156,7 @@ test("completes a small fixed-complexity BS-REL branch test", async () => {
     tree: { name: "demo.nwk", text: tree },
     parameters: {
       branchScope: "all",
+      geneticCode: "2",
       alternativeIterations: 2,
       nullIterations: 2,
       maximumOmega: 50,
@@ -161,6 +174,7 @@ test("completes a small fixed-complexity BS-REL branch test", async () => {
   assert.equal(job.result.branches.length, job.result.diagnostics.branches);
   assert.ok(job.result.branches.every((branch: { pValueHolm: number | null }) => branch.pValueHolm !== null));
   assert.match(job.result.csv, /Holm p-value/);
+  assert.equal(job.result.diagnostics.geneticCodeId, 2);
 });
 
 test("completes an isolated CladeShift job and ignores stale foreground tags", async () => {
@@ -172,6 +186,7 @@ test("completes an isolated CladeShift job and ignores stale foreground tags", a
     tree: { name: "tagged-demo.nwk", text: taggedTree },
     parameters: {
       gridPoints: 8,
+      geneticCode: "6",
       posteriorComponents: 2,
       posteriorMassTarget: 0.5,
       inferenceIterations: 100,
@@ -192,4 +207,5 @@ test("completes an isolated CladeShift job and ignores stale foreground tags", a
   assert.ok(job.result.branches.every((branch: { name: string }) => !branch.name.includes("{")));
   assert.match(job.result.siteCsv, /P\(any persistent clade shift\)/);
   assert.match(job.result.branchCsv, /Expected shifted sites/);
+  assert.equal(job.result.diagnostics.geneticCodeId, 6);
 });

@@ -117,7 +117,7 @@ function compileProgram(
 }
 
 /**
- * Compile a tree to a Sethi-Ullman-style program. Only `registerNumber * 61`
+ * Compile a tree to a Sethi-Ullman-style program. Only `registerNumber * stateCount`
  * likelihood values are live for a grid/site pair, independent of tree size.
  */
 export function compileTree(tree: ParsedTree, maximumSlots = 24): CompiledTree {

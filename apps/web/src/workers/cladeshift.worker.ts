@@ -5,7 +5,7 @@ import {
   cladeShiftSitesToCsv,
   type CladeShiftBackendKind,
 } from "@phylo-workbench/model-cladeshift/browser-source";
-import type { ProgressDetail } from "@phylo-workbench/model-diffubar/browser-source";
+import { getGeneticCode, type ProgressDetail } from "@phylo-workbench/model-diffubar/browser-source";
 import type { CladeShiftRunResult, CladeShiftWorkerResponse, WorkerRunRequest } from "../types.js";
 
 const scope = self as DedicatedWorkerGlobalScope;
@@ -20,6 +20,7 @@ scope.onmessage = (event: MessageEvent<WorkerRunRequest>): void => {
       const backend: CladeShiftBackendKind = parameters.backend === "wasm" ? "wasm" : "wasm-parallel";
       const threshold = Number(parameters.posteriorThreshold ?? 0.9);
       const result = await analyzeCladeShift(request.alignment, request.tree, {
+        geneticCode: getGeneticCode(String(parameters.geneticCode ?? 1)).id,
         backend,
         gridPoints: Number(parameters.gridPoints ?? 16),
         posteriorComponents: Number(parameters.posteriorComponents ?? 96),

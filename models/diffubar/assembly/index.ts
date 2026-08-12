@@ -2095,8 +2095,9 @@ export function evaluateFlavorInterpolatedLikelihood(
 /**
  * Site-rich branch-mixture evaluator. It constructs one dense mixed P matrix
  * per edge/operator, uses it for every site, then discards it. This converts
- * FLAVOR's K component propagations per branch/site into K propagations of 61
- * identity columns once plus one dense propagation per branch/site.
+ * FLAVOR's K component propagations per branch/site into K propagations of
+ * every state-basis vector once per edge/operator, plus one dense propagation
+ * per branch/site. The basis size follows the selected genetic code.
  */
 export function evaluateBranchMixtureLikelihoodDense(
   ops: Uint32Array,

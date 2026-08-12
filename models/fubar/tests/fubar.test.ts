@@ -133,24 +133,29 @@ test("Dirichlet EM publishes real batched iteration and likelihood progress", as
 });
 
 test("FUBAR reports runtime compilation separately and keeps fused likelihood work visibly active", async () => {
-  const fasta = ">a\nAAACCC\n>b\nAAAGGG\n";
+  const fasta = ">a\nTGATGA\n>b\nTGATGG\n";
   const alignment = parseFasta(fasta);
   const f3x4 = countF3x4(alignment);
   const updates: Array<{ readonly stage: string; readonly fraction: number; readonly detail?: ProgressDetail }> = [];
   await analyzeFubar(fasta, "(a:0.1,b:0.1);", {
+    geneticCode: 2,
     backend: "wasm",
     gridPoints: 2,
     iterations: 4,
     fittedModel: {
+      geneticCodeId: 2,
       gtrRates: Float64Array.of(1, 1, 1, 1, 1, 1),
       f3x4,
-      codonEquilibrium: codonEquilibriumFromF3x4(f3x4),
+      codonEquilibrium: codonEquilibriumFromF3x4(f3x4, 2),
       globalAlpha: 1,
       globalBeta: 1,
       logLikelihood: 0,
       fitKind: "provided",
     },
     onStage: (stage, fraction, detail) => updates.push({ stage, fraction, ...(detail === undefined ? {} : { detail }) }),
+  }).then((result) => {
+    assert.equal(result.diagnostics.geneticCodeId, 2);
+    assert.equal(result.diagnostics.codonStates, 60);
   });
   const runtime = updates.filter((update) => update.stage === "runtime-initialization");
   assert.ok(runtime.length >= 2);

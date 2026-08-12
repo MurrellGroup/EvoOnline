@@ -1,3 +1,5 @@
+import type { GeneticCodeId } from "./model/genetic-code.js";
+
 export type BackendKind = "auto" | "webgpu" | "wasm" | "wasm-parallel";
 
 export interface FastaAlignment {
@@ -81,11 +83,13 @@ export interface ModelBank {
 }
 
 export interface FittedModel {
+  /** NCBI translation-table identifier used to define codon states and synonymous edges. */
+  readonly geneticCodeId: GeneticCodeId;
   /** Six symmetric GTR exchangeabilities: AC, AG, AT, CG, CT, GT. */
   readonly gtrRates: Float64Array;
   /** Three rows by A,C,G,T, row-major. */
   readonly f3x4: Float64Array;
-  /** Equilibrium frequencies in the universal-code sense-codon order. */
+  /** Equilibrium frequencies in the selected genetic code's lexical sense-codon order. */
   readonly codonEquilibrium: Float64Array;
   readonly globalAlpha: number;
   readonly globalBeta: number;
@@ -413,6 +417,7 @@ export interface PosteriorMarginals {
 }
 
 export interface AnalysisOptions extends SamplerOptions {
+  readonly geneticCode?: GeneticCodeId;
   readonly backend?: BackendKind;
   readonly foregroundGrid?: number;
   readonly backgroundGrid?: number;
@@ -434,6 +439,9 @@ export interface AnalysisResult {
   readonly backend: "webgpu" | "wasm" | "wasm-parallel";
   readonly timings: Readonly<Record<string, number>>;
   readonly diagnostics: {
+    readonly geneticCodeId: GeneticCodeId;
+    readonly geneticCodeName: string;
+    readonly codonStates: number;
     readonly taxa: number;
     readonly codonSites: number;
     readonly categories: number;

@@ -17,6 +17,8 @@ import {
   countF3x4,
   countNucleotideFrequencies,
   encodeCodonTips,
+  getGeneticCode,
+  type GeneticCodeInput,
 } from "../model/genetic-code.js";
 
 export interface EvaluationBackend {
@@ -324,10 +326,11 @@ async function evaluateCodonCandidates(
   f3x4: Float64Array,
   equilibrium: Float64Array,
   tipStates: Uint8Array,
+  geneticCode: GeneticCodeInput,
   signal?: AbortSignal,
 ): Promise<Float64Array> {
   const grid = codonCandidateGrid(pairs, tree);
-  const models = buildModelBank(grid, tree, gtrRates, f3x4);
+  const models = buildModelBank(grid, tree, gtrRates, f3x4, geneticCode);
   const likelihood = await backend.evaluate({
     tree: compiled,
     tipStates,
@@ -420,6 +423,7 @@ async function optimizeAlphaBeta(
   f3x4: Float64Array,
   equilibrium: Float64Array,
   tipStates: Uint8Array,
+  geneticCode: GeneticCodeInput,
   onProgress?: ProgressCallback,
   signal?: AbortSignal,
 ): Promise<{ alpha: number; beta: number; logLikelihood: number }> {
@@ -444,7 +448,7 @@ async function optimizeAlphaBeta(
       const multipliers = [Math.exp(-logStep), 1, Math.exp(logStep)];
       const pairs: Array<[number, number]> = [];
       for (const am of multipliers) for (const bm of multipliers) pairs.push([Math.max(1e-4, Math.min(5, alpha * am)), Math.max(1e-4, Math.min(5, beta * bm))]);
-      const scores = await evaluateCodonCandidates(pairs, alignment, tree, compiled, backend, gtrRates, f3x4, equilibrium, tipStates, signal);
+      const scores = await evaluateCodonCandidates(pairs, alignment, tree, compiled, backend, gtrRates, f3x4, equilibrium, tipStates, geneticCode, signal);
       const best = scores.indexOf(Math.max(...scores));
       alpha = pairs[best]![0];
       beta = pairs[best]![1];
@@ -463,15 +467,15 @@ async function optimizeAlphaBeta(
   let alpha = 1;
   let beta = 1;
   const alphaFit = await goldenMaximum(async (candidate) => (
-    await evaluateCodonCandidates([[candidate, beta]], alignment, tree, compiled, backend, gtrRates, f3x4, equilibrium, tipStates, signal)
+    await evaluateCodonCandidates([[candidate, beta]], alignment, tree, compiled, backend, gtrRates, f3x4, equilibrium, tipStates, geneticCode, signal)
   )[0]!, 1e-6, 5, 1e-4, "Optimizing global α", (fraction, detail) => onProgress?.(fraction * 0.34, detail));
   alpha = alphaFit.x;
   const betaFit = await goldenMaximum(async (candidate) => (
-    await evaluateCodonCandidates([[alpha, candidate]], alignment, tree, compiled, backend, gtrRates, f3x4, equilibrium, tipStates, signal)
+    await evaluateCodonCandidates([[alpha, candidate]], alignment, tree, compiled, backend, gtrRates, f3x4, equilibrium, tipStates, geneticCode, signal)
   )[0]!, 1e-6, 5, 1e-4, "Optimizing global β", (fraction, detail) => onProgress?.(0.34 + fraction * 0.33, detail));
   beta = betaFit.x;
   const polished = await goldenMaximum(async (candidate) => (
-    await evaluateCodonCandidates([[candidate, beta]], alignment, tree, compiled, backend, gtrRates, f3x4, equilibrium, tipStates, signal)
+    await evaluateCodonCandidates([[candidate, beta]], alignment, tree, compiled, backend, gtrRates, f3x4, equilibrium, tipStates, geneticCode, signal)
   )[0]!, Math.max(1e-6, alpha - 0.05), Math.min(5, alpha + 0.05), 1e-7, "Polishing global α", (fraction, detail) => onProgress?.(0.67 + fraction * 0.33, detail));
   return { alpha: polished.x, beta, logLikelihood: polished.value };
 }
@@ -484,11 +488,13 @@ export async function fitGlobalModel(
   mode: "empirical-fast" | "reference-compatible" = "empirical-fast",
   onProgress?: ProgressCallback,
   signal?: AbortSignal,
+  geneticCodeInput: GeneticCodeInput = 1,
 ): Promise<FittedModel> {
   signal?.throwIfAborted();
+  const geneticCode = getGeneticCode(geneticCodeInput);
   onProgress?.(0, { message: "Estimating F3×4 equilibrium frequencies", indeterminate: true });
   const f3x4 = countF3x4(alignment);
-  const codonEquilibrium = codonEquilibriumFromF3x4(f3x4);
+  const codonEquilibrium = codonEquilibriumFromF3x4(f3x4, geneticCode);
   const nucleotideEquilibrium = countNucleotideFrequencies(alignment);
   const nucleotideTips = encodeNucleotideTips(alignment, tree);
   const gtrRates = mode === "reference-compatible"
@@ -506,7 +512,7 @@ export async function fitGlobalModel(
   if (mode === "empirical-fast") {
     onProgress?.(0.12, { message: "Empirical GTR initialization complete" });
   }
-  const codonTips = encodeCodonTips(alignment, tree);
+  const codonTips = encodeCodonTips(alignment, tree, geneticCode);
   const fit = await optimizeAlphaBeta(
     mode,
     alignment,
@@ -517,6 +523,7 @@ export async function fitGlobalModel(
     f3x4,
     codonEquilibrium,
     codonTips,
+    geneticCode,
     (fraction, detail) => onProgress?.(
       mode === "reference-compatible" ? 0.52 + fraction * 0.48 : 0.12 + fraction * 0.88,
       detail,
@@ -529,6 +536,7 @@ export async function fitGlobalModel(
     metricValue: fit.logLikelihood,
   });
   return {
+    geneticCodeId: geneticCode.id,
     gtrRates,
     f3x4,
     codonEquilibrium,

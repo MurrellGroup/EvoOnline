@@ -9,13 +9,16 @@ The browser workflow currently supports:
 3. Uploading a Newick/NEXUS tree or inferring one with bioWASM FastTree directly from the main workflow.
 4. Viewing a tree, and tagging G1/G2 foreground branches when DifFUBAR requires them, in **phylotagger**.
 5. Validating each method's alignment/tree/tip-name/tag requirements.
-6. Running DifFUBAR, FUBAR, fixed three-rate BS-REL, FAME, FLAVOR, Glamma, or CladeShift in a dedicated browser worker. Exact parallel WASM is the default; DifFUBAR and regular FUBAR also retain selectable WebGPU.
-7. Choosing deterministic Dirichlet-EM or exact Gibbs inference for FUBAR, FAME, and FLAVOR.
-8. Optionally deriving separate approximate-FEL likelihood-ratio tests from the already-computed FUBAR grid.
-9. Exploring model-owned, linked interactive SVG figures, editing publication labels, and exporting lossless SVG or CSV.
-10. Profile-aligning the translated codon alignment to an uploaded PDB/mmCIF structure or an RCSB PDB entry, then exploring residue-level selection calls in a simplified Mol* view.
+6. Selecting one of 24 unambiguous current NCBI genetic codes for any analysis.
+7. Running DifFUBAR, FUBAR, fixed three-rate BS-REL, FAME, FLAVOR, Glamma, or CladeShift in a dedicated browser worker. Exact parallel WASM is the default; DifFUBAR and regular FUBAR also retain selectable WebGPU.
+8. Choosing deterministic Dirichlet-EM or exact Gibbs inference for FUBAR, FAME, and FLAVOR.
+9. Optionally deriving separate approximate-FEL likelihood-ratio tests from the already-computed FUBAR grid.
+10. Exploring model-owned, linked interactive SVG figures, editing publication labels, and exporting lossless SVG or CSV.
+11. Profile-aligning the translated codon alignment to an uploaded PDB/mmCIF structure or an RCSB PDB entry, then exploring residue-level selection calls in a simplified Mol* view.
 
 Sequence and tree data remain device-local when using the browser executor.
+
+The selected NCBI translation table is part of the fitted model, not merely a display preference: it controls stop/sense states, synonymous versus nonsynonymous edges, equilibrium normalization, likelihood dimensions, and every downstream amino-acid translation. See [supported genetic codes](docs/GENETIC_CODES.md).
 
 ## Repository layout
 
@@ -36,6 +39,7 @@ models/
 docs/
   ARCHITECTURE.md
   ADDING_A_MODEL.md
+  GENETIC_CODES.md
   WEBWIDGETS.md
 ```
 
@@ -89,7 +93,7 @@ The result renderer highlights both positive selection, P(β > α), and purifyin
 
 BS-REL is the original fixed three-rate branch-site random-effects construction, not aBS-REL: every branch always has ordered `ω− ≤ ωN ≤ 1 ≤ ω+` classes and three fitted weights. There is no AIC/AICc model-complexity selection. EvoOnline performs one joint L-BFGS optimization over all branch mixtures and branch-length multipliers. A custom SIMD WASM kernel marginalizes each three-class branch into one mixed Markov operator and evaluates codon sites across persistent workers.
 
-Each gradient pass performs one Felsenstein up-pass and one reversible down-pass to retain the two directed messages around every edge. A one-parameter branch perturbation then recomputes only the changed component and contracts it with that local blanket; unchanged rate components are reused. Whole-tree line-search calls omit the down-pass. After the universal alternative is fitted, every requested null fixes that branch's `ω+ = 1` and all nulls are re-optimized concurrently against their fixed two-sided boundary messages. The test uses the calibrated fixed three-rate mixture `0.50 χ²₀ + 0.05 χ²₁ + 0.45 χ²₂`, followed by Holm–Bonferroni across the requested branches.
+Each gradient pass performs one Felsenstein up-pass and one reversible down-pass to retain the two directed messages around every edge. A one-parameter branch perturbation then recomputes only the changed component and contracts it with that local blanket; unchanged rate components are reused. Whole-tree line-search calls omit the down-pass. After the global alternative is fitted, every requested null fixes that branch's `ω+ = 1` and all nulls are re-optimized concurrently against their fixed two-sided boundary messages. The test uses the calibrated fixed three-rate mixture `0.50 χ²₀ + 0.05 χ²₁ + 0.45 χ²₂`, followed by Holm–Bonferroni across the requested branches.
 
 Results include the three ω values and weights, mean ω, fitted branch length, LRT, raw p-value, and Holm p-value. The linked phylogram uses fitted branch lengths for geometry and can color edges by Holm evidence, LRT, positive ω, positive-class fraction, mean ω, or fitted length. Tip/internal labels, branch annotations, line widths, dimensions, and title are adjustable; selecting an edge links to the table and the complete live tree exports as SVG.
 

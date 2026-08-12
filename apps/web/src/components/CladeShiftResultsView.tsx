@@ -67,6 +67,7 @@ export function CladeShiftResultsView({ result, threshold, alignment }: { readon
     <p className="method-note method-note--warning"><strong>Exploratory and not simulation-validated:</strong> these are empirical-Bayes posteriors, not calibrated p-values. Baseline α–β uncertainty is integrated using <span className="formula">BF = E<sub>q<sub>null</sub>(α,β)</sub>[L<sub>shift</sub>/L<sub>null</sub>]</span>; highest-mass null components are retained adaptively until the requested mass target or hard cap is reached, and the actual coverage is reported. CladeShift detects a change in ω stringency, not a causal phenotype association or a directional amino-acid preference shift.</p>
     <div className="result-stats">
       <div><span>Detected shifts</span><strong>{detected.length.toLocaleString()}</strong></div>
+      <div><span>Genetic code</span><strong>NCBI {result.diagnostics.geneticCodeId}</strong><small>{result.diagnostics.geneticCodeName}</small></div>
       <div><span>Relaxed</span><strong style={{ color: "#4267d5" }}>{relaxed.toLocaleString()}</strong></div>
       <div><span>Intensified</span><strong className="positive-text">{intensified.toLocaleString()}</strong></div>
       <div><span>Candidate clades</span><strong>{result.diagnostics.candidateClades.toLocaleString()}</strong></div>
@@ -94,7 +95,7 @@ export function CladeShiftResultsView({ result, threshold, alignment }: { readon
       <div className="result-table-wrap"><table className="result-table"><thead><tr><th>Branch</th><th>Clade size</th><th>Eligible</th><th>E[shifted sites]</th><th>E[relaxed]</th><th>E[intensified]</th><th>Max site posterior</th><th>MAP site</th></tr></thead><tbody>{visibleBranches.map((branch) => <tr key={branch.branch} className={branch.branch === selectedBranch ? "is-selected" : undefined} onClick={() => commitBranch(branch.branch)}><td><strong>{branch.name}</strong><small>#{branch.branch} · parent {branch.parentName}</small></td><td>{branch.descendantTips.toLocaleString()} tips</td><td>{branch.eligible ? "Yes" : "No"}</td><td>{number(branch.expectedShiftedSites)}</td><td>{number(branch.expectedRelaxedSites)}</td><td>{number(branch.expectedIntensifiedSites)}</td><td>{probability(branch.maximumSitePosterior)}</td><td>{branch.mapSite}</td></tr>)}</tbody></table></div>
     </div></details>
 
-    <ReferenceResultMap modelName="CladeShift" alignmentText={alignment} evidenceSites={referenceEvidence} hypotheses={CLADE_SHIFT_REFERENCE_HYPOTHESES} initialThreshold={posteriorThreshold} />
-    <StructureMappingPanel alignmentText={alignment} sites={structureSites} colorModes={structureModes} selectionThreshold={posteriorThreshold} />
+    <ReferenceResultMap modelName="CladeShift" alignmentText={alignment} geneticCodeId={result.diagnostics.geneticCodeId} evidenceSites={referenceEvidence} hypotheses={CLADE_SHIFT_REFERENCE_HYPOTHESES} initialThreshold={posteriorThreshold} />
+    <StructureMappingPanel alignmentText={alignment} geneticCodeId={result.diagnostics.geneticCodeId} sites={structureSites} colorModes={structureModes} selectionThreshold={posteriorThreshold} />
   </section>;
 }

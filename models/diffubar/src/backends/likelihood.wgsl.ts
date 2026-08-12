@@ -1,4 +1,5 @@
-export const GPU_STATE_COUNT = 61;
+/** One workgroup lane per possible DNA codon; inactive stop-codon lanes are masked. */
+export const GPU_STATE_COUNT = 64;
 export const GPU_WORKGROUP_SIZE = 64;
 export const GPU_MAX_SLOTS = 24;
 

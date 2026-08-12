@@ -1,4 +1,5 @@
 import { translateCodon } from "../structure-mapping/sequence-profile.js";
+import type { GeneticCodeInput } from "@phylo-workbench/model-diffubar/browser-source";
 import type { ParsedReferenceSequence, ReferenceSequenceKind } from "./types.js";
 
 const NUCLEOTIDE_ALPHABET = /^[ACGTUNRYKMSWBDHV.-]+$/i;
@@ -38,22 +39,23 @@ function proteinSequence(rawSequence: string): string {
   return ungapped.replaceAll("*", "X").replace(/[^ARNDCQEGHILKMFPSTWYVX]/g, "X");
 }
 
-function nucleotideSequence(rawSequence: string): string {
+function nucleotideSequence(rawSequence: string, geneticCode: GeneticCodeInput): string {
   if (!NUCLEOTIDE_ALPHABET.test(rawSequence)) throw new Error("The coding-nucleotide reference contains unsupported characters.");
   const ungapped = rawSequence.toUpperCase().replaceAll("U", "T").replace(/[.-]/g, "");
   if (ungapped.length === 0 || ungapped.length % 3 !== 0) throw new Error("A coding-nucleotide reference must contain complete codons after gaps are removed.");
   let translated = "";
   for (let offset = 0; offset < ungapped.length; offset += 3) {
-    const aminoAcid = translateCodon(ungapped.slice(offset, offset + 3));
+    const aminoAcid = translateCodon(ungapped.slice(offset, offset + 3), geneticCode);
     translated += aminoAcid === undefined || aminoAcid === "*" ? "X" : aminoAcid;
   }
-  return translated.endsWith("X") && translateCodon(ungapped.slice(-3)) === "*" ? translated.slice(0, -1) : translated;
+  return translated.endsWith("X") && translateCodon(ungapped.slice(-3), geneticCode) === "*" ? translated.slice(0, -1) : translated;
 }
 
 export function parseReferenceSequence(
   text: string,
   fallbackName: string,
   requestedKind: ReferenceSequenceKind = "auto",
+  geneticCode: GeneticCodeInput = 1,
 ): ParsedReferenceSequence {
   const record = parseSingleRecord(text, fallbackName);
   const compact = record.sequence.replace(/\s+/g, "");
@@ -62,7 +64,7 @@ export function parseReferenceSequence(
       ? "nucleotide"
       : "protein"
     : requestedKind;
-  const sequence = kind === "nucleotide" ? nucleotideSequence(compact) : proteinSequence(compact);
+  const sequence = kind === "nucleotide" ? nucleotideSequence(compact, geneticCode) : proteinSequence(compact);
   if (sequence === "") throw new Error("The translated reference contains no amino-acid residues.");
   return { name: record.name, sequence, kind, sourceLength: compact.replace(/[.-]/g, "").length };
 }

@@ -24,6 +24,7 @@ const alignment = parseFasta(fastaText);
 const tree = parseNewick(treeText);
 const f3x4 = countF3x4(alignment);
 const fittedModel: FittedModel = {
+  geneticCodeId: 1,
   gtrRates: new Float64Array(6).fill(1),
   f3x4,
   codonEquilibrium: codonEquilibriumFromF3x4(f3x4),
@@ -116,15 +117,23 @@ test("fixed three-rate calibration and Holm correction are monotone", () => {
 
 test("small fixed-complexity BS-REL analysis returns branch tests", async () => {
   const progress: Array<{ readonly stage: string; readonly fraction: number; readonly indeterminate: boolean }> = [];
+  const mitochondrialFit: FittedModel = {
+    ...fittedModel,
+    geneticCodeId: 2,
+    codonEquilibrium: codonEquilibriumFromF3x4(f3x4, 2),
+  };
   const result = await analyzeBsrel(fastaText, treeText, {
+    geneticCode: 2,
     backend: "wasm",
-    fittedModel,
+    fittedModel: mitochondrialFit,
     alternativeIterations: 2,
     nullIterations: 2,
     maximumOmega: 50,
     onStage: (stage, fraction, detail) => progress.push({ stage, fraction, indeterminate: detail?.indeterminate === true }),
   });
   assert.equal(result.branches.length, tree.nodes.length - 1);
+  assert.equal(result.diagnostics.geneticCodeId, 2);
+  assert.equal(result.diagnostics.codonStates, 60);
   assert.equal(result.diagnostics.testedBranches, result.branches.length);
   assert.equal(result.diagnostics.lrtCalibration, "0.50*chi2_0 + 0.05*chi2_1 + 0.45*chi2_2");
   assert.ok(Number.isFinite(result.alternativeLogLikelihood));

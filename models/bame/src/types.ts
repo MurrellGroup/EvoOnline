@@ -4,6 +4,7 @@ import type {
   DifFUBARGrid,
   FastaAlignment,
   FittedModel,
+  GeneticCodeId,
   ModelBank,
   ParsedTree,
   ProgressDetail,
@@ -95,6 +96,7 @@ export interface FlavorPosteriorProducts {
 }
 
 export interface BameAnalysisOptions {
+  readonly geneticCode?: GeneticCodeId;
   readonly backend?: BameBackendKind;
   readonly inferenceMethod?: BameInferenceMethod;
   readonly iterations?: number;
@@ -125,6 +127,9 @@ export interface FlavorAnalysisOptions extends BameAnalysisOptions {
 }
 
 export interface BameDiagnostics {
+  readonly geneticCodeId: GeneticCodeId;
+  readonly geneticCodeName: string;
+  readonly codonStates: number;
   readonly taxa: number;
   readonly codonSites: number;
   readonly categories: number;
@@ -230,6 +235,7 @@ export interface GlobalGammaPosteriorProducts {
 }
 
 export interface GlobalGammaAnalysisOptions {
+  readonly geneticCode?: GeneticCodeId;
   readonly backend?: BameBackendKind;
   readonly omegaSlices?: number;
   readonly alphaSlices?: number;
@@ -255,6 +261,9 @@ export interface GlobalGammaAnalysisResult {
   readonly backend: "wasm" | "wasm-parallel";
   readonly timings: Readonly<Record<string, number>>;
   readonly diagnostics: {
+    readonly geneticCodeId: GeneticCodeId;
+    readonly geneticCodeName: string;
+    readonly codonStates: number;
     readonly taxa: number;
     readonly codonSites: number;
     readonly branches: number;

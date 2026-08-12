@@ -1,4 +1,4 @@
-import type { PosteriorMarginals, ProgressDetail, SiteResult } from "@phylo-workbench/model-diffubar/browser-source";
+import type { GeneticCodeId, PosteriorMarginals, ProgressDetail, SiteResult } from "@phylo-workbench/model-diffubar/browser-source";
 import type { ApproximateFelProducts, FubarPosteriorProducts, FubarSiteResult } from "@phylo-workbench/model-fubar/browser-source";
 import type { BsrelBranchResult } from "@phylo-workbench/model-bsrel/browser-source";
 import type {
@@ -24,6 +24,9 @@ export interface DifFubarRunResult {
   readonly backend: "webgpu" | "wasm" | "wasm-parallel";
   readonly timings: Readonly<Record<string, number>>;
   readonly diagnostics: {
+    readonly geneticCodeId: GeneticCodeId;
+    readonly geneticCodeName: string;
+    readonly codonStates: number;
     readonly taxa: number;
     readonly codonSites: number;
     readonly categories: number;
@@ -51,6 +54,9 @@ export interface FubarRunResult {
   readonly backend: "webgpu" | "wasm" | "wasm-parallel";
   readonly timings: Readonly<Record<string, number>>;
   readonly diagnostics: {
+    readonly geneticCodeId: GeneticCodeId;
+    readonly geneticCodeName: string;
+    readonly codonStates: number;
     readonly taxa: number;
     readonly codonSites: number;
     readonly categories: number;
@@ -71,6 +77,9 @@ export interface BsrelRunResult {
   readonly backend: "wasm" | "wasm-parallel";
   readonly timings: Readonly<Record<string, number>>;
   readonly diagnostics: {
+    readonly geneticCodeId: GeneticCodeId;
+    readonly geneticCodeName: string;
+    readonly codonStates: number;
     readonly taxa: number;
     readonly codonSites: number;
     readonly branches: number;
@@ -98,6 +107,9 @@ export interface FameRunResult {
   readonly backend: "wasm" | "wasm-parallel";
   readonly timings: Readonly<Record<string, number>>;
   readonly diagnostics: {
+    readonly geneticCodeId: GeneticCodeId;
+    readonly geneticCodeName: string;
+    readonly codonStates: number;
     readonly taxa: number;
     readonly codonSites: number;
     readonly categories: number;
@@ -128,6 +140,9 @@ export interface FlavorRunResult {
   readonly backend: "wasm" | "wasm-parallel";
   readonly timings: Readonly<Record<string, number>>;
   readonly diagnostics: {
+    readonly geneticCodeId: GeneticCodeId;
+    readonly geneticCodeName: string;
+    readonly codonStates: number;
     readonly taxa: number;
     readonly codonSites: number;
     readonly categories: number;
@@ -167,6 +182,9 @@ export interface GlobalGammaRunResult {
   readonly backend: "wasm" | "wasm-parallel";
   readonly timings: Readonly<Record<string, number>>;
   readonly diagnostics: {
+    readonly geneticCodeId: GeneticCodeId;
+    readonly geneticCodeName: string;
+    readonly codonStates: number;
     readonly taxa: number;
     readonly codonSites: number;
     readonly branches: number;
@@ -200,6 +218,9 @@ export interface CladeShiftRunResult {
   readonly backend: "wasm" | "wasm-parallel";
   readonly timings: Readonly<Record<string, number>>;
   readonly diagnostics: {
+    readonly geneticCodeId: GeneticCodeId;
+    readonly geneticCodeName: string;
+    readonly codonStates: number;
     readonly taxa: number;
     readonly codonSites: number;
     readonly branches: number;

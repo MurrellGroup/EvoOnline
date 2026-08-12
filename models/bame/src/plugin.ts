@@ -7,12 +7,20 @@ import {
   type ModelValidation,
   type ValidationIssue,
 } from "@phylo-workbench/model-sdk";
-import { normalizeDifFubarTreeText, parseFasta, parseNewick } from "@phylo-workbench/model-diffubar";
+import { GENETIC_CODE_OPTIONS, normalizeDifFubarTreeText, parseFasta, parseNewick } from "@phylo-workbench/model-diffubar";
 import { fameResultsToCsv, flavorResultsToCsv } from "./pipeline.js";
 import { globalGammaBranchesToCsv } from "./global-gamma.js";
 import type { FameAnalysisResult, FlavorAnalysisResult, GlobalGammaAnalysisResult } from "./types.js";
 
 const commonParameters: ModelManifest["parameters"] = [
+  {
+    id: "geneticCode",
+    label: "Genetic code",
+    description: "NCBI translation table used for sense-codon states, stop filtering, and synonymous/nonsynonymous changes.",
+    type: "select",
+    default: "1",
+    options: GENETIC_CODE_OPTIONS,
+  },
   {
     id: "backend",
     label: "Compute backend",
@@ -228,6 +236,14 @@ export const globalGammaManifest: ModelManifest = {
   category: "selection",
   inputSlots: commonInputs,
   parameters: [
+    {
+      id: "geneticCode",
+      label: "Genetic code",
+      description: "NCBI translation table used for sense-codon states, stop filtering, and synonymous/nonsynonymous changes.",
+      type: "select",
+      default: "1",
+      options: GENETIC_CODE_OPTIONS,
+    },
     {
       id: "backend",
       label: "Compute backend",

@@ -4,6 +4,7 @@ import {
   WasmBackend,
   buildModelBank,
   encodeCodonTips,
+  getGeneticCode,
   parseFasta,
   parseNewick,
   type FittedModel,
@@ -81,6 +82,7 @@ export async function analyzeCladeShift(
   // tree inputs so stale DifFUBAR/FigTree annotations cannot leak branch
   // classes into the baseline model bank.
   const tree = cloneSingleClassTree(typeof newick === "string" ? parseNewick(newick) : newick);
+  const geneticCode = getGeneticCode(options.geneticCode ?? 1);
   const compiled = compileCladeShiftTree(tree);
   if (compiled.edgeNodes.length === 0) throw new DifFUBARError("NO_BRANCHES", "CladeShift requires at least one phylogenetic branch.");
   options.signal?.throwIfAborted();
@@ -111,6 +113,7 @@ export async function analyzeCladeShift(
   // integrate baseline uncertainty without repeating the complete 2-D grid.
   const baselineStarted = performance.now();
   const baseline = await analyzeFubar(alignment, tree, {
+    geneticCode: geneticCode.id,
     backend: options.backend === "wasm" ? "wasm" : "wasm-parallel",
     gridPoints,
     inferenceMethod: "dirichlet-em",
@@ -133,7 +136,7 @@ export async function analyzeCladeShift(
   const modelGrid = createCladeShiftModelGrid(baseline.grid, intensities);
   // FUBAR absorbed global alpha into its private tree; mirror that scaling here.
   for (const node of tree.nodes) node.branchLength *= baseline.fittedModel.globalAlpha;
-  const modelBank = buildModelBank(modelGrid.grid, tree, baseline.fittedModel.gtrRates, baseline.fittedModel.f3x4);
+  const modelBank = buildModelBank(modelGrid.grid, tree, baseline.fittedModel.gtrRates, baseline.fittedModel.f3x4, geneticCode);
   const stateCount = intensities.length + 1;
   const baselineModels = new Uint32Array(alignment.codonSites * compressed.componentCount);
   const shiftedModels = new Uint32Array(baselineModels.length * intensities.length);
@@ -182,7 +185,7 @@ export async function analyzeCladeShift(
   try {
     kernel = await backend.evaluateCladeShift({
       tree: compiled.kernel,
-      tipStates: encodeCodonTips(alignment, tree),
+      tipStates: encodeCodonTips(alignment, tree, geneticCode),
       siteCount: alignment.codonSites,
       branchLengths: Float64Array.from(compiled.edgeNodes, (node) => node.branchLength),
       baselineModels,
@@ -246,6 +249,9 @@ export async function analyzeCladeShift(
       totalMs: performance.now() - started,
     },
     diagnostics: {
+      geneticCodeId: geneticCode.id,
+      geneticCodeName: geneticCode.name,
+      codonStates: geneticCode.senseCodons.length,
       taxa: alignment.names.length,
       codonSites: alignment.codonSites,
       branches: compiled.edgeNodes.length,

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import type { GeneticCodeId } from "@phylo-workbench/model-diffubar/browser-source";
 import { MolstarStructureViewer } from "./MolstarStructureViewer.js";
 import { MOLSTAR_RUNTIME_LABEL } from "./molstar-loader.js";
 import { ProfileChainAlignmentPanel } from "./ProfileChainAlignment.js";
@@ -21,6 +22,7 @@ interface StructureMappingPanelProps {
   readonly alignmentText: string;
   readonly sites: readonly StructureSiteDatum[];
   readonly colorModes: readonly StructureColorMode[];
+  readonly geneticCodeId?: GeneticCodeId;
   /** Current results threshold; binary call modes update whenever it changes. */
   readonly selectionThreshold?: number;
 }
@@ -110,7 +112,7 @@ export function updateChainMode(current: StructureChainMode, control: "show" | "
   return current === "mapped" ? "context" : current;
 }
 
-export function StructureMappingPanel({ alignmentText: inputAlignment, sites, colorModes, selectionThreshold }: StructureMappingPanelProps) {
+export function StructureMappingPanel({ alignmentText: inputAlignment, sites, colorModes, geneticCodeId = 1, selectionThreshold }: StructureMappingPanelProps) {
   const workerRef = useRef<Worker | undefined>(undefined);
   const activeRequestRef = useRef<string | undefined>(undefined);
   const abortRef = useRef<AbortController | undefined>(undefined);
@@ -213,6 +215,7 @@ export function StructureMappingPanel({ alignmentText: inputAlignment, sites, co
       type: "map",
       id,
       alignmentText: inputAlignment,
+      geneticCodeId,
       structureText: nextSource.text,
       format: nextSource.format,
     };

@@ -1,22 +1,15 @@
 import type { AminoAcidProfile, AminoAcidProfileColumn } from "./types.js";
+import {
+  translateCodon as translateCodonForCode,
+  type GeneticCodeInput,
+} from "@phylo-workbench/model-diffubar/browser-source";
 
 export const AMINO_ACIDS = "ARNDCQEGHILKMFPSTWYV";
 
 const AMINO_ACID_INDEX = new Map(Array.from(AMINO_ACIDS, (aminoAcid, index) => [aminoAcid, index]));
 
-const UNIVERSAL_CODE: Readonly<Record<string, string>> = Object.freeze({
-  TTT: "F", TTC: "F", TTA: "L", TTG: "L", TCT: "S", TCC: "S", TCA: "S", TCG: "S",
-  TAT: "Y", TAC: "Y", TAA: "*", TAG: "*", TGT: "C", TGC: "C", TGA: "*", TGG: "W",
-  CTT: "L", CTC: "L", CTA: "L", CTG: "L", CCT: "P", CCC: "P", CCA: "P", CCG: "P",
-  CAT: "H", CAC: "H", CAA: "Q", CAG: "Q", CGT: "R", CGC: "R", CGA: "R", CGG: "R",
-  ATT: "I", ATC: "I", ATA: "I", ATG: "M", ACT: "T", ACC: "T", ACA: "T", ACG: "T",
-  AAT: "N", AAC: "N", AAA: "K", AAG: "K", AGT: "S", AGC: "S", AGA: "R", AGG: "R",
-  GTT: "V", GTC: "V", GTA: "V", GTG: "V", GCT: "A", GCC: "A", GCA: "A", GCG: "A",
-  GAT: "D", GAC: "D", GAA: "E", GAG: "E", GGT: "G", GGC: "G", GGA: "G", GGG: "G",
-});
-
-export function translateCodon(codon: string): string | undefined {
-  return UNIVERSAL_CODE[codon.toUpperCase().replaceAll("U", "T")];
+export function translateCodon(codon: string, geneticCode: GeneticCodeInput = 1): string | undefined {
+  return translateCodonForCode(codon, geneticCode);
 }
 
 function parseAlignedFasta(text: string): readonly string[] {
@@ -41,14 +34,14 @@ function parseAlignedFasta(text: string): readonly string[] {
   return sequences;
 }
 
-export function buildAminoAcidProfile(alignmentText: string): AminoAcidProfile {
+export function buildAminoAcidProfile(alignmentText: string, geneticCode: GeneticCodeInput = 1): AminoAcidProfile {
   const sequences = parseAlignedFasta(alignmentText);
   const columns: AminoAcidProfileColumn[] = [];
   for (let offset = 0; offset < sequences[0]!.length; offset += 3) {
     const counts = new Uint32Array(AMINO_ACIDS.length);
     let validCount = 0;
     for (const sequence of sequences) {
-      const aminoAcid = translateCodon(sequence.slice(offset, offset + 3));
+      const aminoAcid = translateCodon(sequence.slice(offset, offset + 3), geneticCode);
       const index = aminoAcid === undefined || aminoAcid === "*" ? undefined : AMINO_ACID_INDEX.get(aminoAcid);
       if (index === undefined) continue;
       counts[index] = counts[index]! + 1;

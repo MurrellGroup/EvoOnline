@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 import { analyzeFubar, fubarResultsToCsv } from "@phylo-workbench/model-fubar/browser-source";
+import { getGeneticCode } from "@phylo-workbench/model-diffubar/browser-source";
 import type { FubarWorkerResponse, WorkerRunRequest } from "../types.js";
 
 const scope = self as DedicatedWorkerGlobalScope;
@@ -17,6 +18,7 @@ scope.onmessage = (event: MessageEvent<WorkerRunRequest>): void => {
       const threshold = Number(parameters.posteriorThreshold ?? 0.95);
       const inferenceMethod = parameters.inferenceMethod === "gibbs" ? "gibbs" : "dirichlet-em";
       const result = await analyzeFubar(request.alignment, request.tree, {
+        geneticCode: getGeneticCode(String(parameters.geneticCode ?? 1)).id,
         backend,
         gridPoints: Number(parameters.gridPoints ?? 20),
         inferenceMethod,

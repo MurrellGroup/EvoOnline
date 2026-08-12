@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { analyzeDifFUBAR, resultsToCsv } from "@phylo-workbench/model-diffubar/browser-source";
+import { analyzeDifFUBAR, getGeneticCode, resultsToCsv } from "@phylo-workbench/model-diffubar/browser-source";
 import type { WorkerResponse, WorkerRunRequest } from "../types.js";
 
 const scope = self as DedicatedWorkerGlobalScope;
@@ -17,6 +17,7 @@ scope.onmessage = (event: MessageEvent<WorkerRunRequest>): void => {
       const samplerValue = String(parameters.samplerMode ?? "fast-exact");
       const samplerMode = samplerValue === "reference" || samplerValue === "collapsed" ? samplerValue : "fast-exact";
       const result = await analyzeDifFUBAR(request.alignment, request.tree, {
+        geneticCode: getGeneticCode(String(parameters.geneticCode ?? 1)).id,
         backend,
         foregroundGrid: Number(parameters.foregroundGrid ?? 6),
         backgroundGrid: Number(parameters.backgroundGrid ?? 4),

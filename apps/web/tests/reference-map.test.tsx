@@ -44,6 +44,9 @@ test("reference parser auto-detects coding nucleotide and preserves protein inpu
   const protein = parseReferenceSequence(">protein\nMK-TX*\n", "reference.faa", "protein");
   assert.equal(protein.kind, "protein");
   assert.equal(protein.sequence, "MKTX");
+
+  const mitochondrial = parseReferenceSequence(">mitochondrial\nATGTGAATA\n", "reference.fna", "nucleotide", 2);
+  assert.equal(mitochondrial.sequence, "MWM");
 });
 
 test("global profile alignment retains insertions on both sides", () => {

@@ -1,4 +1,5 @@
 import type { AminoAcidProfile, ProfileAlignment } from "../structure-mapping/types.js";
+import type { GeneticCodeId } from "@phylo-workbench/model-diffubar/browser-source";
 
 export type ReferenceSequenceKind = "auto" | "protein" | "nucleotide";
 export type ParsedReferenceSequenceKind = Exclude<ReferenceSequenceKind, "auto">;
@@ -32,6 +33,7 @@ export interface ReferenceAlignmentWorkerRequest {
   readonly type: "align";
   readonly id: string;
   readonly alignmentText: string;
+  readonly geneticCodeId: GeneticCodeId;
   readonly referenceText: string;
   readonly fallbackName: string;
   readonly referenceKind: ReferenceSequenceKind;

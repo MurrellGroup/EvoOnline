@@ -16,9 +16,9 @@ scope.onmessage = (event: MessageEvent<ReferenceAlignmentWorkerRequest>): void =
   if (request.type !== "align") return;
   try {
     send({ type: "progress", id: request.id, message: "Translating the codon alignment into an amino-acid profile…" });
-    const profile = buildAminoAcidProfile(request.alignmentText);
+    const profile = buildAminoAcidProfile(request.alignmentText, request.geneticCodeId);
     send({ type: "progress", id: request.id, message: "Reading and translating the reference sequence…" });
-    const reference = parseReferenceSequence(request.referenceText, request.fallbackName, request.referenceKind);
+    const reference = parseReferenceSequence(request.referenceText, request.fallbackName, request.referenceKind, request.geneticCodeId);
     send({ type: "progress", id: request.id, message: `Globally profile-aligning ${reference.sequence.length.toLocaleString()} reference residues…` });
     const alignment = alignProfileToReference(profile, reference.sequence);
     const transfer = new Set<Transferable>();

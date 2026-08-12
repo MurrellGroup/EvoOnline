@@ -9,7 +9,7 @@ import {
   globalGammaBranchesToCsv,
 } from "@phylo-workbench/model-bame/browser-source";
 import type { BameBackendKind } from "@phylo-workbench/model-bame/browser-source";
-import type { ProgressDetail } from "@phylo-workbench/model-diffubar/browser-source";
+import { getGeneticCode, type ProgressDetail } from "@phylo-workbench/model-diffubar/browser-source";
 import type { BameRunResult, BameWorkerResponse, BameWorkerRunRequest, GlobalGammaRunResult } from "../types.js";
 
 const scope = self as DedicatedWorkerGlobalScope;
@@ -24,7 +24,9 @@ scope.onmessage = (event: MessageEvent<BameWorkerRunRequest>): void => {
       const backendValue = String(parameters.backend ?? "wasm-parallel");
       const backend: BameBackendKind = backendValue === "wasm" || backendValue === "wasm-parallel" ? backendValue : "auto";
       const threshold = Number(parameters.posteriorThreshold ?? 0.9);
+      const geneticCode = getGeneticCode(String(parameters.geneticCode ?? 1)).id;
       const common = {
+        geneticCode,
         backend,
         inferenceMethod: parameters.inferenceMethod === "gibbs" ? "gibbs" as const : "dirichlet-em" as const,
         iterations: Number(parameters.iterations ?? 2500),
@@ -89,6 +91,7 @@ scope.onmessage = (event: MessageEvent<BameWorkerRunRequest>): void => {
         ];
       } else {
         const result = await analyzeGlobalGamma(request.alignment, request.tree, {
+          geneticCode,
           backend,
           omegaSlices: Number(parameters.omegaSlices ?? 8),
           alphaSlices: Number(parameters.alphaSlices ?? 4),

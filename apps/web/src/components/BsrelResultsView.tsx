@@ -38,6 +38,7 @@ export function BsrelResultsView({ result, threshold }: { readonly result: Bsrel
     </div>
     <div className="result-stats">
       <div><span>Branches</span><strong>{result.diagnostics.branches.toLocaleString()}</strong></div>
+      <div><span>Genetic code</span><strong>NCBI {result.diagnostics.geneticCodeId}</strong><small>{result.diagnostics.geneticCodeName}</small></div>
       <div><span>Tested</span><strong>{result.diagnostics.testedBranches.toLocaleString()}</strong></div>
       <div><span>Holm ≤ {significanceThreshold.toPrecision(2)}</span><strong className="positive-text">{significant.length.toLocaleString()}</strong></div>
       <div><span>Alternative fit</span><strong>{result.diagnostics.alternativeConverged ? "Converged" : `${result.diagnostics.alternativeIterations} steps`}</strong></div>

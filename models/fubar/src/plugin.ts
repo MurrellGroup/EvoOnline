@@ -9,6 +9,7 @@ import {
 } from "@phylo-workbench/model-sdk";
 import {
   normalizeDifFubarTreeText,
+  GENETIC_CODE_OPTIONS,
   parseFasta,
   parseNewick,
 } from "@phylo-workbench/model-diffubar";
@@ -39,6 +40,14 @@ export const fubarManifest: ModelManifest = {
     },
   ],
   parameters: [
+    {
+      id: "geneticCode",
+      label: "Genetic code",
+      description: "NCBI translation table used for sense-codon states, stop filtering, and synonymous/nonsynonymous changes.",
+      type: "select",
+      default: "1",
+      options: GENETIC_CODE_OPTIONS,
+    },
     {
       id: "backend",
       label: "Compute backend",

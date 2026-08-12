@@ -44,6 +44,7 @@ const fasta = syntheticFasta(codonSites);
 const alignment = parseFasta(fasta);
 const f3x4 = countF3x4(alignment);
 const fittedModel: FittedModel = {
+  geneticCodeId: 1,
   gtrRates: Float64Array.of(1, 1, 1, 1, 1, 1),
   f3x4,
   codonEquilibrium: codonEquilibriumFromF3x4(f3x4),

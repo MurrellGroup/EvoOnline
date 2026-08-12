@@ -1,6 +1,7 @@
 import type {
   FastaAlignment,
   FittedModel,
+  GeneticCodeId,
   ParsedTree,
   ProgressDetail,
 } from "@phylo-workbench/model-diffubar";
@@ -33,6 +34,7 @@ export interface BsrelBranchResult {
 }
 
 export interface BsrelAnalysisOptions {
+  readonly geneticCode?: GeneticCodeId;
   readonly backend?: BsrelBackendKind;
   readonly branchScope?: BsrelBranchScope;
   readonly significanceThreshold?: number;
@@ -53,6 +55,9 @@ export interface BsrelAnalysisResult {
   readonly backend: "wasm" | "wasm-parallel";
   readonly timings: Readonly<Record<string, number>>;
   readonly diagnostics: {
+    readonly geneticCodeId: GeneticCodeId;
+    readonly geneticCodeName: string;
+    readonly codonStates: number;
     readonly taxa: number;
     readonly codonSites: number;
     readonly branches: number;

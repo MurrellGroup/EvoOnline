@@ -1,13 +1,13 @@
 # difFUBAR WebGPU
 
-Browser-native difFUBAR with a custom 61-state WebGPU pruning kernel and an optimized f64 WebAssembly fallback. FASTA and tagged Newick/NEXUS data stay in the browser.
+Browser-native difFUBAR with a custom dynamic 60–63-state WebGPU pruning kernel and an optimized f64 WebAssembly fallback. FASTA and tagged Newick/NEXUS data stay in the browser.
 
 This is an independent TypeScript/AssemblyScript implementation of the model in the [difFUBAR preprint](https://www.biorxiv.org/content/10.1101/2025.05.19.654647v1) and the reference [CodonMolecularEvolution.jl implementation](https://github.com/MurrellGroup/CodonMolecularEvolution.jl). It does not embed Julia.
 
 ## Current status
 
 - The default foreground/background grids, category ordering, MG94-F3x4 construction, tree-tag semantics, conditional likelihood scaling, uncollapsed Gibbs transition, and eight-column CSV output match the Julia design.
-- The WebGPU likelihood path is a purpose-built WGSL compute kernel. One 64-lane workgroup evaluates one `(site, grid category)` pair; lanes 0–60 own codon states.
+- The WebGPU likelihood path is a purpose-built WGSL compute kernel. One 64-lane workgroup evaluates one `(site, grid category)` pair; the first 60–63 lanes own the selected code's sense-codon states.
 - The WASM path uses f64 SIMD, adaptive sparse uniformization, 16-site cache blocks, Sethi–Ullman tree registers, and a hierarchical dependency cache that reuses subtrees across omitted grid axes.
 - A persistent worker pool partitions sites across CPU cores. The WASM module is compiled once and shared with the workers.
 - The default `fast-exact` Gibbs kernel uses exact rejection sampling instead of scanning all grid categories. `reference` retains the dense Julia-style transition for auditing, and `collapsed` is an optional alternative kernel targeting the same posterior.
@@ -44,12 +44,14 @@ node dist/cli.js \
   --tree tagged-tree.nex \
   --output posteriors.csv \
   --backend auto \
+  --genetic-code 1 \
   --iterations 2500
 ```
 
 Useful switches:
 
 - `--backend auto|wasm-parallel|wasm|webgpu`
+- `--genetic-code N` selects a supported NCBI translation-table number
 - `--foreground-grid 6 --background-grid 4`
 - `--reference-fit` for the slower optimizer-compatible global fit
 - `--strict-sampler` to disable conditional-likelihood pruning
@@ -66,6 +68,7 @@ import { analyzeDifFUBAR, resultsToCsv } from "@phylo-workbench/model-diffubar";
 
 const result = await analyzeDifFUBAR(fastaText, taggedTreeText, {
   backend: "auto",
+  geneticCode: 2,        // NCBI vertebrate mitochondrial code
   foregroundGrid: 6,
   backgroundGrid: 4,
   iterations: 2_500,
@@ -89,8 +92,8 @@ Pass `fittedModel` to bypass optimizer differences and compare the likelihood gr
 - Tree tip names must match FASTA names after `{tag}` text is removed.
 - Exactly two tags are compared. Untagged non-root edges form an optional background class.
 - Tags are sorted before class assignment, matching the reference implementation's group ordering.
-- Universal-code stop or ambiguous codons are treated as missing states, matching the reference `CodonPartition` behavior used by difFUBAR.
-- The current build supports the universal genetic code only.
+- Stop codons under the selected translation table, plus ambiguous codons, are treated as missing states, matching the reference `CodonPartition` behavior used by difFUBAR.
+- The CLI, browser, and API support the 24 unambiguous current NCBI translation tables listed in [Genetic codes](../../docs/GENETIC_CODES.md). The selected code is stored in fitted models and result diagnostics.
 
 Example tagged Newick:
 

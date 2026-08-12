@@ -2,6 +2,7 @@ import type { PhyloWorkspaceSnapshot } from "@phylo-workbench/domain";
 import {
   analyzeDifFUBAR,
   difFubarManifest,
+  getGeneticCode,
   resultsToCsv,
   validateDifFubarWorkspace,
   type AnalysisResult,
@@ -66,6 +67,10 @@ function numberParameter(parameters: ParameterValues, name: string, fallback: nu
   return Number.isFinite(value) ? value : fallback;
 }
 
+function geneticCodeParameter(parameters: ParameterValues) {
+  return getGeneticCode(String(parameters.geneticCode ?? 1)).id;
+}
+
 function serialiseDifFubarResult(result: AnalysisResult) {
   return {
     sites: result.sites,
@@ -74,6 +79,7 @@ function serialiseDifFubarResult(result: AnalysisResult) {
     timings: result.timings,
     diagnostics: result.diagnostics,
     fittedModel: {
+      geneticCodeId: result.fittedModel.geneticCodeId,
       gtrRates: [...result.fittedModel.gtrRates],
       f3x4: [...result.fittedModel.f3x4],
       globalAlpha: result.fittedModel.globalAlpha,
@@ -103,6 +109,7 @@ function serialiseFubarResult(result: FubarAnalysisResult, threshold: number) {
     timings: result.timings,
     diagnostics: result.diagnostics,
     fittedModel: {
+      geneticCodeId: result.fittedModel.geneticCodeId,
       gtrRates: [...result.fittedModel.gtrRates],
       f3x4: [...result.fittedModel.f3x4],
       globalAlpha: result.fittedModel.globalAlpha,
@@ -125,6 +132,7 @@ function serialiseBsrelResult(result: BsrelAnalysisResult) {
     timings: result.timings,
     diagnostics: result.diagnostics,
     fittedModel: {
+      geneticCodeId: result.fittedModel.geneticCodeId,
       gtrRates: [...result.fittedModel.gtrRates],
       f3x4: [...result.fittedModel.f3x4],
       globalAlpha: result.fittedModel.globalAlpha,
@@ -146,6 +154,7 @@ function serialiseBameResult(result: FameAnalysisResult | FlavorAnalysisResult, 
     timings: result.timings,
     diagnostics: result.diagnostics,
     fittedModel: {
+      geneticCodeId: result.fittedModel.geneticCodeId,
       gtrRates: [...result.fittedModel.gtrRates],
       f3x4: [...result.fittedModel.f3x4],
       globalAlpha: result.fittedModel.globalAlpha,
@@ -176,6 +185,7 @@ function serialiseGlobalGammaResult(result: GlobalGammaAnalysisResult) {
     timings: result.timings,
     diagnostics: result.diagnostics,
     fittedModel: {
+      geneticCodeId: result.fittedModel.geneticCodeId,
       gtrRates: [...result.fittedModel.gtrRates],
       f3x4: [...result.fittedModel.f3x4],
       globalAlpha: result.fittedModel.globalAlpha,
@@ -209,6 +219,7 @@ function serialiseCladeShiftResult(result: CladeShiftAnalysisResult) {
     timings: result.timings,
     diagnostics: result.diagnostics,
     fittedModel: {
+      geneticCodeId: result.fittedModel.geneticCodeId,
       gtrRates: [...result.fittedModel.gtrRates],
       f3x4: [...result.fittedModel.f3x4],
       globalAlpha: result.fittedModel.globalAlpha,
@@ -227,6 +238,7 @@ export const serverModelRegistry: readonly ServerModelRegistration[] = [
     validate: validateDifFubarWorkspace,
     run: async ({ alignment, tree, parameters, signal, onProgress }) => {
       const result = await analyzeDifFUBAR(alignment, tree, {
+        geneticCode: geneticCodeParameter(parameters),
         // The reference server runner is deliberately conservative. Production
         // registrations can choose a native parallel or GPU runner per job.
         backend: "wasm",
@@ -252,6 +264,7 @@ export const serverModelRegistry: readonly ServerModelRegistration[] = [
     run: async ({ alignment, tree, parameters, signal, onProgress }) => {
       const posteriorThreshold = numberParameter(parameters, "posteriorThreshold", 0.95);
       const result = await analyzeFubar(alignment, tree, {
+        geneticCode: geneticCodeParameter(parameters),
         backend: "wasm",
         gridPoints: numberParameter(parameters, "gridPoints", 20),
         inferenceMethod: parameters.inferenceMethod === "gibbs" ? "gibbs" : "dirichlet-em",
@@ -276,6 +289,7 @@ export const serverModelRegistry: readonly ServerModelRegistration[] = [
         ? parameters.branchScope
         : "all";
       const result = await analyzeBsrel(alignment, tree, {
+        geneticCode: geneticCodeParameter(parameters),
         backend: "wasm",
         branchScope,
         significanceThreshold: numberParameter(parameters, "significanceThreshold", 0.05),
@@ -295,6 +309,7 @@ export const serverModelRegistry: readonly ServerModelRegistration[] = [
     run: async ({ alignment, tree, parameters, signal, onProgress }) => {
       const threshold = numberParameter(parameters, "posteriorThreshold", 0.9);
       const result = await analyzeFame(alignment, tree, {
+        geneticCode: geneticCodeParameter(parameters),
         backend: "wasm",
         inferenceMethod: parameters.inferenceMethod === "gibbs" ? "gibbs" : "dirichlet-em",
         iterations: numberParameter(parameters, "iterations", 2500),
@@ -319,6 +334,7 @@ export const serverModelRegistry: readonly ServerModelRegistration[] = [
     run: async ({ alignment, tree, parameters, signal, onProgress }) => {
       const threshold = numberParameter(parameters, "posteriorThreshold", 0.9);
       const result = await analyzeFlavor(alignment, tree, {
+        geneticCode: geneticCodeParameter(parameters),
         backend: "wasm",
         inferenceMethod: parameters.inferenceMethod === "gibbs" ? "gibbs" : "dirichlet-em",
         iterations: numberParameter(parameters, "iterations", 2500),
@@ -341,6 +357,7 @@ export const serverModelRegistry: readonly ServerModelRegistration[] = [
     validate: validateBameWorkspace,
     run: async ({ alignment, tree, parameters, signal, onProgress }) => {
       const result = await analyzeGlobalGamma(alignment, tree, {
+        geneticCode: geneticCodeParameter(parameters),
         backend: "wasm",
         omegaSlices: numberParameter(parameters, "omegaSlices", 8),
         alphaSlices: numberParameter(parameters, "alphaSlices", 4),
@@ -359,6 +376,7 @@ export const serverModelRegistry: readonly ServerModelRegistration[] = [
     validate: validateCladeShiftWorkspace,
     run: async ({ alignment, tree, parameters, signal, onProgress }) => {
       const result = await analyzeCladeShift(alignment, tree, {
+        geneticCode: geneticCodeParameter(parameters),
         backend: "wasm",
         gridPoints: numberParameter(parameters, "gridPoints", 16),
         posteriorComponents: numberParameter(parameters, "posteriorComponents", 96),

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import type { GeneticCodeId } from "@phylo-workbench/model-diffubar/browser-source";
 import { CommittedNumberInput } from "../../components/CommittedNumberInput.js";
 import { downloadSvg } from "../../lib/svg-export.js";
 import { buildAminoAcidProfile } from "../structure-mapping/sequence-profile.js";
@@ -19,6 +20,7 @@ interface ReferenceResultMapProps {
   readonly evidenceSites: readonly ReferenceEvidenceSite[];
   readonly hypotheses: readonly ReferenceHypothesis[];
   readonly initialThreshold: number;
+  readonly geneticCodeId?: GeneticCodeId;
 }
 
 interface ReferenceSource {
@@ -41,17 +43,17 @@ function percent(value: number): string {
   return `${(value * 100).toFixed(value < 0.1 ? 1 : 0)}%`;
 }
 
-export function ReferenceResultMap({ modelName, alignmentText, evidenceSites, hypotheses, initialThreshold }: ReferenceResultMapProps) {
+export function ReferenceResultMap({ modelName, alignmentText, evidenceSites, hypotheses, initialThreshold, geneticCodeId = 1 }: ReferenceResultMapProps) {
   const workerRef = useRef<Worker | undefined>(undefined);
   const activeRequestRef = useRef<string | undefined>(undefined);
   const svgRef = useRef<SVGSVGElement>(null);
   const profileBuild = useMemo<{ readonly profile?: AminoAcidProfile; readonly error?: string }>(() => {
     try {
-      return { profile: buildAminoAcidProfile(alignmentText) };
+      return { profile: buildAminoAcidProfile(alignmentText, geneticCodeId) };
     } catch (error) {
       return { error: error instanceof Error ? error.message : String(error) };
     }
-  }, [alignmentText]);
+  }, [alignmentText, geneticCodeId]);
   const [open, setOpen] = useState(false);
   const [source, setSource] = useState<ReferenceSource>();
   const [referenceKind, setReferenceKind] = useState<ReferenceSequenceKind>("auto");
@@ -113,6 +115,7 @@ export function ReferenceResultMap({ modelName, alignmentText, evidenceSites, hy
       type: "align",
       id,
       alignmentText,
+      geneticCodeId,
       referenceText: nextSource.text,
       fallbackName: nextSource.name,
       referenceKind: kind,

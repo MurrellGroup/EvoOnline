@@ -64,6 +64,7 @@ export function GlobalGammaResultsView({ result, threshold, alignment }: { reado
     <p className="method-note"><strong>Likelihood hierarchy:</strong> for each α category, the same site-wise α is used on every edge while each edge independently integrates the fitted Gamma(ω) categories; complete-tree site likelihoods are then averaged over α. The selection log evidence ratio is <strong>log L(full Gamma) − log L(ω&gt;1→1 null)</strong>: the site null applies that replacement to every edge at one site, while the branch null applies it to one edge across every site. Weights and global parameters are not re-optimized. The activation empirical BF integrates <em>λ</em> under Beta({result.diagnostics.activationPriorAlpha.toPrecision(3)}, {result.diagnostics.activationPriorBeta.toPrecision(3)}). These are plug-in conditional/empirical-Bayes quantities, not calibrated LRT p-values.</p>
     <div className="result-stats">
       <div><span>Gamma ω mean</span><strong>{result.fit.omegaMean.toPrecision(4)}</strong></div>
+      <div><span>Genetic code</span><strong>NCBI {result.diagnostics.geneticCodeId}</strong><small>{result.diagnostics.geneticCodeName}</small></div>
       <div><span>Gamma ω shape</span><strong>{result.fit.omegaShape.toPrecision(4)}</strong></div>
       <div><span>Gamma α shape</span><strong>{result.fit.alphaShape.toPrecision(4)}</strong></div>
       <div><span>Prior P(ω &gt; 1)</span><strong>{probability(result.positivePrior)}</strong></div>
@@ -85,7 +86,7 @@ export function GlobalGammaResultsView({ result, threshold, alignment }: { reado
       <div className="result-table-wrap"><table className="result-table"><thead><tr><th>Codon</th><th>Full / all-branches-null log ER</th><th>Evidence ratio</th><th>Conditional support</th><th>E[positive branches]</th><th>Max branch posterior</th></tr></thead><tbody>{visibleSites.map((site) => <tr key={site.site} className={selectedSite === site.site ? "is-selected" : undefined} onClick={() => setSelectedSite(site.site)}><td><strong>{site.site}</strong></td><td className={site.cappedLogEvidence >= evidenceCutoff ? "positive-text" : undefined}>{number(site.cappedLogEvidence)}</td><td>{number(site.cappedEvidenceRatio)}</td><td>{probability(site.conditionalSupport)}</td><td>{number(site.expectedPositiveBranches)}</td><td className={site.maximumBranchPosterior >= posteriorThreshold ? "positive-text" : undefined}>{probability(site.maximumBranchPosterior)}</td></tr>)}</tbody></table></div>
     </div></details>
 
-    <ReferenceResultMap modelName="Glamma" alignmentText={alignment} evidenceSites={referenceEvidence} hypotheses={GLOBAL_GAMMA_REFERENCE_HYPOTHESES} initialThreshold={posteriorThreshold} />
-    <StructureMappingPanel alignmentText={alignment} sites={structureSites} colorModes={structureColorModes} selectionThreshold={posteriorThreshold} />
+    <ReferenceResultMap modelName="Glamma" alignmentText={alignment} geneticCodeId={result.diagnostics.geneticCodeId} evidenceSites={referenceEvidence} hypotheses={GLOBAL_GAMMA_REFERENCE_HYPOTHESES} initialThreshold={posteriorThreshold} />
+    <StructureMappingPanel alignmentText={alignment} geneticCodeId={result.diagnostics.geneticCodeId} sites={structureSites} colorModes={structureColorModes} selectionThreshold={posteriorThreshold} />
   </section>;
 }

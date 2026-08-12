@@ -11,7 +11,7 @@ The implementation reproduces these reference choices:
 - transformed grid `10^x - 0.05`, with default 12 alpha, 12 omega-1, 12 omega-2, and (when present) 7 background-omega points;
 - 1,728 categories without background and 12,096 with background;
 - category order: alpha, omega-1, omega-2, then background omega;
-- lexically sorted universal-code sense codons;
+- lexically sorted sense codons under the selected NCBI translation table (table 1 preserves the original 61-state order exactly);
 - MG94-F3x4 rate construction and F3x4 equilibrium normalization;
 - two sorted foreground tags plus an optional untagged background class;
 - per-combine sum scaling and log-scale accumulation;
@@ -33,7 +33,7 @@ Validation completed in this environment:
 | Full 12,096-category matrix versus Julia | RMS absolute error `9.46e-14`; maximum `3.10e-12` |
 | Dawn WGSL compilation | passed with no shader errors |
 | TypeScript typecheck | passed |
-| Node test suite | 11/11 passed |
+| Node test suite | passed, including 60-, 61-, and 63-state code fixtures |
 
 `scripts/generate-julia-reference.jl` and `scripts/compare-julia-reference.ts` provide direct category/log-likelihood comparison with the upstream package. The full-data comparison above used Julia 1.11.5, the upstream `Ace2_reallytiny` alignment/tree, and a Julia-fitted model exported once and reused by both implementations.
 
@@ -69,12 +69,12 @@ The reference Julia path uses BOBYQA for nucleotide parameters and Brent/parabol
 
 ## Known scope differences
 
-- Universal genetic code only; the Julia API accepts other genetic-code objects.
+- EvoOnline supports all 24 current NCBI tables with unambiguous codon assignments. Tables 27, 28, and 31 are rejected because their context-dependent sense/STOP behavior cannot be represented by one stationary MG94 state per codon.
 - No branch-length or topology optimization option.
 - WebGPU accelerates the conditional-likelihood grid. Gibbs remains in f64 WASM; the rejection kernel is already faster than the measured Julia sampler on the validation data and avoids GPU synchronization complexity.
 - WebGPU is f32; strict f64 is WASM.
 - GPU subtree caching is not yet enabled. The flat GPU program favors massive workgroup parallelism; the CPU uses the dependency-cache DAG.
-- The browser displays and exports the reference eight-column table, but it does not reproduce Julia plotting extensions or HyPhy JSON export.
+- The browser's interactive SVG plots are model-equivalent visualizations, not pixel-identical reproductions of Julia's plotting stack. HyPhy JSON export is not implemented.
 
 ## Recommended acceptance test
 

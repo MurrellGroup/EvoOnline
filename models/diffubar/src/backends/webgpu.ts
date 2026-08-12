@@ -110,7 +110,7 @@ export class WebGPUBackend {
       const adapter = await navigator.gpu.requestAdapter({ powerPreference: "high-performance" });
       if (adapter === null) throw new DifFUBARError("WEBGPU_NO_ADAPTER", "No WebGPU adapter is available.");
       if (adapter.limits.maxComputeInvocationsPerWorkgroup < 64 || adapter.limits.maxComputeWorkgroupStorageSize < 8192) {
-        throw new DifFUBARError("WEBGPU_LIMITS", "The WebGPU adapter has insufficient compute limits for the 61-state kernel.");
+        throw new DifFUBARError("WEBGPU_LIMITS", "The WebGPU adapter has insufficient compute limits for the 64-lane codon kernel.");
       }
       return adapter.requestDevice();
     })();
@@ -145,8 +145,8 @@ export class WebGPUBackend {
       message: "Preparing the WebGPU likelihood pipeline",
       indeterminate: true,
     });
-    if (request.models.stateCount < 2 || request.models.stateCount > 61) {
-      throw new DifFUBARError("GPU_STATE_COUNT", "The WebGPU pruning kernel supports between 2 and 61 states.");
+    if (request.models.stateCount < 2 || request.models.stateCount > 64) {
+      throw new DifFUBARError("GPU_STATE_COUNT", "The WebGPU pruning kernel supports between 2 and 64 states.");
     }
     if (request.tree.slotCount > GPU_MAX_SLOTS) {
       throw new DifFUBARError("GPU_TREE_SLOTS", `Tree requires ${request.tree.slotCount} slots; GPU kernel limit is ${GPU_MAX_SLOTS}.`);

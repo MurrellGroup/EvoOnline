@@ -9,7 +9,7 @@ import { groupSurfaceViews, viewsForRepresentation } from "../src/features/struc
 import { defaultStructureChainSettings, effectiveRepresentations, normalizeSurfaceOpacity, thresholdStructureColorMode, updateChainMode } from "../src/features/structure-mapping/StructureMappingPanel.js";
 import { alignProfileToChain, assessStructureAlignment } from "../src/features/structure-mapping/profile-align.js";
 import { bameStructureColorModes, buildBameStructureSites } from "../src/features/structure-mapping/result-colors.js";
-import { buildAminoAcidProfile } from "../src/features/structure-mapping/sequence-profile.js";
+import { buildAminoAcidProfile, translateCodon } from "../src/features/structure-mapping/sequence-profile.js";
 import { parseMmcifChains, parsePdbChains } from "../src/features/structure-mapping/structure-parser.js";
 import type { StructureChainView, StructureColorMode } from "../src/features/structure-mapping/types.js";
 import type { BameRunResult, FubarRunResult } from "../src/types.js";
@@ -47,6 +47,14 @@ test("translated codon columns form an amino-acid profile and locally map to a s
   assert.equal(alignment.alignedProfile, "MKT");
   assert.equal(alignment.alignedChain, "MKT");
   assert.equal(assessmentLabel(assessStructureAlignment(alignment)), "strong");
+});
+
+test("protein profiles use the analysis genetic code rather than a hard-coded standard table", () => {
+  const fasta = ">one\nATGTGAATA\n>two\nATGTGAATA\n";
+  assert.equal(translateCodon("TGA", 1), "*");
+  assert.equal(translateCodon("TGA", 2), "W");
+  assert.equal(buildAminoAcidProfile(fasta, 1).columns.map((column) => column.consensus).join(""), "MXI");
+  assert.equal(buildAminoAcidProfile(fasta, 2).columns.map((column) => column.consensus).join(""), "MWM");
 });
 
 function assessmentLabel(assessment: ReturnType<typeof assessStructureAlignment>): string {

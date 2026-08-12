@@ -16,7 +16,7 @@ scope.onmessage = (event: MessageEvent<StructureMappingWorkerRequest>): void => 
   if (request.type !== "map") return;
   try {
     send({ type: "progress", id: request.id, message: "Translating the codon alignment into an amino-acid profile…" });
-    const profile = buildAminoAcidProfile(request.alignmentText);
+    const profile = buildAminoAcidProfile(request.alignmentText, request.geneticCodeId);
     send({ type: "progress", id: request.id, message: "Reading coordinate-bearing protein chains…" });
     const chains = parseStructureChains(request.structureText, request.format);
     const alignments: ProfileAlignment[] = [];

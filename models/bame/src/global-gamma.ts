@@ -6,6 +6,7 @@ import {
   compileTree,
   encodeCodonTips,
   fitGlobalModel,
+  getGeneticCode,
   parseFasta,
   parseNewick,
   type BranchMixtureOperators,
@@ -132,10 +133,11 @@ function cloneSingleClassTree(tree: ParsedTree): ParsedTree {
   };
 }
 
-function validateFittedModel(model: FittedModel): void {
-  if (model.gtrRates.length !== 6 || model.f3x4.length !== 12 || model.codonEquilibrium.length !== 61) {
+function validateFittedModel(model: FittedModel, geneticCodeId: FittedModel["geneticCodeId"], stateCount: number): void {
+  if (model.gtrRates.length !== 6 || model.f3x4.length !== 12 || model.codonEquilibrium.length !== stateCount) {
     throw new DifFUBARError("INVALID_FITTED_MODEL", "Provided fitted model has invalid array dimensions.");
   }
+  if (model.geneticCodeId !== geneticCodeId) throw new DifFUBARError("GENETIC_CODE_MISMATCH", `Provided model uses NCBI code ${model.geneticCodeId}, but this analysis requested code ${geneticCodeId}.`);
   if (!(model.globalAlpha > 0) || !Number.isFinite(model.globalAlpha)) {
     throw new DifFUBARError("INVALID_FITTED_MODEL", "Provided global alpha must be finite and positive.");
   }
@@ -271,7 +273,7 @@ function buildCandidateMixtures(
     }
   }
   operatorOffsets[grid.categoryCount] = componentIds.length;
-  const models = buildModelBank(atomicGrid(Float64Array.from(catalog)), tree, fittedModel.gtrRates, fittedModel.f3x4);
+  const models = buildModelBank(atomicGrid(Float64Array.from(catalog)), tree, fittedModel.gtrRates, fittedModel.f3x4, fittedModel.geneticCodeId);
   const operators: BranchMixtureOperators = {
     operatorCount: grid.categoryCount,
     operatorOffsets,
@@ -518,6 +520,7 @@ export async function analyzeGlobalGamma(
   const started = performance.now();
   const alignment = typeof fasta === "string" ? parseFasta(fasta) : fasta;
   const tree = typeof newick === "string" ? parseNewick(newick) : cloneSingleClassTree(newick);
+  const geneticCode = getGeneticCode(options.geneticCode ?? 1);
   options.signal?.throwIfAborted();
   const compiledMessages = compileMessageTree(tree);
   if (compiledMessages.edgeNodes.length === 0) throw new DifFUBARError("NO_BRANCHES", "Glamma requires at least one phylogenetic branch.");
@@ -554,7 +557,7 @@ export async function analyzeGlobalGamma(
   const globalFitStarted = performance.now();
   let fittedModel: FittedModel;
   if (options.fittedModel !== undefined) {
-    validateFittedModel(options.fittedModel);
+    validateFittedModel(options.fittedModel, geneticCode.id, geneticCode.senseCodons.length);
     fittedModel = options.fittedModel;
     stage(options, "global-fit", 1, { message: "Using the supplied global codon fit" });
   } else {
@@ -566,11 +569,12 @@ export async function analyzeGlobalGamma(
       options.fitMode ?? "empirical-fast",
       (fraction, detail) => stage(options, "global-fit", fraction, detail),
       options.signal,
+      geneticCode,
     );
   }
   const globalFitMs = performance.now() - globalFitStarted;
   for (const node of tree.nodes) node.branchLength *= fittedModel.globalAlpha;
-  const tipStates = encodeCodonTips(alignment, tree);
+  const tipStates = encodeCodonTips(alignment, tree, geneticCode);
 
   const gammaFitStarted = performance.now();
   stage(options, "glamma-fit", 0, {
@@ -623,7 +627,7 @@ export async function analyzeGlobalGamma(
   const positiveMask = omegaQuadrature.positiveMask;
   let positivePrior = 0;
   for (let omega = 0; omega < omegaSliceCount; omega += 1) if (positiveMask[omega] !== 0) positivePrior += omegaWeights[omega]!;
-  const models = buildModelBank(atomicGrid(omegaValues), tree, fittedModel.gtrRates, fittedModel.f3x4);
+  const models = buildModelBank(atomicGrid(omegaValues), tree, fittedModel.gtrRates, fittedModel.f3x4, geneticCode);
   const omegaModels = models.gridModels.slice(0, omegaSliceCount);
   const neutralModel = models.gridModels[omegaSliceCount]!;
   const branchLengths = Float64Array.from(compiledMessages.edgeNodes, (node) => node.branchLength);
@@ -772,6 +776,9 @@ export async function analyzeGlobalGamma(
       totalMs: performance.now() - started,
     },
     diagnostics: {
+      geneticCodeId: geneticCode.id,
+      geneticCodeName: geneticCode.name,
+      codonStates: geneticCode.senseCodons.length,
       taxa: alignment.names.length,
       codonSites: alignment.codonSites,
       branches: branches.length,

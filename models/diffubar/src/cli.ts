@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readFile, writeFile } from "node:fs/promises";
 import { analyzeDifFUBAR, resultsToCsv } from "./pipeline.js";
+import { getGeneticCode } from "./model/genetic-code.js";
 import type { FittedModel } from "./types.js";
 
 function valueAfter(name: string): string | undefined {
@@ -22,6 +23,7 @@ async function main(): Promise<void> {
       "  --foreground-grid N        Grid points below one (default: 6)",
       "  --background-grid N        Background points below one (default: 4)",
       "  --threshold P              Detection threshold (default: 0.95)",
+      "  --genetic-code N           NCBI translation table (default: 1)",
       "  --seed N                   Reproducible WASM RNG seed",
       "  --reference-fit            Slower optimizer-compatible fit",
       "  --fitted-model FILE        Reuse a fitted-model JSON object",
@@ -37,12 +39,14 @@ async function main(): Promise<void> {
   const iterations = Number(valueAfter("--iterations") ?? 2500);
   const burninValue = valueAfter("--burnin");
   const backendValue = valueAfter("--backend") ?? "auto";
+  const geneticCode = getGeneticCode(valueAfter("--genetic-code") ?? 1);
   if (!["auto", "wasm", "wasm-parallel", "webgpu"].includes(backendValue)) throw new Error(`Unknown backend '${backendValue}'.`);
   let fittedModel: FittedModel | undefined;
   const fittedModelPath = valueAfter("--fitted-model");
   if (fittedModelPath !== undefined) {
     const parsed = JSON.parse(await readFile(fittedModelPath, "utf8")) as Record<string, unknown>;
     fittedModel = {
+      geneticCodeId: getGeneticCode(Number(parsed["geneticCodeId"] ?? 1)).id,
       gtrRates: Float64Array.from(parsed["gtrRates"] as ArrayLike<number>),
       f3x4: Float64Array.from(parsed["f3x4"] as ArrayLike<number>),
       codonEquilibrium: Float64Array.from(parsed["codonEquilibrium"] as ArrayLike<number>),
@@ -53,6 +57,7 @@ async function main(): Promise<void> {
     };
   }
   const result = await analyzeDifFUBAR(fasta, tree, {
+    geneticCode: geneticCode.id,
     backend: backendValue as "auto" | "wasm" | "wasm-parallel" | "webgpu",
     iterations,
     ...(burninValue === undefined ? {} : { burnin: Number(burninValue) }),

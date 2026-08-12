@@ -7,7 +7,7 @@ import {
   type ModelValidation,
   type ValidationIssue,
 } from "@phylo-workbench/model-sdk";
-import { normalizeDifFubarTreeText, parseFasta, parseNewick } from "@phylo-workbench/model-diffubar";
+import { GENETIC_CODE_OPTIONS, normalizeDifFubarTreeText, parseFasta, parseNewick } from "@phylo-workbench/model-diffubar";
 import { bsrelResultsToCsv } from "./pipeline.js";
 import type { BsrelAnalysisResult } from "./types.js";
 
@@ -23,6 +23,14 @@ export const bsrelManifest: ModelManifest = {
     { id: "tree", label: "Phylogeny", kind: "tree", required: true, description: "Untagged Newick or NEXUS tree with branch lengths." },
   ],
   parameters: [
+    {
+      id: "geneticCode",
+      label: "Genetic code",
+      description: "NCBI translation table used for sense-codon states, stop filtering, and synonymous/nonsynonymous changes.",
+      type: "select",
+      default: "1",
+      options: GENETIC_CODE_OPTIONS,
+    },
     {
       id: "backend",
       label: "Compute backend",

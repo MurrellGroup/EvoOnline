@@ -1,5 +1,6 @@
 /// <reference lib="webworker" />
 import { analyzeBsrel, bsrelResultsToCsv } from "@phylo-workbench/model-bsrel/browser-source";
+import { getGeneticCode } from "@phylo-workbench/model-diffubar/browser-source";
 import type { BsrelWorkerResponse, WorkerRunRequest } from "../types.js";
 
 const scope = self as DedicatedWorkerGlobalScope;
@@ -15,6 +16,7 @@ scope.onmessage = (event: MessageEvent<WorkerRunRequest>): void => {
         ? parameters.branchScope
         : "all";
       const result = await analyzeBsrel(request.alignment, request.tree, {
+        geneticCode: getGeneticCode(String(parameters.geneticCode ?? 1)).id,
         backend,
         branchScope,
         significanceThreshold: Number(parameters.significanceThreshold ?? 0.05),

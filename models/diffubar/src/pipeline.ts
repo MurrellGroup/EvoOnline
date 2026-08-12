@@ -11,16 +11,19 @@ import { parseFasta } from "./io/fasta.js";
 import { parseTaggedNewick } from "./io/newick.js";
 import { compileTree } from "./tree/compiler.js";
 import { createDifFUBARGrid } from "./model/grid.js";
-import { buildModelBank, encodeCodonTips } from "./model/genetic-code.js";
+import { buildModelBank, encodeCodonTips, getGeneticCode, type GeneticCode } from "./model/genetic-code.js";
 import { fitGlobalModel, type EvaluationBackend } from "./fit/global.js";
 import { WasmBackend, normalizeConditionalLikelihoodsInPlace } from "./backends/wasm.js";
 import { ParallelWasmBackend } from "./backends/wasm-parallel.js";
 import { WebGPUBackend } from "./backends/webgpu.js";
 import { collapsePosteriorMarginals } from "./posterior/marginals.js";
 
-function validateFittedModel(model: FittedModel): void {
-  if (model.gtrRates.length !== 6 || model.f3x4.length !== 12 || model.codonEquilibrium.length !== 61) {
+function validateFittedModel(model: FittedModel, geneticCode: GeneticCode): void {
+  if (model.gtrRates.length !== 6 || model.f3x4.length !== 12 || model.codonEquilibrium.length !== geneticCode.senseCodons.length) {
     throw new DifFUBARError("INVALID_FITTED_MODEL", "Provided fitted model has invalid array dimensions.");
+  }
+  if (model.geneticCodeId !== geneticCode.id) {
+    throw new DifFUBARError("GENETIC_CODE_MISMATCH", `Provided model uses NCBI code ${model.geneticCodeId}, but this analysis requested code ${geneticCode.id}.`);
   }
   if (!(model.globalAlpha > 0) || !Number.isFinite(model.globalAlpha)) {
     throw new DifFUBARError("INVALID_FITTED_MODEL", "Provided global alpha must be finite and positive.");
@@ -108,6 +111,7 @@ export async function analyzeDifFUBAR(
   const started = performance.now();
   const alignment = typeof fasta === "string" ? parseFasta(fasta) : fasta;
   const tree = typeof newick === "string" ? parseTaggedNewick(newick, options.tags) : cloneTree(newick);
+  const geneticCode = getGeneticCode(options.geneticCode ?? 1);
   options.signal?.throwIfAborted();
   options.onStage?.("initialization", 1, {
     message: `${alignment.names.length.toLocaleString()} taxa · ${alignment.codonSites.toLocaleString()} codon sites`,
@@ -131,7 +135,7 @@ export async function analyzeDifFUBAR(
   const fitStarted = performance.now();
   let fittedModel: FittedModel;
   if (options.fittedModel !== undefined) {
-    validateFittedModel(options.fittedModel);
+    validateFittedModel(options.fittedModel, geneticCode);
     fittedModel = options.fittedModel;
     options.onStage?.("global-fit", 1, { message: "Using the supplied fitted model" });
   } else {
@@ -144,6 +148,7 @@ export async function analyzeDifFUBAR(
         options.fitMode ?? "empirical-fast",
         (fraction, detail) => options.onStage?.("global-fit", fraction, detail),
         options.signal,
+        geneticCode,
       );
     } catch (error) {
       if (requestedBackend !== "auto" || !(fitBackend instanceof WebGPUBackend)) throw error;
@@ -157,6 +162,7 @@ export async function analyzeDifFUBAR(
         options.fitMode ?? "empirical-fast",
         (fraction, detail) => options.onStage?.("global-fit", fraction, detail),
         options.signal,
+        geneticCode,
       );
     }
   }
@@ -170,8 +176,8 @@ export async function analyzeDifFUBAR(
   });
   rescaleTree(tree, fittedModel.globalAlpha);
   const compiled = compileTree(tree);
-  const models = buildModelBank(grid, tree, fittedModel.gtrRates, fittedModel.f3x4);
-  const tipStates = encodeCodonTips(alignment, tree);
+  const models = buildModelBank(grid, tree, fittedModel.gtrRates, fittedModel.f3x4, geneticCode);
+  const tipStates = encodeCodonTips(alignment, tree, geneticCode);
   options.onStage?.("grid-preparation", 1, {
     message: `${grid.categoryCount.toLocaleString()} categories · ${models.modelCount.toLocaleString()} unique codon models`,
     current: grid.categoryCount,
@@ -258,6 +264,9 @@ export async function analyzeDifFUBAR(
       totalMs: performance.now() - started,
     },
     diagnostics: {
+      geneticCodeId: geneticCode.id,
+      geneticCodeName: geneticCode.name,
+      codonStates: geneticCode.senseCodons.length,
       taxa: tree.tips.length,
       codonSites: alignment.codonSites,
       categories: grid.categoryCount,

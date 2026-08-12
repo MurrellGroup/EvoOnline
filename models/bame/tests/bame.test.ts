@@ -23,7 +23,60 @@ import {
   gammaMeanSlices,
   thresholdGammaSlices,
   gaussLegendreUnit,
+  analyzeFame,
+  analyzeFlavor,
+  analyzeGlobalGamma,
 } from "../src/index.js";
+
+test("FAME, FLAVOR, and Glamma execute with a dynamic vertebrate-mitochondrial state space", async () => {
+  const fasta = ">a\nTGA\n>b\nTGA\n";
+  const alignment = parseFasta(fasta);
+  const f3x4 = countF3x4(alignment);
+  const fittedModel = {
+    geneticCodeId: 2 as const,
+    gtrRates: Float64Array.of(1, 1, 1, 1, 1, 1),
+    f3x4,
+    codonEquilibrium: codonEquilibriumFromF3x4(f3x4, 2),
+    globalAlpha: 1,
+    globalBeta: 1,
+    logLikelihood: 0,
+    fitKind: "provided" as const,
+  };
+  const tree = "(a:0.01,b:0.01);";
+  const fame = await analyzeFame(fasta, tree, {
+    geneticCode: 2,
+    fittedModel,
+    backend: "wasm",
+    gridPreset: "fast",
+    weightIntegration: "likelihood-quadrature",
+    quadraturePoints: 2,
+    iterations: 3,
+    tolerance: 1e-3,
+  });
+  const flavor = await analyzeFlavor(fasta, tree, {
+    geneticCode: 2,
+    fittedModel,
+    backend: "wasm",
+    gridPreset: "fast",
+    gammaSlices: 8,
+    transitionEngine: "julia-interpolated",
+    iterations: 3,
+    tolerance: 1e-3,
+  });
+  const glamma = await analyzeGlobalGamma(fasta, tree, {
+    geneticCode: 2,
+    fittedModel,
+    backend: "wasm",
+    omegaSlices: 4,
+    alphaSlices: 3,
+    fitPreset: "fast",
+  });
+  for (const result of [fame, flavor, glamma]) {
+    assert.equal(result.diagnostics.geneticCodeId, 2);
+    assert.equal(result.diagnostics.codonStates, 60);
+    assert.equal(result.sites.length, 1);
+  }
+});
 
 test("FAME and FLAVOR default grids exactly retain the MixtureModels branch dimensions", () => {
   const fame = createFameGrid();

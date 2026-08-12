@@ -11,6 +11,7 @@ import {
 import { parseFasta } from "./io/fasta.js";
 import { normalizeDifFubarTreeText, parseTaggedNewick } from "./io/newick.js";
 import { resultsToCsv } from "./pipeline.js";
+import { GENETIC_CODE_OPTIONS } from "./model/genetic-code.js";
 import type { AnalysisResult } from "./types.js";
 
 export const difFubarManifest: ModelManifest = {
@@ -44,6 +45,14 @@ export const difFubarManifest: ModelManifest = {
     },
   ],
   parameters: [
+    {
+      id: "geneticCode",
+      label: "Genetic code",
+      description: "NCBI translation table used for sense-codon states, stop filtering, and synonymous/nonsynonymous changes.",
+      type: "select",
+      default: "1",
+      options: GENETIC_CODE_OPTIONS,
+    },
     {
       id: "backend",
       label: "Compute backend",

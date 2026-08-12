@@ -57,7 +57,7 @@ function packModels(
     omegas[offset++] = candidate.model.omegaNeutral;
     omegas[offset++] = candidate.model.omegaPositive;
   }
-  const bank = buildModelBank(modelGrid(omegas), tree, fittedModel.gtrRates, fittedModel.f3x4);
+  const bank = buildModelBank(modelGrid(omegas), tree, fittedModel.gtrRates, fittedModel.f3x4, fittedModel.geneticCodeId);
   return {
     bank,
     branchModels: bank.gridModels.slice(0, baseline.length * 3),

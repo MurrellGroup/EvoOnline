@@ -1,3 +1,5 @@
+import type { GeneticCodeId } from "@phylo-workbench/model-diffubar/browser-source";
+
 export type StructureFormat = "pdb" | "mmcif";
 
 export interface AminoAcidProfileColumn {
@@ -99,6 +101,7 @@ export interface StructureMappingWorkerRequest {
   readonly type: "map";
   readonly id: string;
   readonly alignmentText: string;
+  readonly geneticCodeId: GeneticCodeId;
   readonly structureText: string;
   readonly format: StructureFormat;
 }

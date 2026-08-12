@@ -39,7 +39,7 @@ The most likely portability boundaries are f32 `exp`/`log` accuracy and driver-s
 Measure before retaining any of these changes:
 
 - specialize shaders for 2 versus 3 branch classes;
-- specialize fixed 61-state loops and Poisson term count as WGSL overrides;
+- specialize dynamic 60–63-state loops and Poisson term count as WGSL overrides;
 - evaluate two or four sites per workgroup if workgroup memory permits;
 - add a GPU cache-DAG prepass for high-purity trees;
 - overlap site-chunk dispatch/readback with the next chunk;

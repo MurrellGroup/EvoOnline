@@ -33,6 +33,7 @@ export function BameResultsView({ result, threshold, alignment }: { readonly res
     <p className="method-note"><strong>Development provenance:</strong> ported from CodonMolecularEvolution.jl <code>MixtureModels@{result.diagnostics.modelDraftCommit.slice(0, 8)}</code>. This run uses the <strong>{result.diagnostics.gridPreset === "fast" ? "fast interactive" : "full Julia-draft"}</strong> grid. {result.method === "fame" ? result.diagnostics.weightIntegration === "julia-draft-log-average" ? "It reproduces the draft’s mean-of-log-likelihood operation; that is not likelihood marginalization." : `It uses statistically valid ${result.diagnostics.weightPoints}-point likelihood-domain quadrature instead of the draft’s mean of log likelihoods.` : `It retains the draft’s capped-grid multiplicity with a ${result.diagnostics.gammaSlices}-mid-quantile Gamma approximation and ${result.diagnostics.transitionEngine === "julia-interpolated" ? "Julia-style 50-node transition interpolation" : "direct uniformization"}.`} Bayes factors are empirical-Bayes evidence ratios because their prior mass is learned from these sites.</p>
     <div className="result-stats">
       <div><span>Codon sites</span><strong>{result.diagnostics.codonSites.toLocaleString()}</strong></div>
+      <div><span>Genetic code</span><strong>NCBI {result.diagnostics.geneticCodeId}</strong><small>{result.diagnostics.geneticCodeName}</small></div>
       <div><span>Positive at {posteriorThreshold.toFixed(3)}</span><strong className="positive-text">{detected.size.toLocaleString()}</strong></div>
       <div><span>Grid categories</span><strong>{result.diagnostics.categories.toLocaleString()}</strong></div>
       <div><span>Posterior inference</span><strong>{result.diagnostics.inferenceMethod === "gibbs" ? "Gibbs" : "Dirichlet-EM"}</strong></div>
@@ -50,7 +51,7 @@ export function BameResultsView({ result, threshold, alignment }: { readonly res
         {result.method === "fame" && "meanOmega1" in site ? <><td>{site.meanOmega1.toFixed(3)}</td><td>{site.meanOmega2.toFixed(3)}</td></> : "meanOmega" in site ? <><td>{probability(site.pUncapped)}</td><td>{site.meanOmega.toFixed(3)}</td><td>{site.meanShape.toFixed(3)}</td><td>{site.meanOmegaStandardDeviation.toFixed(3)}</td><td>{site.meanPositiveBranchFraction.toFixed(3)}</td></> : null}
         <td>{selected ? "episodic positive" : "none"}</td></tr>;
     })}</tbody></table></div>
-    <ReferenceResultMap modelName={method} alignmentText={alignment} evidenceSites={referenceEvidence} hypotheses={BAME_REFERENCE_HYPOTHESES} initialThreshold={posteriorThreshold} />
-    <StructureMappingPanel alignmentText={alignment} sites={structureSites} colorModes={structureModes} selectionThreshold={posteriorThreshold} />
+    <ReferenceResultMap modelName={method} alignmentText={alignment} geneticCodeId={result.diagnostics.geneticCodeId} evidenceSites={referenceEvidence} hypotheses={BAME_REFERENCE_HYPOTHESES} initialThreshold={posteriorThreshold} />
+    <StructureMappingPanel alignmentText={alignment} geneticCodeId={result.diagnostics.geneticCodeId} sites={structureSites} colorModes={structureModes} selectionThreshold={posteriorThreshold} />
   </section>;
 }

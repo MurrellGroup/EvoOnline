@@ -3,6 +3,7 @@ import type {
   DifFUBARGrid,
   FastaAlignment,
   FittedModel,
+  GeneticCodeId,
   ParsedTree,
   ProgressDetail,
 } from "@phylo-workbench/model-diffubar";
@@ -82,6 +83,7 @@ export interface ApproximateFelProducts {
 }
 
 export interface FubarAnalysisOptions {
+  readonly geneticCode?: GeneticCodeId;
   readonly backend?: BackendKind;
   readonly gridPoints?: number;
   readonly inferenceMethod?: FubarInferenceMethod;
@@ -111,6 +113,9 @@ export interface FubarAnalysisResult {
   readonly backend: "webgpu" | "wasm" | "wasm-parallel";
   readonly timings: Readonly<Record<string, number>>;
   readonly diagnostics: {
+    readonly geneticCodeId: GeneticCodeId;
+    readonly geneticCodeName: string;
+    readonly codonStates: number;
     readonly taxa: number;
     readonly codonSites: number;
     readonly categories: number;
