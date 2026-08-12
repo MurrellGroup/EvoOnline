@@ -21,12 +21,79 @@ import { GlobalGammaResultsView } from "../src/components/GlobalGammaResultsView
 import type { GlobalGammaRunResult } from "../src/types.js";
 import { CladeShiftResultsView } from "../src/components/CladeShiftResultsView.js";
 import type { CladeShiftRunResult } from "../src/types.js";
+import { FsartResultsView } from "../src/components/FsartResultsView.js";
+import type { FsartAnalysisResult } from "@phylo-workbench/model-fsart/browser-source";
 
 test("deferred number fields accept replacement text and validate only when committed", () => {
   assert.equal(normalizeCommittedNumberDraft("", 17, 1, 100), 17);
   assert.equal(normalizeCommittedNumberDraft("42", 17, 1, 100), 42);
   assert.equal(normalizeCommittedNumberDraft("999", 17, 1, 100), 100);
   assert.equal(normalizeCommittedNumberDraft("4.9", 17, 1, 100), 4);
+});
+
+test("FSART renders consensus proposals, triplet topology evidence, topology HMM, and Viterbi trees as SVG", () => {
+  const trace = {
+    positions: Uint32Array.of(2, 5, 8, 11, 14, 17, 20, 23),
+    observations: Uint8Array.of(0, 0, 0, 0, 1, 1, 1, 1),
+    mapStates: Uint8Array.of(0, 0, 0, 0, 1, 1, 1, 1),
+    switchPosterior: Float32Array.of(0.01, 0.02, 0.08, 0.94, 0.06, 0.02, 0.01),
+  };
+  const representative = {
+    taxa: [0, 1, 2] as const, taxaNames: ["a", "b", "c"] as const,
+    breakpoint: 13, eventBoundary: 4, informativeEvents: 8,
+    leftState: 0 as const, rightState: 1 as const,
+    leftCounts: [4, 0, 0] as const, rightCounts: [0, 4, 0] as const,
+    g2: 22.1, logP: -11.05, rawP: 1.59e-5, adjustedP: 0.002,
+    evidence: 2.699, intervalLow: 11, intervalHigh: 16, switchPosterior: 0.94,
+    emissionAccuracy: 0.94, switchingRates: [{ expectedSwitches: 0.5, posterior: 0.25 }, { expectedSwitches: 1, posterior: 0.75 }], trace,
+  };
+  const result: FsartAnalysisResult = {
+    method: "fsart",
+    breakpoints: [{ id: "BP1", rank: 1, breakpoint: 13, intervalLow: 11, intervalHigh: 16, supportLow: 10, supportHigh: 18, evidence: 2.699, adjustedP: 0.002, supportTriplets: 3, supportTaxa: 4, representative, memberIndexes: [0] }],
+    tripletSignals: [representative],
+    partition: {
+      status: "complete", criterion: "aicc", criterionValue: 210.4,
+      segments: [
+        { id: "segment-1-13", start: 1, end: 13, logLikelihood: -70, tree: "((a:0.1,b:0.1):0.1,c:0.2);", variableSites: 6, elapsedMs: 5 },
+        { id: "segment-14-24", start: 14, end: 24, logLikelihood: -60, tree: "((a:0.1,c:0.1):0.1,b:0.2);", variableSites: 7, elapsedMs: 5 },
+      ],
+      candidateTrees: [
+        { id: "segment-1-13", start: 1, end: 13, logLikelihood: -70, tree: "((a:0.1,b:0.1):0.1,c:0.2);", variableSites: 6, elapsedMs: 5 },
+        { id: "segment-14-24", start: 14, end: 24, logLikelihood: -60, tree: "((a:0.1,c:0.1):0.1,b:0.2);", variableSites: 7, elapsedMs: 5 },
+      ],
+      steps: [{ candidateRank: 1, breakpoint: 13, accepted: true, reason: "AICc improved.", criterionBefore: 230, criterionAfter: 210.4, deltaCriterion: 19.6, logLikelihoodBefore: -150, logLikelihoodAfter: -130, parameterCountBefore: 14, parameterCountAfter: 28, consecutiveFailures: 0 }],
+      acceptedBreakpoints: [13], rejectedBreakpoints: [], fastTreeVersion: "FastTree 2.1.11 bioWASM",
+    },
+    treeHmm: {
+      status: "complete", criterion: "aicc", criterionValue: 190, nullCriterionValue: 230, deltaCriterion: 40,
+      logLikelihood: -70, integratedLogEvidence: -71, nullLogLikelihood: -100, parameterCount: 20, nullParameterCount: 12,
+      sites: 24,
+      states: [
+        { id: "T1", tree: "((a,b),c);", topologySignature: "t1", sourceStart: 1, sourceEnd: 13, weight: 0.5, occupancy: 0.5, expectedSites: 12, color: "#176b87" },
+        { id: "T2", tree: "((a,c),b);", topologySignature: "t2", sourceStart: 14, sourceEnd: 24, weight: 0.5, occupancy: 0.5, expectedSites: 12, color: "#d5673f" },
+      ],
+      statePosterior: Float32Array.from([...Array(12).fill(0.98), ...Array(12).fill(0.02), ...Array(12).fill(0.02), ...Array(12).fill(0.98)]),
+      mapState: Uint16Array.from([...Array(12).fill(0), ...Array(12).fill(1)]),
+      switchPosterior: Float32Array.from([...Array(11).fill(0.01), 0.92, ...Array(11).fill(0.01)]),
+      switchIntervals: [{ rank: 1, breakpoint: 12, intervalLow: 11, intervalHigh: 14, peakProbability: 0.92, expectedSwitchMass: 1.02 }],
+      switchingRates: [{ expectedResets: 1, transitionProbability: 0.04, logLikelihood: -70, posterior: 1 }],
+      expectedSwitches: 1.02, searchSteps: [], fastTreeMs: 10, hmmMs: 2,
+    },
+    discordantClades: [{ betweenSegments: ["segment-1-13", "segment-14-24"], direction: "lost", taxa: ["a", "b"], size: 2 }],
+    diagnostics: { taxa: 3, sites: 24, variableSites: 18, totalTriplets: 1, scannedTriplets: 1, tripletSampling: "exhaustive", pairCoverageGuaranteed: true, totalTaxonPairs: 3, informativeTriplets: 1, testedBoundaries: 10, scanWindow: 4, minimumTreeSpan: 12, expectedVariableSitesPerMinimumSpan: 9, parallelWorkers: 1, multipleTesting: "none-ranked-candidate-generation", breakpointUncertainty: "three-state-burt-style-hmm-rate-marginalization", intervalConditioning: "candidate-window-local-posterior-basin", exactBurtParity: false, baumWelch: false, scanner: "bitset-informative-event-g-test", pairEqualityCache: true, bitsetWords: 1 },
+    timings: { totalMs: 120 }, breakpointCsv: "Rank\n1\n", partitionCsv: "Breakpoint\n13\n", treeHmmCsv: "Site\n1\n",
+  };
+  const markup = renderToStaticMarkup(<FsartResultsView result={result} />);
+  assert.match(markup, /Fast Stepwise Approximate Recombination Test/);
+  assert.match(markup, /without a multiple-comparisons admission gate/);
+  assert.match(markup, /Credible interval/);
+  assert.match(markup, /Approximate GARD competitor/);
+  assert.match(markup, /Topology-HMM posterior along the alignment/);
+  assert.match(markup, /Triplet topology trace/);
+  assert.match(markup, /Refined Viterbi tree reconstruction/);
+  assert.match(markup, /Exploratory participating-subtree candidates/);
+  assert.match(markup, /FastTree 2.1.11 bioWASM/);
+  assert.ok((markup.match(/Export SVG/g) ?? []).length >= 4);
 });
 
 test("DifFUBAR result studio renders a native SVG overview and export control", () => {

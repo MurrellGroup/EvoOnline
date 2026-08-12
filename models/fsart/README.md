@@ -1,0 +1,52 @@
+# FSART
+
+FSART is EvoOnline's **Fast Stepwise Approximate Recombination Test**. It is an exploratory, alignment-only browser method. It does not alter or feed any selection model.
+
+## Statistical pipeline
+
+1. Encode the alignment site-major as one byte per taxon/site and as taxon/base 32-site bit planes. A bounded pair-equality bitset cache is used when it fits within 8 MiB per worker; larger inputs compute the three equality masks directly from base planes instead of allocating quadratic cache memory.
+2. Scan taxa triplets exhaustively when practical. Above the configured budget, construct a deterministic sample that includes at least one triplet containing every taxon pair, then fill the remaining budget with systematic ranks across the complete triplet space. A site contributes one event only when exactly one pair in the triplet matches; gaps, ambiguity, three-way differences, and invariant triplets are ignored.
+3. Classify 32 alignment sites per bitwise step, then compare fixed windows of `W` informative events on either side of every eligible boundary with a 2 × 3 likelihood-ratio (G) statistic. The remaining hot loop uses rolling integer counts and a precomputed `x log x` table. For two degrees of freedom, `log p = -G²/2` requires no special-function call.
+4. Retain at most four separated modes per triplet and a bounded global heap of the strongest local peaks. Raw asymptotic p-values rank this exploratory pool without a multiple-comparison admission gate; a conservative Bonferroni value is retained only for audit.
+5. For each retained triplet, initialize one fixed symmetric emission-fidelity parameter from the purity of scan-seeded event runs. A three-state continuous-coordinate HMM represents the three possible matching pairs. A coarse log grid of switching rates is integrated using scaled forward–backward passes. No Baum–Welch or hidden parameter optimization is performed.
+6. The marginal values `P(S_i ≠ S_{i+1} | data)` sum to the expected number of switches, so they are deliberately **not** normalized over the whole sequence as if exactly one breakpoint existed. Each scan candidate is anchored to its informative-event window, associated with the connected local HMM switch mode, and assigned an equal-tailed switch-location interval conditional on that mode. This prevents distinct switches elsewhere in the alignment from inflating or relocating its interval.
+7. Pool the retained triplet modes into a consensus evidence field. Each taxon triplet contributes at most once to a local neighborhood; extreme single-triplet evidence is log-compressed, while the number of supporting triplets and accumulated strength both contribute to the score. Weighted-interval dynamic programming selects a fairly long proposal list subject to a hard minimum segment length. The default is 150 nt and is raised on shallow alignments until a window is expected to contain at least `max(30, 2 × taxa)` variable sites, so two proposed cuts can never define a segment too sparse for a defensible tree fit. Raw and Bonferroni values remain audit columns and do not gate admission.
+8. The consensus cuts define atomic segments. FastTree 2.1.11 bioWASM fits GTR+Gamma trees to the global alignment, every atomic segment, every contiguous pair of segments, and every contiguous triplet—never larger combinations. Equivalent unrooted topologies are deduplicated. The global fit supplies one shared GTR rate/frequency model, and FastTree then emits Gamma20 log likelihoods for **every alignment site** under every retained fixed topology.
+9. Once that emission matrix is cached, an O(L×K) sticky/reset HMM can test topology subsets without rerunning phylogenetic likelihoods. A bounded beam over subset size followed by floating add/drop/swap moves searches the chosen AIC, AICc (default), or BIC objective. The rapid pass uses sitewise-likelihood responsibility weights so a topology serving a short tract is not saddled with a uniform reset probability. Exact forward–backward inference, stationary topology-weight fitting, switching-rate marginalization, Viterbi decoding, and conditional switch intervals are run only on the selected subset.
+10. The Viterbi path partitions the alignment into topology runs. Sites assigned to the same topology are concatenated, including discontiguous ranges, and their tree is refitted; all-site emissions and the rapid subset search are then repeated for up to three rounds by default. Boundary and topology-set stability are recorded, but convergence is diagnostic rather than required.
+
+The scanner runs in up to eight independent workers. The client reduces that count for large uploads to cap replicated alignment memory; GitHub Pages cannot supply the cross-origin isolation required for shared-memory workers. FastTree reuses alivibe's existing Aioli worker and WASM module, so FSART adds no second FastTree runtime. The cached topology search and final HMM are returned to the retained worker, keeping the UI responsive.
+
+Run the deterministic single-worker scanner benchmark with `npm run benchmark --workspace @phylo-workbench/model-fsart`. Override its dimensions with `FSART_TAXA` and `FSART_SITES` when profiling another scale.
+
+## Recombination simulation benchmark
+
+The reproducible simulation harness under `simulations/` generates piecewise-tree nucleotide alignments by exact Gillespie simulation under a four-state GTR process. It combines continuous Gamma site rates, an invariant-site component, correlated regional rate multipliers, heterogeneous tree/branch lengths, sparse ambiguity, and short gap tracts. Every simulated boundary is guaranteed to change the **unrooted** topology. The primary paired 3 kb matrix crosses GARD-inspired low/high diversity with zero, one, two, or three NNI topology changes. Reports use realized pairwise p-distance, variable/parsimony-informative site fractions, and FSART's exactly-one-pair events per triplet rather than assuming the requested branch scale produced the intended diversity.
+
+With a native FastTree binary available, run the complete pipeline from the repository root:
+
+```sh
+FSART_FASTTREE=/absolute/path/to/FastTree npm run simulate:fsart -- --replicates 20 --taxa 9 --sites 3000
+```
+
+Use `--quick` for a smoke run, `--no-fasttree` to isolate the triplet/HMM stages, `--diversity-scales 0.12,1.2` to replace the default sweep, or `--out PATH` to retain another result matrix. The default output is `simulations/results/` and contains raw per-replicate JSON/CSV, pooled CSV, a Markdown report, and an SVG accuracy/timing figure. Same-data GARD comparison is explicitly deferred and is not part of the current fast-method validation.
+
+Breakpoint accuracy uses exact ordered one-to-one matching within the configured tolerance (default: 2% of alignment length). The report includes pooled precision, recall, F1, exact breakpoint-count rate, localization MAE, interval coverage and width, and alignment-length-weighted normalized Robinson–Foulds error. Timings exclude simulation. Raw/HMM timings use one Node worker for reproducibility; the browser may use up to eight scan workers. FastTree timings are native-process measurements and should not be presented as bioWASM timings.
+
+The committed report is regenerated from the current implementation and keeps candidate retrieval separate from final IC-controlled detections. It includes an oracle-candidate FastTree control to distinguish candidate-generation failures from scoring/model-selection failures. Treat small exploratory runs as engineering diagnostics, not calibrated operating characteristics; expand the replicate count before publication claims.
+
+## What this is not
+
+- The scan is inspired by the informative-triplet logic in RDP, but is not an exact RDP reimplementation.
+- Published details sufficient for exact BURT parity are not available. The uncertainty engine is deliberately labelled **BURT-style**.
+- The tree-family/HMM stage is GARD-like in objective, but it searches a fixed proposal-derived topology dictionary rather than GARD's genetic algorithm over breakpoints and trees.
+- Adjacent segment-tree split differences are reported as candidate participating clades. They are not a claimed minimum-SPR history, and FSART does not pretend FastTree globally optimized branch lengths were local-only optimizations.
+- Triplet tests are dependent. Raw asymptotic p-values rank candidates and Bonferroni values are audit-only; neither substitutes for whole-model selection or independent validation.
+
+## References
+
+- Martin et al. (2021), RDP5: <https://pmc.ncbi.nlm.nih.gov/articles/PMC8062008/>
+- Martin et al. (2015), RDP4: <https://pmc.ncbi.nlm.nih.gov/articles/PMC5014473/>
+- Jaya et al. (2023), evaluation of viral recombination methods and validation trade-offs: <https://pubmed.ncbi.nlm.nih.gov/38131005/>
+- Kosakovsky Pond et al. (2006), GARD: <https://academic.oup.com/mbe/article/23/10/1891/1096946>
+- Price et al. (2010), FastTree 2: <https://pmc.ncbi.nlm.nih.gov/articles/PMC2835736/>

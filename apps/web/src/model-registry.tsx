@@ -4,18 +4,22 @@ import { fubarPlugin } from "@phylo-workbench/model-fubar/browser-source";
 import { bsrelPlugin } from "@phylo-workbench/model-bsrel/browser-source";
 import { famePlugin, flavorPlugin, globalGammaPlugin } from "@phylo-workbench/model-bame/browser-source";
 import { cladeShiftPlugin } from "@phylo-workbench/model-cladeshift/browser-source";
+import { fsartPlugin, type FsartAnalysisResult } from "@phylo-workbench/model-fsart/browser-source";
 import type { ModelPlugin, ParameterValues } from "@phylo-workbench/model-sdk";
+import type { WidgetBridge } from "@phylo-workbench/viewer-bridge";
 import { ResultsView } from "./components/ResultsView.js";
 import { FubarResultsView } from "./components/FubarResultsView.js";
 import { BsrelResultsView } from "./components/BsrelResultsView.js";
 import { BameResultsView } from "./components/BameResultsView.js";
 import { GlobalGammaResultsView } from "./components/GlobalGammaResultsView.js";
 import { CladeShiftResultsView } from "./components/CladeShiftResultsView.js";
+import { FsartResultsView } from "./components/FsartResultsView.js";
 import { DifFubarClient, type RunProgress } from "./lib/diffubar-client.js";
 import { FubarClient } from "./lib/fubar-client.js";
 import { BsrelClient } from "./lib/bsrel-client.js";
 import { BameClient } from "./lib/bame-client.js";
 import { CladeShiftClient } from "./lib/cladeshift-client.js";
+import { FsartClient } from "./lib/fsart-client.js";
 import type { BameRunResult, BsrelRunResult, CladeShiftRunResult, DifFubarRunResult, FubarRunResult, GlobalGammaRunResult } from "./types.js";
 
 export interface BrowserModelExecutor {
@@ -29,6 +33,10 @@ export interface BrowserModelExecutor {
   dispose(): void;
 }
 
+export interface BrowserExecutorServices {
+  readonly getAlignmentBridge: () => WidgetBridge | undefined;
+}
+
 interface ResultProps {
   readonly result: unknown;
   readonly parameters: ParameterValues;
@@ -39,7 +47,7 @@ export interface BrowserModelRegistration {
   readonly plugin: ModelPlugin<any>;
   readonly glyph: string;
   readonly runtimeLabel: string;
-  readonly createExecutor: () => BrowserModelExecutor;
+  readonly createExecutor: (services: BrowserExecutorServices) => BrowserModelExecutor;
   readonly ResultView: ComponentType<ResultProps>;
   readonly completionMessage: (result: unknown) => string;
 }
@@ -66,6 +74,10 @@ function GlobalGammaResult({ result, parameters, alignment }: ResultProps) {
 
 function CladeShiftResult({ result, parameters, alignment }: ResultProps) {
   return <CladeShiftResultsView result={result as CladeShiftRunResult} threshold={Number(parameters.posteriorThreshold ?? 0.9)} alignment={alignment} />;
+}
+
+function FsartResult({ result, parameters }: ResultProps) {
+  return <FsartResultsView result={result as FsartAnalysisResult} />;
 }
 
 export const modelRegistry: readonly BrowserModelRegistration[] = [
@@ -142,6 +154,18 @@ export const modelRegistry: readonly BrowserModelRegistration[] = [
     completionMessage: (result) => {
       const output = result as CladeShiftRunResult;
       return `CladeShift completed with ${output.backend}: ${output.detectedSites.length} persistent site-wise clade shifts detected.`;
+    },
+  },
+  {
+    plugin: fsartPlugin,
+    glyph: "⇄",
+    runtimeLabel: "Parallel scan · FastTree WASM",
+    createExecutor: (services) => new FsartClient(services.getAlignmentBridge),
+    ResultView: FsartResult,
+    completionMessage: (result) => {
+      const output = result as FsartAnalysisResult;
+      const reconstruction = output.partition.status === "complete" ? `; ${output.partition.acceptedBreakpoints.length} refined Viterbi switch${output.partition.acceptedBreakpoints.length === 1 ? "" : "es"}` : "";
+      return `FSART completed: ${output.breakpoints.length} consensus proposal${output.breakpoints.length === 1 ? "" : "s"}${reconstruction}.`;
     },
   },
 ];

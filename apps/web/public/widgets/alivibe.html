@@ -440,7 +440,9 @@ const state = {
     mouse: { isDown: false, target: null, startR: 0, startC: 0, lastHoverC: 0 },
     ctxTargetRow: null,
     pastedNameCounter: 1,
-    aioliCLI: null
+    aioliCLI: null,
+    fastTreeQueue: Promise.resolve(),
+    fastTreeJob: 0
 };
 
 // --- DOM ---
@@ -495,7 +497,7 @@ const ctxTree = dom.cvsTree.getContext('2d');
 async function init() {
     // Initialize Aioli
     try {
-        state.aioliCLI = await new Aioli(["kalign/3.3.1", "fasttree/2.1.11"]);
+        state.aioliCLI = await new Aioli(["kalign/3.3.1", "fasttree/2.1.11"], { printInterleaved: false });
     } catch (err) {
         console.error("Failed to initialize Aioli:", err);
     }
@@ -927,7 +929,8 @@ async function runKalignAlignment() {
         });
 
         const command = `kalign input.fa -f fasta`;
-        const resultFasta = await state.aioliCLI.exec(command);
+        const execution = await state.aioliCLI.exec(command);
+        const resultFasta = typeof execution === 'string' ? execution : execution.stdout;
         
         if (!resultFasta || !resultFasta.includes('>')) {
             throw new Error("Kalign failed to return a valid FASTA alignment.");
@@ -1646,7 +1649,8 @@ async function runFastTreeTask() {
         flags += " " + document.getElementById('sel-ft-speed').value;
 
         const command = `fasttree ${flags.trim()} input_tree.fa`;
-        const newick = await state.aioliCLI.exec(command);
+        const execution = await state.aioliCLI.exec(command);
+        const newick = typeof execution === 'string' ? execution : execution.stdout;
         
         if (newick && newick.includes('(')) {
             state.tempNameMap = state.rawSequences.map(s => s.name);
@@ -1659,6 +1663,268 @@ async function runFastTreeTask() {
         alert("FastTree failed: " + err.message);
         showOverlay(false);
     }
+}
+
+function parseStandaloneFasta(text) {
+    const names = [];
+    const sequences = [];
+    let name = null;
+    let sequence = '';
+    const commit = () => {
+        if (name === null) return;
+        names.push(name);
+        sequences.push(sequence.replace(/\s/g, '').toUpperCase());
+    };
+    for (const raw of String(text).replace(/\r/g, '').split('\n')) {
+        const line = raw.trim();
+        if (!line) continue;
+        if (line.startsWith('>')) {
+            commit();
+            name = line.slice(1).trim().split(/\s+/, 1)[0];
+            sequence = '';
+        } else {
+            if (name === null) throw new Error('FASTA sequence data appears before the first header.');
+            sequence += line;
+        }
+    }
+    commit();
+    if (names.length < 3) throw new Error('FastTree requires at least three sequences.');
+    if (sequences.some(sequence => sequence.length !== sequences[0].length)) throw new Error('The alignment is not rectangular.');
+    return { names, sequences };
+}
+
+function quoteNewickLabel(value) {
+    return /^[A-Za-z_][A-Za-z0-9_.-]*$/.test(value) ? value : `'${value.replace(/'/g, "''")}'`;
+}
+
+function restoreFastTreeNames(newick, names) {
+    return newick.replace(/(^|[(,])\s*(\d+)(?=\s*:)/g, (_match, prefix, index) => {
+        const name = names[Number(index)];
+        return `${prefix}${quoteNewickLabel(name === undefined ? index : name)}`;
+    });
+}
+
+function parseFastTreeLikelihood(stderr) {
+    const gamma = stderr.match(/Gamma\(\s*20\s*\)\s+LogLk\s*=\s*([-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)/i);
+    if (gamma) return Number(gamma[1]);
+    const values = Array.from(stderr.matchAll(/LogLk\s*(?:~?=)?\s*([-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)/gi));
+    return values.length ? Number(values[values.length - 1][1]) : NaN;
+}
+
+function parseFastTreeModel(stderr) {
+    const frequencies = String(stderr).match(/GTR Frequencies:\s*([\d.eE+-]+)\s+([\d.eE+-]+)\s+([\d.eE+-]+)\s+([\d.eE+-]+)/i)
+        ?? String(stderr).match(/GTR frequencies\(A C G T\)\s*([\d.eE+-]+)\s+([\d.eE+-]+)\s+([\d.eE+-]+)\s+([\d.eE+-]+)/i);
+    const rates = String(stderr).match(/GTR rates\(ac ag at cg ct gt\)\s*([\d.eE+-]+)\s+([\d.eE+-]+)\s+([\d.eE+-]+)\s+([\d.eE+-]+)\s+([\d.eE+-]+)\s+([\d.eE+-]+)/i);
+    const alpha = String(stderr).match(/Gamma\(\s*20\s*\)\s+LogLk\s*=\s*[-+\d.eE]+\s+alpha\s*=\s*([\d.eE+-]+)/i);
+    return {
+        ...(frequencies ? { gtrFrequencies: frequencies.slice(1, 5).map(Number) } : {}),
+        ...(rates ? { gtrRates: rates.slice(1, 7).map(Number) } : {}),
+        ...(alpha ? { gammaAlpha: Number(alpha[1]) } : {}),
+    };
+}
+
+function indexFastTreeNames(newick, names) {
+    const lookup = new Map(names.map((name, index) => [name, String(index)]));
+    return String(newick).replace(/(^|[(,])\s*('(?:''|[^'])*'|[^'(),:;\s]+)(?=\s*:)/g, (_match, prefix, token) => {
+        const label = token.startsWith("'") ? token.slice(1, -1).replace(/''/g, "'") : token;
+        const index = lookup.get(label);
+        if (index === undefined) throw new Error(`Tree tip '${label}' is absent from the alignment.`);
+        return `${prefix}${index}`;
+    });
+}
+
+function parseFastTreeSiteLikelihoods(logText, sites) {
+    const output = new Array(sites).fill(Number.NaN);
+    const pattern = /^Gamma20\s+(\d+)\s+([-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)/gm;
+    for (const match of String(logText).matchAll(pattern)) {
+        const site = Number(match[1]);
+        if (site >= 0 && site < sites) output[site] = Number(match[2]);
+    }
+    const missing = output.findIndex(value => !Number.isFinite(value));
+    if (missing >= 0) throw new Error(`FastTree site-likelihood log is missing aligned site ${missing + 1}.`);
+    return output;
+}
+
+async function scoreFastTreeSegment(payload) {
+    if (!state.aioliCLI) throw new Error('FastTree (bioWASM) is not initialized.');
+    const parsed = parseStandaloneFasta(payload.alignment);
+    const start = Math.max(1, Math.floor(Number(payload.start)));
+    const end = Math.min(parsed.sequences[0].length, Math.floor(Number(payload.end)));
+    if (!(end >= start)) throw new Error(`Invalid segment ${start}–${end}.`);
+    const sliced = parsed.sequences.map(sequence => sequence.slice(start - 1, end));
+    const filename = `fsart_${state.fastTreeJob++}.fa`;
+    const input = sliced.map((sequence, index) => `>${index}\n${sequence}`).join('\n');
+    await state.aioliCLI.mount({ name: filename, data: input });
+    const frequencies = Array.from(payload.gtrFrequencies ?? [], Number);
+    const rates = Array.from(payload.gtrRates ?? [], Number);
+    const fixedModel = frequencies.length === 4 && rates.length === 6
+        && frequencies.every(value => value > 0 && Number.isFinite(value))
+        && rates.every(value => value > 0 && Number.isFinite(value));
+    const modelArgs = fixedModel ? `-gtrfreq ${frequencies.join(' ')} -gtrrates ${rates.join(' ')} ` : '';
+    const command = `fasttree -nt -gtr ${modelArgs}-nosupport -gamma -nopr ${payload.fastest ? '-fastest ' : ''}${filename}`;
+    const started = performance.now();
+    const execution = await state.aioliCLI.exec(command);
+    const stdout = typeof execution === 'string' ? execution : execution.stdout;
+    const stderr = typeof execution === 'string' ? execution : execution.stderr;
+    const treeLine = String(stdout).split(/\r?\n/).filter(line => line.includes('(')).pop();
+    if (!treeLine) throw new Error('FastTree returned no Newick tree.');
+    const logLikelihood = parseFastTreeLikelihood(String(stderr));
+    if (!Number.isFinite(logLikelihood)) throw new Error(`FastTree did not report a Gamma20 likelihood. ${String(stderr).slice(-240)}`);
+    let variableSites = 0;
+    for (let site = 0; site < sliced[0].length; site += 1) {
+        const states = new Set();
+        for (const sequence of sliced) if (/[ACGT]/.test(sequence[site])) states.add(sequence[site]);
+        if (states.size > 1) variableSites += 1;
+    }
+    try { await state.aioliCLI.fs.unlink(filename); } catch (_error) { /* virtual scratch cleanup is best-effort */ }
+    return {
+        start,
+        end,
+        logLikelihood,
+        tree: restoreFastTreeNames(treeLine.trim(), parsed.names),
+        variableSites,
+        elapsedMs: performance.now() - started,
+        version: 'FastTree 2.1.11 bioWASM',
+        ...parseFastTreeModel(String(stderr)),
+    };
+}
+
+function normalizeFastTreeRanges(payload, sites) {
+    const supplied = Array.isArray(payload.sourceRanges) ? payload.sourceRanges : [];
+    const ranges = supplied.map(range => {
+        const start = Math.max(1, Math.floor(Number(range?.[0])));
+        const end = Math.min(sites, Math.floor(Number(range?.[1])));
+        return [start, end];
+    }).filter(range => range[1] >= range[0]).sort((a, b) => a[0] - b[0]);
+    if (ranges.length > 0) return ranges;
+    const start = Math.max(1, Math.floor(Number(payload.sourceStart ?? 1)));
+    const end = Math.min(sites, Math.floor(Number(payload.sourceEnd ?? sites)));
+    if (end < start) throw new Error(`Invalid FastTree source range ${start}–${end}.`);
+    return [[start, end]];
+}
+
+async function scoreFastTreeRanges(payload) {
+    if (!state.aioliCLI) throw new Error('FastTree (bioWASM) is not initialized.');
+    const parsed = parseStandaloneFasta(payload.alignment);
+    const ranges = normalizeFastTreeRanges(payload, parsed.sequences[0].length);
+    const sliced = parsed.sequences.map(sequence => ranges.map(range => sequence.slice(range[0] - 1, range[1])).join(''));
+    if (sliced[0].length < 1) throw new Error('The Viterbi-assigned FastTree source has no aligned sites.');
+    const filename = `fsart_ranges_${state.fastTreeJob++}.fa`;
+    const input = sliced.map((sequence, index) => `>${index}\n${sequence}`).join('\n');
+    await state.aioliCLI.mount({ name: filename, data: input });
+    const frequencies = Array.from(payload.gtrFrequencies ?? [], Number);
+    const rates = Array.from(payload.gtrRates ?? [], Number);
+    const fixedModel = frequencies.length === 4 && rates.length === 6
+        && frequencies.every(value => value > 0 && Number.isFinite(value))
+        && rates.every(value => value > 0 && Number.isFinite(value));
+    const modelArgs = fixedModel ? `-gtrfreq ${frequencies.join(' ')} -gtrrates ${rates.join(' ')} ` : '';
+    const command = `fasttree -nt -gtr ${modelArgs}-nosupport -gamma -nopr ${payload.fastest ? '-fastest ' : ''}${filename}`;
+    const started = performance.now();
+    try {
+        const execution = await state.aioliCLI.exec(command);
+        const stdout = typeof execution === 'string' ? execution : execution.stdout;
+        const stderr = typeof execution === 'string' ? execution : execution.stderr;
+        const treeLine = String(stdout).split(/\r?\n/).filter(line => line.includes('(')).pop();
+        if (!treeLine) throw new Error('FastTree returned no Newick tree for the Viterbi-assigned ranges.');
+        const logLikelihood = parseFastTreeLikelihood(String(stderr));
+        if (!Number.isFinite(logLikelihood)) throw new Error(`FastTree did not report a Gamma20 likelihood. ${String(stderr).slice(-240)}`);
+        let variableSites = 0;
+        for (let site = 0; site < sliced[0].length; site += 1) {
+            const states = new Set();
+            for (const sequence of sliced) if (/[ACGT]/.test(sequence[site])) states.add(sequence[site]);
+            if (states.size > 1) variableSites += 1;
+        }
+        return {
+            start: ranges[0][0],
+            end: ranges[ranges.length - 1][1],
+            sourceRanges: ranges,
+            logLikelihood,
+            tree: restoreFastTreeNames(treeLine.trim(), parsed.names),
+            variableSites,
+            elapsedMs: performance.now() - started,
+            version: 'FastTree 2.1.11 bioWASM',
+            ...parseFastTreeModel(String(stderr)),
+        };
+    } finally {
+        try { await state.aioliCLI.fs.unlink(filename); } catch (_error) { /* virtual scratch cleanup is best-effort */ }
+    }
+}
+
+async function scoreFastTreeTopology(payload) {
+    if (!state.aioliCLI) throw new Error('FastTree (bioWASM) is not initialized.');
+    const parsed = parseStandaloneFasta(payload.alignment);
+    const job = state.fastTreeJob++;
+    const alignmentFilename = `fsart_hmm_${job}.fa`;
+    const treeFilename = `fsart_hmm_${job}.nwk`;
+    const logFilename = `fsart_hmm_${job}.log`;
+    const sourceRanges = normalizeFastTreeRanges(payload, parsed.sequences[0].length);
+    const sourceStart = sourceRanges[0][0];
+    const sourceEnd = sourceRanges[sourceRanges.length - 1][1];
+    const isGlobalSource = sourceRanges.length === 1 && sourceStart === 1 && sourceEnd === parsed.sequences[0].length;
+    const sourceWeight = isGlobalSource
+        ? 1
+        : Math.max(1, Math.min(8, Math.round(Number(payload.sourceWeight ?? 4))));
+    const scoringSequences = parsed.sequences.map(sequence => {
+        const source = sourceRanges.map(range => sequence.slice(range[0] - 1, range[1])).join('');
+        return `${sequence}${source.repeat(sourceWeight - 1)}`;
+    });
+    const alignmentInput = scoringSequences.map((sequence, index) => `>${index}\n${sequence}`).join('\n');
+    const indexedTree = indexFastTreeNames(String(payload.tree), parsed.names);
+    await state.aioliCLI.mount({ name: alignmentFilename, data: alignmentInput });
+    await state.aioliCLI.mount({ name: treeFilename, data: indexedTree.endsWith(';') ? indexedTree : `${indexedTree};` });
+    const frequencies = Array.from(payload.gtrFrequencies ?? [], Number);
+    const rates = Array.from(payload.gtrRates ?? [], Number);
+    if (frequencies.length !== 4 || frequencies.some(value => !(value > 0) || !Number.isFinite(value))) throw new Error('A valid shared four-frequency GTR fit is required.');
+    if (rates.length !== 6 || rates.some(value => !(value > 0) || !Number.isFinite(value))) throw new Error('A valid shared six-rate GTR fit is required.');
+    const command = `fasttree -nt -gtr -gtrfreq ${frequencies.join(' ')} -gtrrates ${rates.join(' ')} -nosupport -gamma -nopr -nome -mllen -intree ${treeFilename} -log ${logFilename} ${alignmentFilename}`;
+    const started = performance.now();
+    try {
+        const execution = await state.aioliCLI.exec(command);
+        const stdout = typeof execution === 'string' ? execution : execution.stdout;
+        const stderr = typeof execution === 'string' ? execution : execution.stderr;
+        const logText = await state.aioliCLI.cat(logFilename);
+        if (typeof logText !== 'string') throw new Error('FastTree did not create its per-site likelihood log.');
+        const treeLine = String(stdout).split(/\r?\n/).filter(line => line.includes('(')).pop();
+        if (!treeLine) throw new Error('FastTree returned no fixed-topology Newick tree.');
+        const logLikelihood = parseFastTreeLikelihood(String(stderr));
+        if (!Number.isFinite(logLikelihood)) throw new Error(`FastTree did not report a fixed-topology Gamma20 likelihood. ${String(stderr).slice(-240)}`);
+        const siteLogLikelihoods = parseFastTreeSiteLikelihoods(logText, parsed.sequences[0].length);
+        return {
+            id: String(payload.id ?? `tree-${job}`),
+            sourceStart,
+            sourceEnd,
+            sourceRanges,
+            topologySignature: String(payload.topologySignature ?? ''),
+            tree: restoreFastTreeNames(treeLine.trim(), parsed.names),
+            logLikelihood: siteLogLikelihoods.reduce((sum, value) => sum + value, 0),
+            siteLogLikelihoods,
+            elapsedMs: performance.now() - started,
+            ...parseFastTreeModel(String(stderr)),
+            version: 'FastTree 2.1.11 bioWASM',
+        };
+    } finally {
+        for (const filename of [alignmentFilename, treeFilename, logFilename]) {
+            try { await state.aioliCLI.fs.unlink(filename); } catch (_error) { /* virtual scratch cleanup is best-effort */ }
+        }
+    }
+}
+
+function queueFastTreeSegment(payload) {
+    const pending = state.fastTreeQueue.then(() => scoreFastTreeSegment(payload));
+    state.fastTreeQueue = pending.catch(() => undefined);
+    return pending;
+}
+
+function queueFastTreeRanges(payload) {
+    const pending = state.fastTreeQueue.then(() => scoreFastTreeRanges(payload));
+    state.fastTreeQueue = pending.catch(() => undefined);
+    return pending;
+}
+
+function queueFastTreeTopology(payload) {
+    const pending = state.fastTreeQueue.then(() => scoreFastTreeTopology(payload));
+    state.fastTreeQueue = pending.catch(() => undefined);
+    return pending;
 }
 
 // --- Export Tree as Newick ---
@@ -2546,6 +2812,26 @@ window.addEventListener('message', async event => {
                 bridgeSend('response', snapshot, message.requestId);
                 break;
             }
+            case 'score-fasttree-segment': {
+                const start = Math.floor(Number(message.payload?.start));
+                const end = Math.floor(Number(message.payload?.end));
+                bridgeSend('status', { stage: 'fasttree-partition', message: `FastTree GTR+Gamma segment ${start}–${end}`, start, end });
+                const score = await queueFastTreeSegment(message.payload ?? {});
+                bridgeSend('response', score, message.requestId);
+                break;
+            }
+            case 'score-fasttree-ranges': {
+                bridgeSend('status', { stage: 'tree-refinement', message: `Refitting a tree on ${Number(message.payload?.sourceRanges?.length ?? 0)} Viterbi run(s)` });
+                const score = await queueFastTreeRanges(message.payload ?? {});
+                bridgeSend('response', score, message.requestId);
+                break;
+            }
+            case 'score-fasttree-topology': {
+                bridgeSend('status', { stage: 'tree-hmm-emissions', message: `FastTree fixed-topology site likelihoods for ${String(message.payload?.id ?? 'candidate tree')}` });
+                const score = await queueFastTreeTopology(message.payload ?? {});
+                bridgeSend('response', score, message.requestId);
+                break;
+            }
             default:
                 bridgeSend('response', undefined, message.requestId, `Unknown alivibe action '${message.type}'.`);
         }
@@ -2555,7 +2841,7 @@ window.addEventListener('message', async event => {
 });
 
 init()
-    .then(() => bridgeSend('ready', { capabilities: ['alignment-edit', 'msa', 'kalign', 'frame-clean', 'fasttree'] }))
+    .then(() => bridgeSend('ready', { capabilities: ['alignment-edit', 'msa', 'kalign', 'frame-clean', 'fasttree', 'fasttree-segment-likelihood', 'fasttree-range-likelihood', 'fasttree-site-likelihoods'] }))
     .catch(error => bridgeSend('ready', { capabilities: ['alignment-edit'] }, undefined, error instanceof Error ? error.message : String(error)));
 </script>
 </body>

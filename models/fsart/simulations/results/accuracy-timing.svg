@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1380 850" width="1380" height="850" role="img">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<g font-family="Inter,Arial,sans-serif" fill="#1b2926">
+<text x="92" y="38" font-size="25" font-weight="700">FSART final-model accuracy across realized diversity</text>
+<text x="92" y="64" font-size="12" fill="#63726e">F1 excludes uncorrected candidate rankings; timing includes candidate generation; error tolerance ±60 nt</text>
+<line x1="92" x2="1344" y1="349" y2="349" stroke="#dfe6e2" stroke-dasharray="3 5"/>
+<text x="80" y="353" text-anchor="end" font-size="10" fill="#667570">0.00</text>
+<line x1="92" x2="1344" y1="287.75" y2="287.75" stroke="#dfe6e2" stroke-dasharray="3 5"/>
+<text x="80" y="291.75" text-anchor="end" font-size="10" fill="#667570">0.25</text>
+<line x1="92" x2="1344" y1="226.5" y2="226.5" stroke="#dfe6e2" stroke-dasharray="3 5"/>
+<text x="80" y="230.5" text-anchor="end" font-size="10" fill="#667570">0.50</text>
+<line x1="92" x2="1344" y1="165.25" y2="165.25" stroke="#dfe6e2" stroke-dasharray="3 5"/>
+<text x="80" y="169.25" text-anchor="end" font-size="10" fill="#667570">0.75</text>
+<line x1="92" x2="1344" y1="104" y2="104" stroke="#dfe6e2" stroke-dasharray="3 5"/>
+<text x="80" y="108" text-anchor="end" font-size="10" fill="#667570">1.00</text>
+<text x="24" y="226.5" transform="rotate(-90 24 226.5)" text-anchor="middle" font-size="12">Breakpoint F1</text>
+<rect x="181.64000000000001" y="289.6060606060606" width="146.23999999999998" height="59.39393939393938" rx="2" fill="#17806f" opacity="0.88"><title>GARD low-diversity regime (~5% target) · Legacy greedy fixed partition · F1 0.242</title></rect>
+<rect x="331.88" y="270.6" width="146.23999999999998" height="78.39999999999998" rx="2" fill="#b54e72" opacity="0.88"><title>GARD low-diversity regime (~5% target) · Consensus-family HMM + refit · F1 0.320</title></rect>
+<rect x="482.12" y="174" width="146.23999999999998" height="175" rx="2" fill="#c87922" opacity="0.88"><title>GARD low-diversity regime (~5% target) · Oracle candidates + AICc · F1 0.714</title></rect>
+<text x="405" y="369" text-anchor="middle" font-size="10" fill="#44534f">GARD low-diversity regime (~5% target)</text>
+<text x="405" y="384" text-anchor="middle" font-size="10" fill="#6b7975">mean p = 0.045</text>
+<rect x="807.64" y="207.1578947368421" width="146.23999999999998" height="141.8421052631579" rx="2" fill="#17806f" opacity="0.88"><title>GARD high-diversity regime (~25% target) · Legacy greedy fixed partition · F1 0.579</title></rect>
+<rect x="957.88" y="202" width="146.23999999999998" height="147" rx="2" fill="#b54e72" opacity="0.88"><title>GARD high-diversity regime (~25% target) · Consensus-family HMM + refit · F1 0.600</title></rect>
+<rect x="1108.12" y="134.625" width="146.23999999999998" height="214.375" rx="2" fill="#c87922" opacity="0.88"><title>GARD high-diversity regime (~25% target) · Oracle candidates + AICc · F1 0.875</title></rect>
+<text x="1031" y="369" text-anchor="middle" font-size="10" fill="#44534f">GARD high-diversity regime (~25% target)</text>
+<text x="1031" y="384" text-anchor="middle" font-size="10" fill="#6b7975">mean p = 0.230</text>
+<line x1="92" x2="1344" y1="700" y2="700" stroke="#dfe6e2" stroke-dasharray="3 5"/>
+<text x="80" y="704" text-anchor="end" font-size="10" fill="#667570">1ms</text>
+<line x1="92" x2="1344" y1="651" y2="651" stroke="#dfe6e2" stroke-dasharray="3 5"/>
+<text x="80" y="655" text-anchor="end" font-size="10" fill="#667570">10ms</text>
+<line x1="92" x2="1344" y1="602" y2="602" stroke="#dfe6e2" stroke-dasharray="3 5"/>
+<text x="80" y="606" text-anchor="end" font-size="10" fill="#667570">100ms</text>
+<line x1="92" x2="1344" y1="553" y2="553" stroke="#dfe6e2" stroke-dasharray="3 5"/>
+<text x="80" y="557" text-anchor="end" font-size="10" fill="#667570">1s</text>
+<line x1="92" x2="1344" y1="504" y2="504" stroke="#dfe6e2" stroke-dasharray="3 5"/>
+<text x="80" y="508" text-anchor="end" font-size="10" fill="#667570">10s</text>
+<line x1="92" x2="1344" y1="455" y2="455" stroke="#dfe6e2" stroke-dasharray="3 5"/>
+<text x="80" y="459" text-anchor="end" font-size="10" fill="#667570">100s</text>
+<text x="24" y="577.5" transform="rotate(-90 24 577.5)" text-anchor="middle" font-size="12">Median wall time (log scale)</text>
+<rect x="169.12" y="670.8293421928299" width="75.29333333333334" height="29.170657807170073" rx="2" fill="#71867f" opacity="0.88"><title>GARD low-diversity regime (~5% target) · Ranked window candidates · 3.9 ms</title></rect>
+<rect x="248.41333333333336" y="606.864924420013" width="75.29333333333334" height="93.13507557998696" rx="2" fill="#2d72b8" opacity="0.88"><title>GARD low-diversity regime (~5% target) · Consensus triplet proposals · 79.6 ms</title></rect>
+<rect x="327.7066666666667" y="523.8380204408631" width="75.29333333333334" height="176.16197955913685" rx="2" fill="#17806f" opacity="0.88"><title>GARD low-diversity regime (~5% target) · Legacy greedy fixed partition · 3.94 s</title></rect>
+<rect x="407" y="513.8066617000738" width="75.29333333333334" height="186.19333829992615" rx="2" fill="#b54e72" opacity="0.88"><title>GARD low-diversity regime (~5% target) · Consensus-family HMM + refit · 6.31 s</title></rect>
+<rect x="486.29333333333335" y="543.4792857059526" width="75.29333333333334" height="156.52071429404737" rx="2" fill="#c87922" opacity="0.88"><title>GARD low-diversity regime (~5% target) · Oracle candidates + AICc · 1.56 s</title></rect>
+<rect x="565.5866666666667" y="561.3760909804765" width="75.29333333333334" height="138.62390901952347" rx="2" fill="#815bb5" opacity="0.88"><title>GARD low-diversity regime (~5% target) · Single FastTree · 674.6 ms</title></rect>
+<text x="405" y="722" text-anchor="middle" font-size="10" fill="#44534f">GARD low-diversity regime (~5% target)</text>
+<rect x="795.12" y="658.913411821399" width="75.29333333333334" height="41.086588178601005" rx="2" fill="#71867f" opacity="0.88"><title>GARD high-diversity regime (~25% target) · Ranked window candidates · 6.9 ms</title></rect>
+<rect x="874.4133333333333" y="576.3028015816996" width="75.29333333333334" height="123.69719841830045" rx="2" fill="#2d72b8" opacity="0.88"><title>GARD high-diversity regime (~25% target) · Consensus triplet proposals · 334.5 ms</title></rect>
+<rect x="953.7066666666667" y="503.96724682911815" width="75.29333333333334" height="196.03275317088185" rx="2" fill="#17806f" opacity="0.88"><title>GARD high-diversity regime (~25% target) · Legacy greedy fixed partition · 10.02 s</title></rect>
+<rect x="1033" y="504.9964821881638" width="75.29333333333334" height="195.00351781183622" rx="2" fill="#b54e72" opacity="0.88"><title>GARD high-diversity regime (~25% target) · Consensus-family HMM + refit · 9.54 s</title></rect>
+<rect x="1112.2933333333333" y="543.9227327711128" width="75.29333333333334" height="156.0772672288872" rx="2" fill="#c87922" opacity="0.88"><title>GARD high-diversity regime (~25% target) · Oracle candidates + AICc · 1.53 s</title></rect>
+<rect x="1191.5866666666666" y="557.9837367783405" width="75.29333333333334" height="142.01626322165953" rx="2" fill="#815bb5" opacity="0.88"><title>GARD high-diversity regime (~25% target) · Single FastTree · 791.2 ms</title></rect>
+<text x="1031" y="722" text-anchor="middle" font-size="10" fill="#44534f">GARD high-diversity regime (~25% target)</text>
+<rect x="92" y="777" width="18" height="10" rx="2" fill="#71867f"/>
+<text x="117" y="786" font-size="10" fill="#43524e">Ranked window candidates</text>
+<rect x="502" y="777" width="18" height="10" rx="2" fill="#2d72b8"/>
+<text x="527" y="786" font-size="10" fill="#43524e">Consensus triplet proposals</text>
+<rect x="912" y="777" width="18" height="10" rx="2" fill="#17806f"/>
+<text x="937" y="786" font-size="10" fill="#43524e">Legacy greedy fixed partition</text>
+<rect x="92" y="802" width="18" height="10" rx="2" fill="#b54e72"/>
+<text x="117" y="811" font-size="10" fill="#43524e">Consensus-family HMM + refit</text>
+<rect x="502" y="802" width="18" height="10" rx="2" fill="#c87922"/>
+<text x="527" y="811" font-size="10" fill="#43524e">Oracle candidates + AICc</text>
+<rect x="912" y="802" width="18" height="10" rx="2" fill="#815bb5"/>
+<text x="937" y="811" font-size="10" fill="#43524e">Single FastTree</text>
+</g></svg>

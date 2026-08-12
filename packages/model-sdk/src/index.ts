@@ -75,7 +75,7 @@ export interface AnalysisJobSpec {
   };
   readonly inputs: {
     readonly alignmentSha256: string;
-    readonly treeSha256: string;
+    readonly treeSha256?: string;
   };
   readonly parameters: ParameterValues;
   readonly seed?: number;

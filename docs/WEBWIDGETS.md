@@ -18,6 +18,9 @@ Host requests:
 - `set-tree`
 - `get-tree`
 - `run-fasttree`
+- `score-fasttree-segment` (private FSART service action)
+- `score-fasttree-ranges` (private FSART refit action)
+- `score-fasttree-topology` (private FSART all-site emission action)
 
 Widget events:
 
@@ -27,6 +30,10 @@ Widget events:
 - `status`
 
 The direct FastTree button uses `run-fasttree`; it therefore invokes the same bioWASM FastTree installation that alivibe uses internally, without requiring the user to open the editor.
+
+FSART uses `score-fasttree-segment` with `{ alignment, start, end, fastest }` to fit its global/segment/pair/triplet tree family. It does not mutate alivibe's displayed alignment: it mounts a numeric-name slice, runs FastTree GTR+Gamma, captures the likelihood from separated stderr, restores original Newick tip labels, and returns the fit plus the fitted GTR parameters when requested.
+
+`score-fasttree-topology` fixes one candidate Newick topology, applies the shared global GTR rates/frequencies, and returns its Gamma20 likelihood for every original alignment site. An optional `sourceRanges` field concatenates the sites assigned to that state when fitting its branch lengths while still reporting emissions over the complete alignment. `score-fasttree-ranges` performs the corresponding de novo topology refit on one or more inclusive, possibly discontiguous ranges. These requests are serialized through the single shared Aioli worker, so the application does not download or instantiate a second FastTree module.
 
 ## phylotagger messages
 

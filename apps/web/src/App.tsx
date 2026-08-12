@@ -9,7 +9,7 @@ import type { ModelParameter, ParameterValues } from "@phylo-workbench/model-sdk
 import { WidgetBridge } from "@phylo-workbench/viewer-bridge";
 import { WidgetModal } from "./components/WidgetModal.js";
 import type { RunProgress } from "./lib/diffubar-client.js";
-import { getRegisteredModel, modelRegistry, type BrowserModelExecutor } from "./model-registry.js";
+import { getRegisteredModel, modelRegistry, type BrowserExecutorServices, type BrowserModelExecutor } from "./model-registry.js";
 
 interface WidgetSnapshot {
   readonly alignment?: string;
@@ -35,6 +35,14 @@ const stageLabels: Readonly<Record<string, string>> = {
   "clade-shift-runtime": "Preparing the all-clade message engine",
   "clade-shift-scan": "Scanning persistent descendant-clade shifts",
   "clade-shift-tabulation": "Integrating CladeShift posteriors",
+  "triplet-scan": "Scanning informative taxa triplets",
+  "breakpoint-hmm": "Marginalizing breakpoint uncertainty",
+  "fasttree-runtime": "Compiling the FastTree runtime",
+  "tree-family": "Fitting segment, pair, triplet, and global trees",
+  "tree-hmm-emissions": "Caching per-site tree likelihoods",
+  "tree-hmm": "Searching topology HMM subsets",
+  "tree-refinement": "Refining Viterbi runs and trees",
+  "tree-refinement-hmm": "Updating the refined topology HMM",
   "branch-mixture-preparation": "Building branch-mixture operators",
   "branch-mixture-likelihoods": "Evaluating branch-mixture likelihoods",
   "approximate-fel": "Optimizing approximate FEL surfaces",
@@ -122,8 +130,11 @@ export function App() {
   const resultsRef = useRef<HTMLDivElement>(null);
   const [selectedModelId, setSelectedModelId] = useState(modelRegistry[0]?.plugin.manifest.id ?? "");
   const selectedModel = getRegisteredModel(selectedModelId);
-  const executor = useRef<BrowserModelExecutor>(selectedModel.createExecutor());
   const [bridges, setBridges] = useState<{ alignment: WidgetBridge; tree: WidgetBridge }>();
+  const bridgesRef = useRef<typeof bridges>(undefined);
+  bridgesRef.current = bridges;
+  const executorServices = useRef<BrowserExecutorServices>({ getAlignmentBridge: () => bridgesRef.current?.alignment });
+  const executor = useRef<BrowserModelExecutor>(selectedModel.createExecutor(executorServices.current));
   const [alignment, setAlignment] = useState<AlignmentArtifact>();
   const [tree, setTree] = useState<TreeArtifact>();
   const [parameters, setParameters] = useState<ParameterValues>(() => selectedModel.plugin.defaultParameters());
@@ -162,7 +173,7 @@ export function App() {
 
   useEffect(() => {
     executor.current.dispose();
-    executor.current = selectedModel.createExecutor();
+    executor.current = selectedModel.createExecutor(executorServices.current);
     setParameters(selectedModel.plugin.defaultParameters());
     setResult(undefined);
     return () => executor.current.dispose();
@@ -185,6 +196,8 @@ export function App() {
   const manifest = selectedModel.plugin.manifest;
   const visibleParameters = manifest.parameters.filter((parameter) => showAdvanced || !parameter.advanced);
   const requiresForeground = manifest.inputSlots.some((slot) => slot.id === "foreground" && slot.required);
+  const acceptsTree = manifest.inputSlots.some((slot) => slot.id === "tree");
+  const requiresTree = manifest.inputSlots.some((slot) => slot.id === "tree" && slot.required);
   const tagReady = !requiresForeground || tree?.tags.length === 2;
   const webGpuAvailable = typeof navigator !== "undefined" && "gpu" in navigator;
 
@@ -309,15 +322,15 @@ export function App() {
   };
 
   const runAnalysis = async (): Promise<void> => {
-    if (alignment === undefined || tree === undefined || !validation.ready) return;
+    if (alignment === undefined || (requiresTree && tree === undefined) || !validation.ready) return;
     runStartedAt.current = performance.now();
     setElapsedMs(0);
     setRunState("running");
     setResult(undefined);
-    setProgress({ stage: "initialization", fraction: 0, message: requiresForeground ? "Parsing alignment and tagged tree" : "Parsing alignment and phylogeny", indeterminate: true });
+    setProgress({ stage: "initialization", fraction: 0, message: requiresForeground ? "Parsing alignment and tagged tree" : requiresTree ? "Parsing alignment and phylogeny" : "Parsing nucleotide alignment", indeterminate: true });
     setNotice(undefined);
     try {
-      const next = await executor.current.run(alignment.text, tree.text, parameters, setProgress);
+      const next = await executor.current.run(alignment.text, tree?.text ?? "", parameters, setProgress);
       setResult(next);
       setNotice({ tone: "success", text: selectedModel.completionMessage(next) });
     } catch (error) {
@@ -376,11 +389,13 @@ export function App() {
       <main className="workspace">
         <section className="workspace-hero">
           <div>
-            <p className="eyebrow">Selection analysis / {manifest.shortTitle}</p>
+            <p className="eyebrow">{manifest.category} analysis / {manifest.shortTitle}</p>
             <h1>Build an analysis-ready phylogenetic workspace</h1>
             <p>{requiresForeground
               ? "Load a codon alignment, inspect or edit it, attach a phylogeny, tag two foreground groups, then run entirely in this browser."
-              : `Load a codon alignment, inspect or edit it, attach a phylogeny, then run ${manifest.shortTitle} entirely in this browser.`}</p>
+              : requiresTree
+                ? `Load a codon alignment, inspect or edit it, attach a phylogeny, then run ${manifest.shortTitle} entirely in this browser.`
+                : `Load an aligned nucleotide FASTA, inspect or edit it, then run ${manifest.shortTitle} entirely in this browser; segment trees are inferred only after breakpoint scanning.`}</p>
           </div>
           <div className="privacy-note"><span>Device-local</span>Your sequence data is not uploaded by the browser runner.</div>
         </section>
@@ -411,7 +426,7 @@ export function App() {
                 <dl>
                   <div><dt>Taxa</dt><dd>{alignment.taxa}</dd></div>
                   <div><dt>Sites</dt><dd>{alignment.sites.toLocaleString()}</dd></div>
-                  <div><dt>Frame</dt><dd>{alignment.divisibleByThree ? "Codon-ready" : "Needs edit"}</dd></div>
+                  <div><dt>{manifest.category === "recombination" ? "Layout" : "Frame"}</dt><dd>{manifest.category === "recombination" ? "Aligned nucleotides" : alignment.divisibleByThree ? "Codon-ready" : "Needs edit"}</dd></div>
                 </dl>
                 <div className="artifact__actions">
                   <button type="button" className="button button--secondary" onClick={openAlignmentEditor}>Open alignment editor</button>
@@ -421,7 +436,7 @@ export function App() {
             )}
           </section>
 
-          <section className={`workflow-card ${tree !== undefined ? "is-complete" : ""}`}>
+          {acceptsTree && <section className={`workflow-card ${tree !== undefined ? "is-complete" : ""}`}>
             <div className="step-number">02</div>
             <div className="workflow-card__heading">
               <div><h2>Phylogeny</h2><p>Upload or infer a tree</p></div>
@@ -455,7 +470,7 @@ export function App() {
                 </div>
               </div>
             )}
-          </section>
+          </section>}
 
           {requiresForeground && (
             <section className={`workflow-card workflow-card--foreground ${tagReady ? "is-complete" : ""}`}>
@@ -478,8 +493,8 @@ export function App() {
 
         <section className="run-panel">
           <div className="run-panel__header">
-            <div><p className="eyebrow">{requiresForeground ? "04" : "03"} / Configure and run</p><h2>{manifest.title}</h2><p>{manifest.description}</p></div>
-            <div className="runtime-choice"><span>Execution</span><strong>{String(parameters.backend ?? "wasm-parallel")}</strong><small>{webGpuAvailable ? "Parallel WASM recommended · WebGPU available" : "Parallel WASM available"}</small></div>
+            <div><p className="eyebrow">{requiresForeground ? "04" : acceptsTree ? "03" : "02"} / Configure and run</p><h2>{manifest.title}</h2><p>{manifest.description}</p></div>
+            <div className="runtime-choice"><span>Execution</span><strong>{String(parameters.backend ?? selectedModel.runtimeLabel)}</strong><small>{manifest.id === "fsart" ? "Parallel informative-triplet workers · local FastTree WASM" : webGpuAvailable ? "Parallel WASM recommended · WebGPU available" : "Parallel WASM available"}</small></div>
           </div>
           <div className="parameter-grid">
             {visibleParameters.map((parameter) => (
@@ -497,9 +512,9 @@ export function App() {
 
           <div className="validation-strip">
             <div className={alignment !== undefined ? "is-valid" : ""}><span>{alignment !== undefined ? "✓" : "1"}</span>Alignment</div>
-            <div className={tree !== undefined ? "is-valid" : ""}><span>{tree !== undefined ? "✓" : "2"}</span>Tree</div>
+            {acceptsTree && <div className={tree !== undefined ? "is-valid" : ""}><span>{tree !== undefined ? "✓" : "2"}</span>Tree</div>}
             {requiresForeground && <div className={tagReady ? "is-valid" : ""}><span>{tagReady ? "✓" : "3"}</span>Two groups</div>}
-            <div className={validation.ready ? "is-valid" : ""}><span>{validation.ready ? "✓" : requiresForeground ? "4" : "3"}</span>Validated</div>
+            <div className={validation.ready ? "is-valid" : ""}><span>{validation.ready ? "✓" : requiresForeground ? "4" : acceptsTree ? "3" : "2"}</span>Validated</div>
           </div>
 
           {!validation.ready && validation.issues.length > 0 && (
@@ -527,7 +542,7 @@ export function App() {
             </div>
           ) : (
             <button type="button" className="button button--run" disabled={!validation.ready} onClick={() => void runAnalysis()}>
-              <span>Run {manifest.shortTitle}</span><small>{parameters.backend === "webgpu" ? "Experimental WebGPU kernel" : parameters.backend === "wasm" ? "Exact single-worker WASM" : "Exact parallel WASM (recommended)"}</small>
+              <span>Run {manifest.shortTitle}</span><small>{manifest.id === "fsart" ? "Pair-covered triplet scan · FastTree-WASM tree-family HMM" : parameters.backend === "webgpu" ? "Experimental WebGPU kernel" : parameters.backend === "wasm" ? "Exact single-worker WASM" : "Exact parallel WASM (recommended)"}</small>
             </button>
           )}
         </section>
