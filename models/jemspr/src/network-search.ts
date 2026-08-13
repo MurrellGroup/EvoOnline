@@ -97,6 +97,8 @@ export interface FixedSwitchingNetworkEvaluation {
 export interface InternalNetworkSearchResult {
   readonly public: JemsprNetworkResult;
   readonly network: SwitchingNetwork;
+  readonly masks: readonly number[];
+  readonly maskPath: Int32Array;
   readonly candidateTemplates: number;
   readonly serializableNetwork: unknown;
 }
@@ -990,5 +992,5 @@ export function searchSwitchingNetwork(alignment: JemsprAlignment, path: Interna
     });
   }
   const publicResult = publicNetwork(alignment, best, path, search, allBest, config);
-  return { public: publicResult, network: best.network, candidateTemplates: attemptedTemplates.size, serializableNetwork: networkToSerializable(best.network) };
+  return { public: publicResult, network: best.network, masks: best.masks, maskPath: best.maskPath, candidateTemplates: attemptedTemplates.size, serializableNetwork: networkToSerializable(best.network) };
 }

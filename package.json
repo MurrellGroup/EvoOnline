@@ -13,7 +13,7 @@
     "dev:api": "npm run dev --workspace @phylo-workbench/api",
     "simulate:fsart": "npm run simulate --workspace @phylo-workbench/model-fsart --",
     "benchmark:jemspr": "npm run benchmark --workspace @phylo-workbench/model-jemspr --",
-    "build:shared": "npm run build --workspace @phylo-workbench/domain && npm run build --workspace @phylo-workbench/model-sdk && npm run build --workspace @phylo-workbench/viewer-bridge",
+    "build:shared": "npm run build --workspace @phylo-workbench/domain && npm run build --workspace @phylo-workbench/model-sdk && npm run build --workspace @phylo-workbench/viewer-bridge && npm run build --workspace @phylo-workbench/phylo-likelihood",
     "build:models": "npm run build --workspace @phylo-workbench/model-diffubar && npm run build --workspace @phylo-workbench/model-fubar && npm run build --workspace @phylo-workbench/model-bsrel && npm run build --workspace @phylo-workbench/model-bame && npm run build --workspace @phylo-workbench/model-cladeshift && npm run build --workspace @phylo-workbench/model-fsart && npm run build --workspace @phylo-workbench/model-mosaicspr && npm run build --workspace @phylo-workbench/model-jemspr",
     "build": "npm run build:shared && npm run build:models && npm run build --workspace @phylo-workbench/api && npm run build --workspace @phylo-workbench/web",
     "typecheck": "npm run build:shared && npm run build:models && npm run typecheck --workspaces --if-present",

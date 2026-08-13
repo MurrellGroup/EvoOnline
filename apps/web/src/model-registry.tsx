@@ -197,12 +197,13 @@ export const modelRegistry: readonly BrowserModelRegistration[] = [
   {
     plugin: jemsprPlugin,
     glyph: "rSPR⁺",
-    runtimeLabel: "Independent rooted-SPR worker",
-    createExecutor: () => new JemsprClient(),
+    runtimeLabel: "Rooted-SPR worker · linked GTR ML",
+    createExecutor: (services) => new JemsprClient(undefined, services.getAlignmentBridge),
     ResultView: JemsprResult,
     completionMessage: (result) => {
       const output = result as JemsprAnalysisResult;
-      return `JEMSPR completed: ${output.network.templates.length} coherent reticulation template${output.network.templates.length === 1 ? "" : "s"}, ${output.network.occurrences.length} event occurrence${output.network.occurrences.length === 1 ? "" : "s"}, and ${output.network.runs.length} genomic region${output.network.runs.length === 1 ? "" : "s"}.`;
+      const linked = output.likelihood.status === "complete" ? ` Linked ML fitted ${output.likelihood.atomicBranches.length} shared network edges.` : "";
+      return `JEMSPR completed: ${output.network.templates.length} coherent reticulation template${output.network.templates.length === 1 ? "" : "s"}, ${output.network.occurrences.length} event occurrence${output.network.occurrences.length === 1 ? "" : "s"}, and ${output.network.runs.length} genomic region${output.network.runs.length === 1 ? "" : "s"}.${linked}`;
     },
   },
 ];

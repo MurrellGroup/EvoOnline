@@ -1723,6 +1723,39 @@ function parseFastTreeModel(stderr) {
     };
 }
 
+async function fitFastTreeGtrModel(payload) {
+    if (!state.aioliCLI) throw new Error('FastTree (bioWASM) is not initialized.');
+    const parsed = parseStandaloneFasta(payload.alignment);
+    const filename = `jemspr_gtr_${state.fastTreeJob++}.fa`;
+    const input = parsed.sequences.map((sequence, index) => `>${index}\n${sequence}`).join('\n');
+    await state.aioliCLI.mount({ name: filename, data: input });
+    const started = performance.now();
+    try {
+        // FastTree is used only as a whole-alignment estimator of the fixed
+        // GTR matrix. Its inferred topology, branch lengths, CAT rates,
+        // support values, and objective are deliberately neither returned nor
+        // consumed by JEMSPR.
+        const execution = await state.aioliCLI.exec(`fasttree -nt -gtr -nosupport -nopr ${filename}`);
+        const stderr = typeof execution === 'string' ? execution : execution.stderr;
+        const fitted = parseFastTreeModel(String(stderr));
+        if (!Array.isArray(fitted.gtrFrequencies) || fitted.gtrFrequencies.length !== 4 || fitted.gtrFrequencies.some(value => !(value > 0) || !Number.isFinite(value))) {
+            throw new Error(`FastTree did not report four valid GTR equilibrium frequencies. ${String(stderr).slice(-240)}`);
+        }
+        if (!Array.isArray(fitted.gtrRates) || fitted.gtrRates.length !== 6 || fitted.gtrRates.some(value => !(value > 0) || !Number.isFinite(value))) {
+            throw new Error(`FastTree did not report six valid GTR exchangeabilities. ${String(stderr).slice(-240)}`);
+        }
+        return {
+            frequencies: fitted.gtrFrequencies,
+            exchangeabilities: fitted.gtrRates,
+            source: 'FastTree-2.1.11-global-fit',
+            version: 'FastTree 2.1.11 bioWASM',
+            elapsedMs: performance.now() - started,
+        };
+    } finally {
+        try { await state.aioliCLI.fs.unlink(filename); } catch (_error) { /* virtual scratch cleanup is best-effort */ }
+    }
+}
+
 function indexFastTreeNames(newick, names) {
     const lookup = new Map(names.map((name, index) => [name, String(index)]));
     return String(newick).replace(/(^|[(,])\s*('(?:''|[^'])*'|[^'(),:;\s]+)(?=\s*:)/g, (_match, prefix, token) => {
@@ -1923,6 +1956,12 @@ function queueFastTreeRanges(payload) {
 
 function queueFastTreeTopology(payload) {
     const pending = state.fastTreeQueue.then(() => scoreFastTreeTopology(payload));
+    state.fastTreeQueue = pending.catch(() => undefined);
+    return pending;
+}
+
+function queueFastTreeGtrModel(payload) {
+    const pending = state.fastTreeQueue.then(() => fitFastTreeGtrModel(payload));
     state.fastTreeQueue = pending.catch(() => undefined);
     return pending;
 }
@@ -2832,6 +2871,12 @@ window.addEventListener('message', async event => {
                 bridgeSend('response', score, message.requestId);
                 break;
             }
+            case 'fit-fasttree-gtr-model': {
+                bridgeSend('status', { stage: 'jemspr-gtr-model', message: 'Estimating the one fixed whole-alignment GTR matrix with FastTree' });
+                const fitted = await queueFastTreeGtrModel(message.payload ?? {});
+                bridgeSend('response', fitted, message.requestId);
+                break;
+            }
             default:
                 bridgeSend('response', undefined, message.requestId, `Unknown alivibe action '${message.type}'.`);
         }
@@ -2841,7 +2886,7 @@ window.addEventListener('message', async event => {
 });
 
 init()
-    .then(() => bridgeSend('ready', { capabilities: ['alignment-edit', 'msa', 'kalign', 'frame-clean', 'fasttree', 'fasttree-segment-likelihood', 'fasttree-range-likelihood', 'fasttree-site-likelihoods'] }))
+    .then(() => bridgeSend('ready', { capabilities: ['alignment-edit', 'msa', 'kalign', 'frame-clean', 'fasttree', 'fasttree-gtr-model', 'fasttree-segment-likelihood', 'fasttree-range-likelihood', 'fasttree-site-likelihoods'] }))
     .catch(error => bridgeSend('ready', { capabilities: ['alignment-edit'] }, undefined, error instanceof Error ? error.message : String(error)));
 </script>
 </body>

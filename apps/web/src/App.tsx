@@ -53,6 +53,12 @@ const stageLabels: Readonly<Record<string, string>> = {
   "jemspr-root-search": "Searching inferred root placements",
   "jemspr-tree-space": "Pricing the adaptive rooted-SPR graph",
   "jemspr-network-search": "Compiling and decoding switching networks",
+  "jemspr-gtr-model": "Calibrating the fixed global GTR matrix",
+  "jemspr-linked-likelihood": "Compiling the linked likelihood structure",
+  "jemspr-branch-fit": "Fitting shared network-edge lengths",
+  "jemspr-rate-fit": "Profiling custom site-rate variation",
+  "jemspr-likelihood-path": "Likelihood-refining the genomic path",
+  "jemspr-branch-refit": "Refitting linked lengths on the refined path",
   "branch-mixture-preparation": "Building branch-mixture operators",
   "branch-mixture-likelihoods": "Evaluating branch-mixture likelihoods",
   "approximate-fel": "Optimizing approximate FEL surfaces",
@@ -531,7 +537,7 @@ export function App() {
         <section className="run-panel">
           <div className="run-panel__header">
             <div><p className="eyebrow">{requiresForeground ? "04" : acceptsTree ? "03" : "02"} / Configure and run</p><h2>{manifest.title}</h2><p>{manifest.description}</p></div>
-            <div className="runtime-choice"><span>Execution</span><strong>{String(parameters.backend ?? selectedModel.runtimeLabel)}</strong><small>{manifest.id === "fsart" ? "Parallel informative-triplet workers · local FastTree WASM" : manifest.id === "jemspr" ? "Alignment-only · no FastTree, supplied tree, FSART, or breakpoint proposals" : webGpuAvailable ? "Parallel WASM recommended · WebGPU available" : "Parallel WASM available"}</small></div>
+            <div className="runtime-choice"><span>Execution</span><strong>{String(parameters.backend ?? selectedModel.runtimeLabel)}</strong><small>{manifest.id === "fsart" ? "Parallel informative-triplet workers · local FastTree WASM" : manifest.id === "jemspr" ? "Internal topology/network search · FastTree supplies only a fixed GTR matrix · custom linked ML" : webGpuAvailable ? "Parallel WASM recommended · WebGPU available" : "Parallel WASM available"}</small></div>
           </div>
           <div className="parameter-grid">
             {visibleParameters.map((parameter) => (
@@ -579,7 +585,7 @@ export function App() {
             </div>
           ) : (
             <button type="button" className="button button--run" disabled={!validation.ready} onClick={() => void runAnalysis()}>
-              <span>Run {manifest.shortTitle}</span><small>{manifest.id === "fsart" ? "Pair-covered triplet scan · FastTree-WASM tree-family HMM" : manifest.id === "jemspr" ? "Pure internal rooted-tree and coherent event-network search" : parameters.backend === "webgpu" ? "Experimental WebGPU kernel" : parameters.backend === "wasm" ? "Exact single-worker WASM" : "Exact parallel WASM (recommended)"}</small>
+              <span>Run {manifest.shortTitle}</span><small>{manifest.id === "fsart" ? "Pair-covered triplet scan · FastTree-WASM tree-family HMM" : manifest.id === "jemspr" ? "Internal event-network search · coherent shared-length ML · optional likelihood path refinement" : parameters.backend === "webgpu" ? "Experimental WebGPU kernel" : parameters.backend === "wasm" ? "Exact single-worker WASM" : "Exact parallel WASM (recommended)"}</small>
             </button>
           )}
           {runFailure !== undefined && runFailure.model === manifest.shortTitle && (

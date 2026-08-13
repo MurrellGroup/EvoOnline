@@ -68,3 +68,30 @@ test("cancelling JEMSPR invalidates late messages from the old worker", async ()
   await assert.rejects(pending, (error: unknown) => error instanceof DOMException && error.name === "AbortError");
   assert.equal(worker?.terminated, true);
 });
+
+test("JEMSPR consumes only the global FastTree GTR matrix before starting its own worker likelihood", async () => {
+  let bridgeAction = "";
+  let forwarded: JemsprWorkerRequest | undefined;
+  const bridge = {
+    request: async (action: string) => {
+      bridgeAction = action;
+      return {
+        frequencies: [0.3, 0.2, 0.25, 0.25],
+        exchangeabilities: [1, 3, 1, 1, 3, 1],
+        source: "FastTree-2.1.11-global-fit",
+        version: "FastTree test",
+      };
+    },
+  };
+  const client = new JemsprClient(
+    () => new FakeWorker((worker, request) => {
+      forwarded = request;
+      queueMicrotask(() => worker.message({ type: "result", id: request.id, result: fakeResult }));
+    }) as unknown as Worker,
+    () => bridge as never,
+  );
+  await client.run(">a\nAAAA\n>b\nAAAA\n>c\nGGGG\n>d\nGGGG\n", "", { linkedLikelihood: true }, () => undefined);
+  assert.equal(bridgeAction, "fit-fasttree-gtr-model");
+  assert.deepEqual(forwarded?.gtrModel?.frequencies, [0.3, 0.2, 0.25, 0.25]);
+  assert.deepEqual(forwarded?.gtrModel?.exchangeabilities, [1, 3, 1, 1, 3, 1]);
+});

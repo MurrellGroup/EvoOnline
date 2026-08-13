@@ -40,13 +40,15 @@ test("FSART and MosaicSPR are separately registered methods with non-overlapping
   assert.equal(mosaic.plugin.manifest.parameters.some((parameter) => parameter.id === "maximumSprStates"), true);
 });
 
-test("JEMSPR is a third independent alignment-only recombination method with no proposal or FastTree controls", () => {
+test("JEMSPR is a third independent alignment-only method with no proposal/FastTree-topology controls and an explicit linked-ML stage", () => {
   const jemspr = modelRegistry.find((entry) => entry.plugin.manifest.id === "jemspr");
   assert.ok(jemspr);
   assert.deepEqual(jemspr.plugin.manifest.inputSlots.map((slot) => slot.id), ["alignment"]);
   assert.equal(jemspr.plugin.manifest.parameters.some((parameter) => /triplet|fasttree|proposal/i.test(parameter.id)), false);
   assert.ok(jemspr.plugin.manifest.parameters.some((parameter) => parameter.id === "overlapCap"));
   assert.ok(jemspr.plugin.manifest.parameters.some((parameter) => parameter.id === "maximumReticulations"));
+  assert.ok(jemspr.plugin.manifest.parameters.some((parameter) => parameter.id === "linkedLikelihood"));
+  assert.ok(jemspr.plugin.manifest.parameters.some((parameter) => parameter.id === "likelihoodRefinement"));
 });
 
 test("deferred number fields accept replacement text and validate only when committed", () => {
@@ -198,16 +200,24 @@ test("JEMSPR renders coherent event lanes, linked implied trees, and the compile
     pathBreakpointPenalty: 2, pathEndpointPenalty: 1, pathSpanPenalty: .001,
     maximumReticulations: 2, overlapCap: 2, networkBeamWidth: 3, eventPoolSize: 6,
     eventOpenPenalty: 1, networkBreakpointPenalty: 1, eventSpanPenalty: .001, reticulationPenalty: 1,
+    gtrModel: { frequencies: [.25, .25, .25, .25], exchangeabilities: [1, 2, 1, 1, 2, 1], source: "FastTree-2.1.11-global-fit", version: "test" },
+    likelihoodRateCategories: 1, fitLikelihoodGammaShape: false, likelihoodIterations: 5, likelihoodRefitIterations: 3,
   });
   const markup = renderToStaticMarkup(<JemsprResultsView result={result} />);
   assert.match(markup, /JEMSPR/);
-  assert.match(markup, /does not call FastTree, FSART, MosaicSPR/);
+  assert.match(markup, /never supplied by FastTree, FSART, MosaicSPR/);
+  assert.match(markup, /Coherent linked branch-length likelihood/);
+  assert.match(markup, /Shared atomic network edges/);
+  assert.match(markup, /Likelihood-refined breakpoints and branch-length trees/);
+  assert.match(markup, /JEMSPR likelihood-refined regional phylograms/);
+  assert.match(markup, /Branch-length scale/);
+  assert.match(markup, /Shared horizontal scale:/);
   assert.match(markup, /Coherent genomic event history/);
   assert.match(markup, /Implied regional phylogenies/);
   assert.match(markup, /Compiled switching DAG/);
   assert.match(markup, /Matching-taxon links/);
   assert.match(markup, /Network JSON/);
-  assert.ok((markup.match(/Export SVG/g) ?? []).length >= 3);
+  assert.ok((markup.match(/Export SVG/g) ?? []).length >= 4);
 });
 
 test("DifFUBAR result studio renders a native SVG overview and export control", () => {

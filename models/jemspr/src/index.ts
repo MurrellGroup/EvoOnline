@@ -1,6 +1,7 @@
 export * from "./alignment.js";
 export * from "./csv.js";
 export * from "./network-search.js";
+export * from "./likelihood-refinement.js";
 export * from "./nj.js";
 export * from "./parsimony.js";
 export * from "./path-search.js";

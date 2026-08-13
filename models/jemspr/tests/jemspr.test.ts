@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeJemspr } from "../src/pipeline.js";
+import { runBranchLengthRecoveryTrial } from "../benchmarks/branch-length-recovery.js";
 import { parseJemsprFasta } from "../src/alignment.js";
 import { maskMovementTransform } from "../src/network-search.js";
 import { compileReticulation, displayNetwork, networkHash, treeNetwork } from "../src/switching-network.js";
@@ -219,4 +220,67 @@ test("site-level decoding reports a tied endpoint range across an invariant run"
   const event = result.network.occurrences[0]!;
   const widest = Math.max(event.openingIntervalHigh - event.openingIntervalLow, event.closingIntervalHigh - event.closingIntervalLow);
   assert.ok(widest >= 40, "the zero-data interval should remain visibly nonlocalized");
+});
+
+test("linked likelihood fits one coherent set of network-edge lengths without FastTree topology or length inputs", async () => {
+  const length = 72;
+  const sequences = [
+    ["A", "A"],
+    ["A", "G"],
+    ["G", "A"],
+    ["G", "G"],
+  ].map(([first, second]) => first!.repeat(length / 2) + second!.repeat(length / 2));
+  const fasta = sequences.map((sequence, index) => `>t${index}\n${sequence}`).join("\n");
+  const result = await analyzeJemspr(fasta, {
+    minimumWindow: 18,
+    maximumDyadicTrees: 6,
+    rootPlacements: 1,
+    maximumGraphStates: 14,
+    maximumGraphIterations: 4,
+    neighbourScreen: 20,
+    frontierStates: 3,
+    nearImprovers: 1,
+    pathBreakpointPenalty: 2,
+    pathEndpointPenalty: 1,
+    pathSpanPenalty: 0.001,
+    maximumReticulations: 1,
+    overlapCap: 1,
+    networkBeamWidth: 4,
+    eventPoolSize: 8,
+    eventOpenPenalty: 1,
+    networkBreakpointPenalty: 1,
+    eventSpanPenalty: 0.001,
+    reticulationPenalty: 1,
+    gtrModel: {
+      frequencies: [0.25, 0.25, 0.25, 0.25],
+      exchangeabilities: [1, 2, 1, 1, 2, 1],
+      source: "FastTree-2.1.11-global-fit",
+      version: "test fixed matrix",
+    },
+    likelihoodRateCategories: 1,
+    fitLikelihoodGammaShape: false,
+    likelihoodIterations: 8,
+    likelihoodRefitIterations: 4,
+    likelihoodRefinement: true,
+  });
+  assert.equal(result.likelihood.status, "complete");
+  if (result.likelihood.status !== "complete") return;
+  assert.ok(Number.isFinite(result.likelihood.logLikelihood));
+  assert.ok(result.likelihood.logLikelihood >= result.likelihood.initialLogLikelihood - 1e-8);
+  assert.ok(result.likelihood.atomicBranches.length > 0);
+  assert.equal(result.likelihood.fixedZeroEdges.length, result.network.templates.length);
+  assert.ok(result.likelihood.atomicBranches.every((branch) => branch.length > 0));
+  assert.ok(result.likelihood.atomicBranches.some((branch) => branch.usedByMasks.length > 1), "background network edges must retain one shared parameter across displays");
+  assert.match(result.likelihood.masterTree, /:\d/);
+  assert.match(result.likelihood.masterTree, /:0\.0+/, "the arbitrary reversible binary-root gauge should be explicit");
+  assert.ok(result.likelihood.runs.length >= 1);
+  assert.equal(JSON.parse(result.networkJson).linkedLikelihood.status, "complete");
+});
+
+test("linked ML recovers identifiable displayed-tree distances from a simulated switching DAG", async () => {
+  const recovery = await runBranchLengthRecoveryTrial(10_000, 1);
+  assert.ok(recovery.patristicRrmse < 0.05, `relative patristic RMSE was ${recovery.patristicRrmse}`);
+  assert.ok(recovery.patristicCorrelation > 0.995, `patristic correlation was ${recovery.patristicCorrelation}`);
+  assert.ok(recovery.patristicSlope > 0.95 && recovery.patristicSlope < 1.08, `zero-intercept slope was ${recovery.patristicSlope}`);
+  assert.ok(Math.abs(recovery.patristicBias) < 0.01, `mean patristic bias was ${recovery.patristicBias}`);
 });

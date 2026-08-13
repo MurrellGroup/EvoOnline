@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { analyzeJemspr, type JemsprAnalysisResult, type JemsprOptions, type JemsprProgressDetail } from "@phylo-workbench/model-jemspr/browser-source";
+import { analyzeJemspr, type JemsprAnalysisResult, type JemsprFixedGtrModel, type JemsprOptions, type JemsprProgressDetail } from "@phylo-workbench/model-jemspr/browser-source";
 import type { ParameterValues } from "@phylo-workbench/model-sdk";
 
 export interface JemsprWorkerRequest {
@@ -7,6 +7,7 @@ export interface JemsprWorkerRequest {
   readonly id: string;
   readonly alignment: string;
   readonly parameters: ParameterValues;
+  readonly gtrModel?: JemsprFixedGtrModel;
 }
 
 export type JemsprWorkerResponse =
@@ -53,6 +54,14 @@ scope.onmessage = (event: MessageEvent<JemsprWorkerRequest>): void => {
         boundaryConvention: p.boundaryConvention === "closed" || p.boundaryConvention === "penalized-open" ? p.boundaryConvention : "open",
         boundaryCensorPenalty: numberValue(p, "boundaryCensorPenalty", 2),
         uncertaintyTolerance: numberValue(p, "uncertaintyTolerance", 2),
+        linkedLikelihood: Boolean(p.linkedLikelihood ?? true),
+        likelihoodRefinement: Boolean(p.likelihoodRefinement ?? true),
+        likelihoodIterations: numberValue(p, "likelihoodIterations", 28),
+        likelihoodRefitIterations: numberValue(p, "likelihoodRefitIterations", 14),
+        likelihoodRateCategories: numberValue(p, "likelihoodRateCategories", 4),
+        likelihoodGammaShape: numberValue(p, "likelihoodGammaShape", 0.5),
+        fitLikelihoodGammaShape: Boolean(p.fitLikelihoodGammaShape ?? true),
+        ...(request.gtrModel === undefined ? {} : { gtrModel: request.gtrModel }),
         onProgress: (stage, fraction, detail) => {
           const response: JemsprWorkerResponse = { type: "progress", id: request.id, stage, fraction, ...(detail === undefined ? {} : { detail }) };
           scope.postMessage(response);

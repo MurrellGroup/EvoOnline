@@ -195,6 +195,81 @@ export interface JemsprDiagnostics {
   readonly warnings: readonly string[];
 }
 
+export interface JemsprFixedGtrModel {
+  readonly frequencies: readonly [number, number, number, number];
+  readonly exchangeabilities: readonly [number, number, number, number, number, number];
+  readonly source: "FastTree-2.1.11-global-fit";
+  readonly version: string;
+}
+
+export interface JemsprLinkedBranch {
+  readonly id: string;
+  readonly parentNode: string;
+  readonly childNode: string;
+  readonly length: number;
+  readonly usedByMasks: readonly number[];
+}
+
+export interface JemsprLikelihoodTree {
+  readonly mask: number;
+  readonly signature: string;
+  readonly tree: string;
+  readonly occupiedSites: number;
+  readonly dataLogLikelihood: number;
+}
+
+export interface JemsprLikelihoodRun {
+  readonly start: number;
+  readonly end: number;
+  readonly mask: number;
+  readonly tree: string;
+}
+
+export interface JemsprLikelihoodRound {
+  readonly round: number;
+  readonly phase: "initial-linked-fit" | "gamma-profile" | "path-refit";
+  readonly logLikelihood: number;
+  readonly iterations: number;
+  readonly converged: boolean;
+  readonly gradientRms: number;
+  readonly changedSites: number;
+}
+
+export interface JemsprLinkedLikelihoodResult {
+  readonly status: "complete";
+  readonly model: JemsprFixedGtrModel;
+  readonly rateVariation: {
+    readonly kind: "custom-discrete-gamma" | "constant";
+    readonly shape: number;
+    readonly rates: readonly number[];
+    readonly weights: readonly number[];
+  };
+  readonly logLikelihood: number;
+  readonly initialLogLikelihood: number;
+  readonly parsimonyPathLogLikelihood: number;
+  readonly logMarginalLikelihood: number;
+  readonly viterbiLogJoint: number;
+  readonly openProbability: number;
+  readonly closeProbability: number;
+  readonly refined: boolean;
+  readonly atomicBranches: readonly JemsprLinkedBranch[];
+  readonly fixedZeroEdges: readonly { readonly parentNode: string; readonly childNode: string; readonly reason: "recombination-parent-choice" }[];
+  readonly trees: readonly JemsprLikelihoodTree[];
+  readonly runs: readonly JemsprLikelihoodRun[];
+  readonly switchPosterior: readonly number[];
+  readonly rounds: readonly JemsprLikelihoodRound[];
+  readonly masterTree: string;
+  readonly nonidentifiableGroups: readonly (readonly string[])[];
+  readonly certificate: string;
+}
+
+export interface JemsprSkippedLikelihoodResult {
+  readonly status: "skipped";
+  readonly reason: string;
+}
+
+export type JemsprLikelihoodResult = JemsprLinkedLikelihoodResult | JemsprSkippedLikelihoodResult;
+
 export interface JemsprAnalysisResult {
   readonly method: "jemspr";
   readonly schemaVersion: 1;
@@ -203,6 +278,7 @@ export interface JemsprAnalysisResult {
   readonly informativeSites: number;
   readonly path: JemsprPathResult;
   readonly network: JemsprNetworkResult;
+  readonly likelihood: JemsprLikelihoodResult;
   readonly diagnostics: JemsprDiagnostics;
   readonly timings: Readonly<Record<string, number>>;
   readonly eventsCsv: string;
@@ -239,6 +315,15 @@ export interface JemsprOptions {
   readonly boundaryCensorPenalty?: number;
   /** Optimization-gap tolerance used for consecutive endpoint ranges. */
   readonly uncertaintyTolerance?: number;
+  /** The only FastTree-derived quantity consumed by linked ML. */
+  readonly gtrModel?: JemsprFixedGtrModel;
+  readonly linkedLikelihood?: boolean;
+  readonly likelihoodRefinement?: boolean;
+  readonly likelihoodIterations?: number;
+  readonly likelihoodRefitIterations?: number;
+  readonly likelihoodRateCategories?: number;
+  readonly likelihoodGammaShape?: number;
+  readonly fitLikelihoodGammaShape?: boolean;
   readonly signal?: AbortSignal;
   readonly onProgress?: (stage: string, fraction: number, detail?: JemsprProgressDetail) => void;
 }

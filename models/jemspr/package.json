@@ -16,13 +16,15 @@
   },
   "scripts": {
     "benchmark": "node --import tsx benchmarks/complex-recombinant.ts",
+    "benchmark:branches": "node --import tsx benchmarks/branch-length-recovery.ts",
     "build": "tsc -p tsconfig.build.json",
     "test": "node --import tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@phylo-workbench/domain": "*",
-    "@phylo-workbench/model-sdk": "*"
+    "@phylo-workbench/model-sdk": "*",
+    "@phylo-workbench/phylo-likelihood": "*"
   },
   "devDependencies": {
     "@types/node": "^24.2.1",
