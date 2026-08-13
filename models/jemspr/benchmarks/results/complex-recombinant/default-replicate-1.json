@@ -1,0 +1,461 @@
+{
+  "method": "jemspr",
+  "schemaVersion": 1,
+  "taxa": 8,
+  "sites": 1200,
+  "informativeSites": 426,
+  "path": {
+    "objective": 757,
+    "dataParsimony": 757,
+    "masterStateId": "T1",
+    "states": [
+      {
+        "id": "T1",
+        "signature": "((((L0,L1),(L2,L3)),((L6,L7),L4)),L5)",
+        "tree": "((((t1:1,t2:1):1,(t3:1,t4:1):1):1,((t7:1,t8:1):1,t5:1):1):1,t6:1);",
+        "totalParsimony": 757,
+        "occupiedSpan": 1200,
+        "masterDistance": 0,
+        "color": "#177f72"
+      },
+      {
+        "id": "T2",
+        "signature": "(((((L0,L1),(L2,L3)),(L6,L7)),L4),L5)",
+        "tree": "(((((t1:1,t2:1):1,(t3:1,t4:1):1):1,(t7:1,t8:1):1):1,t5:1):1,t6:1);",
+        "totalParsimony": 766,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#d46d35"
+      },
+      {
+        "id": "T3",
+        "signature": "(((((L0,L1),(L2,L3)),(L6,L7)),L5),L4)",
+        "tree": "(((((t1:1,t2:1):1,(t3:1,t4:1):1):1,(t7:1,t8:1):1):1,t6:1):1,t5:1);",
+        "totalParsimony": 766,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#6658d3"
+      },
+      {
+        "id": "T4",
+        "signature": "((((L0,L1),(L2,L3)),(L6,L7)),(L4,L5))",
+        "tree": "((((t1:1,t2:1):1,(t3:1,t4:1):1):1,(t7:1,t8:1):1):1,(t5:1,t6:1):1);",
+        "totalParsimony": 766,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#cc3d6e"
+      },
+      {
+        "id": "T5",
+        "signature": "(((L0,L1),(L2,L3)),((L4,L5),(L6,L7)))",
+        "tree": "(((t1:1,t2:1):1,(t3:1,t4:1):1):1,((t5:1,t6:1):1,(t7:1,t8:1):1):1);",
+        "totalParsimony": 766,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#719e2b"
+      },
+      {
+        "id": "T6",
+        "signature": "((((L0,L1),(L2,L3)),((L4,L6),L7)),L5)",
+        "tree": "((((t1:1,t2:1):1,(t3:1,t4:1):1):1,((t5:1,t7:1):1,t8:1):1):1,t6:1);",
+        "totalParsimony": 774,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#2575b8"
+      },
+      {
+        "id": "T7",
+        "signature": "(((((L2,L3),(L6,L7)),(L0,L1)),L4),L5)",
+        "tree": "(((((t3:1,t4:1):1,(t7:1,t8:1):1):1,(t1:1,t2:1):1):1,t5:1):1,t6:1);",
+        "totalParsimony": 807,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#a45d1a"
+      },
+      {
+        "id": "T8",
+        "signature": "(((((L0,L1),(L6,L7)),(L2,L3)),L4),L5)",
+        "tree": "(((((t1:1,t2:1):1,(t7:1,t8:1):1):1,(t3:1,t4:1):1):1,t5:1):1,t6:1);",
+        "totalParsimony": 800,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#0e918c"
+      },
+      {
+        "id": "T9",
+        "signature": "(((((L0,L1),(L6,L7)),L4),(L2,L3)),L5)",
+        "tree": "(((((t1:1,t2:1):1,(t7:1,t8:1):1):1,t5:1):1,(t3:1,t4:1):1):1,t6:1);",
+        "totalParsimony": 809,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#8c4eb2"
+      },
+      {
+        "id": "T10",
+        "signature": "((((((L0,L1),(L2,L3)),L6),L7),L4),L5)",
+        "tree": "((((((t1:1,t2:1):1,(t3:1,t4:1):1):1,t7:1):1,t8:1):1,t5:1):1,t6:1);",
+        "totalParsimony": 780,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#56645f"
+      },
+      {
+        "id": "T11",
+        "signature": "((((((L0,L1),(L2,L3)),L7),L6),L4),L5)",
+        "tree": "((((((t1:1,t2:1):1,(t3:1,t4:1):1):1,t8:1):1,t7:1):1,t5:1):1,t6:1);",
+        "totalParsimony": 781,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#177f72"
+      },
+      {
+        "id": "T12",
+        "signature": "((((((L0,L1),L6),L7),L4),(L2,L3)),L5)",
+        "tree": "((((((t1:1,t2:1):1,t7:1):1,t8:1):1,t5:1):1,(t3:1,t4:1):1):1,t6:1);",
+        "totalParsimony": 825,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#d46d35"
+      },
+      {
+        "id": "T13",
+        "signature": "(((((L0,L1),(L2,L3)),L7),(L4,L6)),L5)",
+        "tree": "(((((t1:1,t2:1):1,(t3:1,t4:1):1):1,t8:1):1,(t5:1,t7:1):1):1,t6:1);",
+        "totalParsimony": 791,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#6658d3"
+      },
+      {
+        "id": "T14",
+        "signature": "(((((L0,L1),L3),L2),((L6,L7),L4)),L5)",
+        "tree": "(((((t1:1,t2:1):1,t4:1):1,t3:1):1,((t7:1,t8:1):1,t5:1):1):1,t6:1);",
+        "totalParsimony": 774,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#cc3d6e"
+      },
+      {
+        "id": "T15",
+        "signature": "(((((L0,L3),L1),L2),((L6,L7),L4)),L5)",
+        "tree": "(((((t1:1,t4:1):1,t2:1):1,t3:1):1,((t7:1,t8:1):1,t5:1):1):1,t6:1);",
+        "totalParsimony": 824,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#719e2b"
+      },
+      {
+        "id": "T16",
+        "signature": "(((((L0,L3),L2),L1),((L6,L7),L4)),L5)",
+        "tree": "(((((t1:1,t4:1):1,t3:1):1,t2:1):1,((t7:1,t8:1):1,t5:1):1):1,t6:1);",
+        "totalParsimony": 833,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#2575b8"
+      },
+      {
+        "id": "T17",
+        "signature": "(((((L1,L3),L0),L2),((L6,L7),L4)),L5)",
+        "tree": "(((((t2:1,t4:1):1,t1:1):1,t3:1):1,((t7:1,t8:1):1,t5:1):1):1,t6:1);",
+        "totalParsimony": 822,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#a45d1a"
+      },
+      {
+        "id": "T18",
+        "signature": "((((L0,L1),(L2,L3)),((L4,L7),L6)),L5)",
+        "tree": "((((t1:1,t2:1):1,(t3:1,t4:1):1):1,((t5:1,t8:1):1,t7:1):1):1,t6:1);",
+        "totalParsimony": 781,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#0e918c"
+      },
+      {
+        "id": "T19",
+        "signature": "(((((L0,L1),(L2,L3)),L6),(L4,L7)),L5)",
+        "tree": "(((((t1:1,t2:1):1,(t3:1,t4:1):1):1,t7:1):1,(t5:1,t8:1):1):1,t6:1);",
+        "totalParsimony": 798,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#8c4eb2"
+      }
+    ],
+    "runs": [
+      {
+        "id": "P1",
+        "start": 1,
+        "end": 1200,
+        "stateId": "T1",
+        "stateIndex": 0,
+        "dataParsimony": 757
+      }
+    ],
+    "breakpoints": [],
+    "iterations": [
+      {
+        "start": 1,
+        "iteration": 1,
+        "graphStates": 7,
+        "graphEdges": 6,
+        "occupiedStates": 1,
+        "mastersEvaluated": 7,
+        "neighboursEnumerated": 116,
+        "neighboursPriced": 64,
+        "statesAdded": 6,
+        "objective": 757,
+        "masterStateId": "T1",
+        "bestOmittedIntervalGain": 0,
+        "elapsedMs": 45.199477000000115
+      },
+      {
+        "start": 1,
+        "iteration": 2,
+        "graphStates": 13,
+        "graphEdges": 12,
+        "occupiedStates": 1,
+        "mastersEvaluated": 13,
+        "neighboursEnumerated": 116,
+        "neighboursPriced": 64,
+        "statesAdded": 6,
+        "objective": 757,
+        "masterStateId": "T1",
+        "bestOmittedIntervalGain": 0,
+        "elapsedMs": 50.7950579999997
+      },
+      {
+        "start": 1,
+        "iteration": 3,
+        "graphStates": 19,
+        "graphEdges": 18,
+        "occupiedStates": 1,
+        "mastersEvaluated": 19,
+        "neighboursEnumerated": 116,
+        "neighboursPriced": 64,
+        "statesAdded": 6,
+        "objective": 757,
+        "masterStateId": "T1",
+        "bestOmittedIntervalGain": 0,
+        "elapsedMs": 77.77002399999947
+      },
+      {
+        "start": 2,
+        "iteration": 1,
+        "graphStates": 7,
+        "graphEdges": 6,
+        "occupiedStates": 1,
+        "mastersEvaluated": 7,
+        "neighboursEnumerated": 108,
+        "neighboursPriced": 64,
+        "statesAdded": 6,
+        "objective": 757,
+        "masterStateId": "T6",
+        "bestOmittedIntervalGain": 0,
+        "elapsedMs": 37.776654999999664
+      },
+      {
+        "start": 2,
+        "iteration": 2,
+        "graphStates": 13,
+        "graphEdges": 14,
+        "occupiedStates": 1,
+        "mastersEvaluated": 13,
+        "neighboursEnumerated": 108,
+        "neighboursPriced": 64,
+        "statesAdded": 6,
+        "objective": 757,
+        "masterStateId": "T6",
+        "bestOmittedIntervalGain": 0,
+        "elapsedMs": 54.17043899999953
+      },
+      {
+        "start": 2,
+        "iteration": 3,
+        "graphStates": 19,
+        "graphEdges": 20,
+        "occupiedStates": 1,
+        "mastersEvaluated": 19,
+        "neighboursEnumerated": 108,
+        "neighboursPriced": 64,
+        "statesAdded": 6,
+        "objective": 757,
+        "masterStateId": "T6",
+        "bestOmittedIntervalGain": 0,
+        "elapsedMs": 62.6700780000001
+      },
+      {
+        "start": 3,
+        "iteration": 1,
+        "graphStates": 7,
+        "graphEdges": 6,
+        "occupiedStates": 1,
+        "mastersEvaluated": 7,
+        "neighboursEnumerated": 118,
+        "neighboursPriced": 64,
+        "statesAdded": 6,
+        "objective": 757,
+        "masterStateId": "T5",
+        "bestOmittedIntervalGain": 0,
+        "elapsedMs": 37.65775399999984
+      },
+      {
+        "start": 3,
+        "iteration": 2,
+        "graphStates": 13,
+        "graphEdges": 12,
+        "occupiedStates": 1,
+        "mastersEvaluated": 13,
+        "neighboursEnumerated": 108,
+        "neighboursPriced": 64,
+        "statesAdded": 6,
+        "objective": 757,
+        "masterStateId": "T5",
+        "bestOmittedIntervalGain": 0,
+        "elapsedMs": 42.315395000000535
+      },
+      {
+        "start": 3,
+        "iteration": 3,
+        "graphStates": 19,
+        "graphEdges": 18,
+        "occupiedStates": 1,
+        "mastersEvaluated": 19,
+        "neighboursEnumerated": 108,
+        "neighboursPriced": 64,
+        "statesAdded": 6,
+        "objective": 757,
+        "masterStateId": "T5",
+        "bestOmittedIntervalGain": 0,
+        "elapsedMs": 68.66369699999996
+      }
+    ],
+    "lowerBoundKind": "adaptive-restricted-rspr-graph",
+    "certificate": "Exact joint master/path optimum on the final verified rooted-SPR graph. Outer rooted-tree-space expansion is budgeted; no global topology-space optimum is claimed."
+  },
+  "network": {
+    "status": "complete",
+    "objective": 757,
+    "dataParsimony": 757,
+    "masterTree": "((((((t7:1,t8:1):1,t5:1):1,t6:1):1,(t1:1,t2:1):1):1,t3:1):1,t4:1);",
+    "masterStateId": "R2:T6",
+    "boundaryConvention": "open",
+    "overlapCap": 2,
+    "uncertaintyTolerance": 2,
+    "maximumOverlapUsed": 0,
+    "templates": [],
+    "occurrences": [],
+    "trees": [
+      {
+        "id": "NTree1",
+        "signature": "((((((L6,L7),L4),L5),(L0,L1)),L2),L3)",
+        "tree": "((((((t7:1,t8:1):1,t5:1):1,t6:1):1,(t1:1,t2:1):1):1,t3:1):1,t4:1);",
+        "masks": [
+          0
+        ],
+        "occupiedSpan": 1200,
+        "color": "#177f72"
+      }
+    ],
+    "runs": [
+      {
+        "id": "B1",
+        "start": 1,
+        "end": 1200,
+        "mask": 0,
+        "activeTemplateIds": [],
+        "treeId": "NTree1",
+        "treeIndex": 0,
+        "dataParsimony": 757
+      }
+    ],
+    "breakpointGaps": [],
+    "search": [
+      {
+        "reticulations": 0,
+        "candidatesScored": 6,
+        "temporallyRejected": 0,
+        "beamRetained": 6,
+        "bestObjective": 757,
+        "bestDataParsimony": 757,
+        "bestOverlap": 0,
+        "elapsedMs": 35.81337100000019
+      },
+      {
+        "reticulations": 1,
+        "candidatesScored": 36,
+        "temporallyRejected": 12,
+        "beamRetained": 6,
+        "bestObjective": 758.4120000000067,
+        "bestDataParsimony": 746,
+        "bestOverlap": 1,
+        "elapsedMs": 165.00833599999987
+      },
+      {
+        "reticulations": 2,
+        "candidatesScored": 57,
+        "temporallyRejected": 18,
+        "beamRetained": 6,
+        "bestObjective": 757.8000000000096,
+        "bestDataParsimony": 739,
+        "bestOverlap": 1,
+        "elapsedMs": 310.5990780000002
+      }
+    ],
+    "paretoFrontier": [
+      {
+        "reticulations": 0,
+        "occurrences": 0,
+        "dataParsimony": 757,
+        "objective": 757,
+        "maximumOverlap": 0
+      },
+      {
+        "reticulations": 1,
+        "occurrences": 1,
+        "dataParsimony": 746,
+        "objective": 758.4120000000067,
+        "maximumOverlap": 1
+      },
+      {
+        "reticulations": 2,
+        "occurrences": 2,
+        "dataParsimony": 739,
+        "objective": 757.8000000000096,
+        "maximumOverlap": 1
+      }
+    ],
+    "temporal": {
+      "status": "rank-feasible",
+      "message": "The compiled switching DAG satisfies donor–recipient equality and strict ancestry constraints under an unconstrained rank assignment.",
+      "conflictingTemplates": []
+    },
+    "certificate": "Every retained switching DAG was scored by an exact mask dynamic program over all masks within the selected overlap cap. Distinct master candidates from every inferred root start seed the joint network beam, and donor-time/strict-ancestry infeasibility is enforced as a hard lazy cut. The outer rooted-network beam and event-template pool remain budgeted; no global network-space optimum is claimed."
+  },
+  "diagnostics": {
+    "engine": "independent-typescript-worker",
+    "initialTreeMethod": "internal-neighbor-joining-multiscale",
+    "scoreMethod": "fitch",
+    "transitionCost": 1,
+    "transversionCost": 1,
+    "informativeSites": 426,
+    "dyadicSeeds": 12,
+    "rootPlacements": 3,
+    "candidateEventTemplates": 16,
+    "graphStates": 19,
+    "graphEdges": 18,
+    "pathNetworkObjectiveDifference": 0,
+    "resourceLimited": true,
+    "warnings": [
+      "The rooted-tree graph or root-placement universe was budget limited; increase advanced search budgets to test stability."
+    ]
+  },
+  "timings": {
+    "pathSearchMs": 489.230869,
+    "networkSearchMs": 530.0908169999993,
+    "totalMs": 1020.9011069999997
+  },
+  "eventsCsv": "Occurrence,Template,Start,End,Left censored,Right censored,Maximum overlap,Opening gap,Closing gap,Opening interval low,Opening interval high,Closing interval low,Closing interval high,Pruned taxa,Source sibling,Destination taxa,Destination is root\n\n",
+  "localTreesTsv": "left\tright\ttree_id\tmask\tactive_templates\tparsimony\tnewick\n1\t1200\tNTree1\t0\t\t757\t((((((t7:1,t8:1):1,t5:1):1,t6:1):1,(t1:1,t2:1):1):1,t3:1):1,t4:1);\n",
+  "breakpointsTsv": "after_site\tinterval_low\tinterval_high\tmin_marginal_gap\tnew_mask\tactive_templates\n\n",
+  "networkJson": "{\n  \"schemaVersion\": 1,\n  \"method\": \"jemspr\",\n  \"taxaNames\": [\n    \"t1\",\n    \"t2\",\n    \"t3\",\n    \"t4\",\n    \"t5\",\n    \"t6\",\n    \"t7\",\n    \"t8\"\n  ],\n  \"switchingNetwork\": {\n    \"root\": \"N0\",\n    \"nodes\": [\n      {\n        \"id\": \"N0\",\n        \"kind\": \"root\",\n        \"parents\": [],\n        \"children\": [\n          \"N1\",\n          \"N14\"\n        ]\n      },\n      {\n        \"id\": \"N1\",\n        \"kind\": \"tree\",\n        \"parents\": [\n          \"N0\"\n        ],\n        \"children\": [\n          \"N2\",\n          \"N13\"\n        ]\n      },\n      {\n        \"id\": \"N2\",\n        \"kind\": \"tree\",\n        \"parents\": [\n          \"N1\"\n        ],\n        \"children\": [\n          \"N3\",\n          \"N10\"\n        ]\n      },\n      {\n        \"id\": \"N3\",\n        \"kind\": \"tree\",\n        \"parents\": [\n          \"N2\"\n        ],\n        \"children\": [\n          \"N4\",\n          \"N9\"\n        ]\n      },\n      {\n        \"id\": \"N4\",\n        \"kind\": \"tree\",\n        \"parents\": [\n          \"N3\"\n        ],\n        \"children\": [\n          \"N5\",\n          \"N8\"\n        ]\n      },\n      {\n        \"id\": \"N5\",\n        \"kind\": \"tree\",\n        \"parents\": [\n          \"N4\"\n        ],\n        \"children\": [\n          \"N6\",\n          \"N7\"\n        ]\n      },\n      {\n        \"id\": \"N6\",\n        \"kind\": \"leaf\",\n        \"leaf\": 6,\n        \"parents\": [\n          \"N5\"\n        ],\n        \"children\": []\n      },\n      {\n        \"id\": \"N7\",\n        \"kind\": \"leaf\",\n        \"leaf\": 7,\n        \"parents\": [\n          \"N5\"\n        ],\n        \"children\": []\n      },\n      {\n        \"id\": \"N8\",\n        \"kind\": \"leaf\",\n        \"leaf\": 4,\n        \"parents\": [\n          \"N4\"\n        ],\n        \"children\": []\n      },\n      {\n        \"id\": \"N9\",\n        \"kind\": \"leaf\",\n        \"leaf\": 5,\n        \"parents\": [\n          \"N3\"\n        ],\n        \"children\": []\n      },\n      {\n        \"id\": \"N10\",\n        \"kind\": \"tree\",\n        \"parents\": [\n          \"N2\"\n        ],\n        \"children\": [\n          \"N11\",\n          \"N12\"\n        ]\n      },\n      {\n        \"id\": \"N11\",\n        \"kind\": \"leaf\",\n        \"leaf\": 0,\n        \"parents\": [\n          \"N10\"\n        ],\n        \"children\": []\n      },\n      {\n        \"id\": \"N12\",\n        \"kind\": \"leaf\",\n        \"leaf\": 1,\n        \"parents\": [\n          \"N10\"\n        ],\n        \"children\": []\n      },\n      {\n        \"id\": \"N13\",\n        \"kind\": \"leaf\",\n        \"leaf\": 2,\n        \"parents\": [\n          \"N1\"\n        ],\n        \"children\": []\n      },\n      {\n        \"id\": \"N14\",\n        \"kind\": \"leaf\",\n        \"leaf\": 3,\n        \"parents\": [\n          \"N0\"\n        ],\n        \"children\": []\n      }\n    ],\n    \"reticulations\": []\n  },\n  \"masterTree\": \"((((((t7:1,t8:1):1,t5:1):1,t6:1):1,(t1:1,t2:1):1):1,t3:1):1,t4:1);\",\n  \"templates\": [],\n  \"occurrences\": [],\n  \"maskRuns\": [\n    {\n      \"id\": \"B1\",\n      \"start\": 1,\n      \"end\": 1200,\n      \"mask\": 0,\n      \"activeTemplateIds\": [],\n      \"treeId\": \"NTree1\",\n      \"treeIndex\": 0,\n      \"dataParsimony\": 757\n    }\n  ],\n  \"temporal\": {\n    \"status\": \"rank-feasible\",\n    \"message\": \"The compiled switching DAG satisfies donor–recipient equality and strict ancestry constraints under an unconstrained rank assignment.\",\n    \"conflictingTemplates\": []\n  },\n  \"diagnostics\": {\n    \"engine\": \"independent-typescript-worker\",\n    \"initialTreeMethod\": \"internal-neighbor-joining-multiscale\",\n    \"scoreMethod\": \"fitch\",\n    \"transitionCost\": 1,\n    \"transversionCost\": 1,\n    \"informativeSites\": 426,\n    \"dyadicSeeds\": 12,\n    \"rootPlacements\": 3,\n    \"candidateEventTemplates\": 16,\n    \"graphStates\": 19,\n    \"graphEdges\": 18,\n    \"pathNetworkObjectiveDifference\": 0,\n    \"resourceLimited\": true,\n    \"warnings\": [\n      \"The rooted-tree graph or root-placement universe was budget limited; increase advanced search budgets to test stability.\"\n    ]\n  }\n}"
+}

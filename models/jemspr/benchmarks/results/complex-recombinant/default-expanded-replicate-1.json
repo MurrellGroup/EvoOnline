@@ -1,0 +1,755 @@
+{
+  "method": "jemspr",
+  "schemaVersion": 1,
+  "taxa": 8,
+  "sites": 1200,
+  "informativeSites": 426,
+  "path": {
+    "objective": 757,
+    "dataParsimony": 757,
+    "masterStateId": "T1",
+    "states": [
+      {
+        "id": "T1",
+        "signature": "((((L0,L1),(L2,L3)),((L6,L7),L4)),L5)",
+        "tree": "((((t1:1,t2:1):1,(t3:1,t4:1):1):1,((t7:1,t8:1):1,t5:1):1):1,t6:1);",
+        "totalParsimony": 757,
+        "occupiedSpan": 1200,
+        "masterDistance": 0,
+        "color": "#177f72"
+      },
+      {
+        "id": "T2",
+        "signature": "(((((L0,L1),(L2,L3)),(L6,L7)),L4),L5)",
+        "tree": "(((((t1:1,t2:1):1,(t3:1,t4:1):1):1,(t7:1,t8:1):1):1,t5:1):1,t6:1);",
+        "totalParsimony": 766,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#d46d35"
+      },
+      {
+        "id": "T3",
+        "signature": "(((((L0,L1),(L2,L3)),(L6,L7)),L5),L4)",
+        "tree": "(((((t1:1,t2:1):1,(t3:1,t4:1):1):1,(t7:1,t8:1):1):1,t6:1):1,t5:1);",
+        "totalParsimony": 766,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#6658d3"
+      },
+      {
+        "id": "T4",
+        "signature": "((((L0,L1),(L2,L3)),(L6,L7)),(L4,L5))",
+        "tree": "((((t1:1,t2:1):1,(t3:1,t4:1):1):1,(t7:1,t8:1):1):1,(t5:1,t6:1):1);",
+        "totalParsimony": 766,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#cc3d6e"
+      },
+      {
+        "id": "T5",
+        "signature": "(((L0,L1),(L2,L3)),((L4,L5),(L6,L7)))",
+        "tree": "(((t1:1,t2:1):1,(t3:1,t4:1):1):1,((t5:1,t6:1):1,(t7:1,t8:1):1):1);",
+        "totalParsimony": 766,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#719e2b"
+      },
+      {
+        "id": "T6",
+        "signature": "((((L0,L1),(L2,L3)),((L4,L6),L7)),L5)",
+        "tree": "((((t1:1,t2:1):1,(t3:1,t4:1):1):1,((t5:1,t7:1):1,t8:1):1):1,t6:1);",
+        "totalParsimony": 774,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#2575b8"
+      },
+      {
+        "id": "T7",
+        "signature": "(((((L2,L3),(L6,L7)),(L0,L1)),L4),L5)",
+        "tree": "(((((t3:1,t4:1):1,(t7:1,t8:1):1):1,(t1:1,t2:1):1):1,t5:1):1,t6:1);",
+        "totalParsimony": 807,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#a45d1a"
+      },
+      {
+        "id": "T8",
+        "signature": "(((((L0,L1),(L6,L7)),(L2,L3)),L4),L5)",
+        "tree": "(((((t1:1,t2:1):1,(t7:1,t8:1):1):1,(t3:1,t4:1):1):1,t5:1):1,t6:1);",
+        "totalParsimony": 800,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#0e918c"
+      },
+      {
+        "id": "T9",
+        "signature": "((((((L0,L1),(L2,L3)),L6),L7),L4),L5)",
+        "tree": "((((((t1:1,t2:1):1,(t3:1,t4:1):1):1,t7:1):1,t8:1):1,t5:1):1,t6:1);",
+        "totalParsimony": 780,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#8c4eb2"
+      },
+      {
+        "id": "T10",
+        "signature": "((((((L0,L1),(L2,L3)),L7),L6),L4),L5)",
+        "tree": "((((((t1:1,t2:1):1,(t3:1,t4:1):1):1,t8:1):1,t7:1):1,t5:1):1,t6:1);",
+        "totalParsimony": 781,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#56645f"
+      },
+      {
+        "id": "T11",
+        "signature": "(((((L0,L1),(L2,L3)),L7),(L4,L6)),L5)",
+        "tree": "(((((t1:1,t2:1):1,(t3:1,t4:1):1):1,t8:1):1,(t5:1,t7:1):1):1,t6:1);",
+        "totalParsimony": 791,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#177f72"
+      },
+      {
+        "id": "T12",
+        "signature": "(((((L0,L1),(L6,L7)),L4),(L2,L3)),L5)",
+        "tree": "(((((t1:1,t2:1):1,(t7:1,t8:1):1):1,t5:1):1,(t3:1,t4:1):1):1,t6:1);",
+        "totalParsimony": 809,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#d46d35"
+      },
+      {
+        "id": "T13",
+        "signature": "((((((L0,L1),L6),L7),L4),(L2,L3)),L5)",
+        "tree": "((((((t1:1,t2:1):1,t7:1):1,t8:1):1,t5:1):1,(t3:1,t4:1):1):1,t6:1);",
+        "totalParsimony": 825,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#6658d3"
+      },
+      {
+        "id": "T14",
+        "signature": "(((((L0,L1),L3),L2),((L6,L7),L4)),L5)",
+        "tree": "(((((t1:1,t2:1):1,t4:1):1,t3:1):1,((t7:1,t8:1):1,t5:1):1):1,t6:1);",
+        "totalParsimony": 774,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#cc3d6e"
+      },
+      {
+        "id": "T15",
+        "signature": "(((((L0,L3),L1),L2),((L6,L7),L4)),L5)",
+        "tree": "(((((t1:1,t4:1):1,t2:1):1,t3:1):1,((t7:1,t8:1):1,t5:1):1):1,t6:1);",
+        "totalParsimony": 824,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#719e2b"
+      },
+      {
+        "id": "T16",
+        "signature": "(((((L0,L3),L2),L1),((L6,L7),L4)),L5)",
+        "tree": "(((((t1:1,t4:1):1,t3:1):1,t2:1):1,((t7:1,t8:1):1,t5:1):1):1,t6:1);",
+        "totalParsimony": 833,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#2575b8"
+      },
+      {
+        "id": "T17",
+        "signature": "(((((L1,L3),L0),L2),((L6,L7),L4)),L5)",
+        "tree": "(((((t2:1,t4:1):1,t1:1):1,t3:1):1,((t7:1,t8:1):1,t5:1):1):1,t6:1);",
+        "totalParsimony": 822,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#a45d1a"
+      },
+      {
+        "id": "T18",
+        "signature": "(((((L0,L1),L3),((L6,L7),L4)),L2),L5)",
+        "tree": "(((((t1:1,t2:1):1,t4:1):1,((t7:1,t8:1):1,t5:1):1):1,t3:1):1,t6:1);",
+        "totalParsimony": 829,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#0e918c"
+      },
+      {
+        "id": "T19",
+        "signature": "(((((L0,L1),L3),((L6,L7),L4)),L5),L2)",
+        "tree": "(((((t1:1,t2:1):1,t4:1):1,((t7:1,t8:1):1,t5:1):1):1,t6:1):1,t3:1);",
+        "totalParsimony": 829,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#8c4eb2"
+      },
+      {
+        "id": "T20",
+        "signature": "(((((L6,L7),L4),L2),((L0,L1),L3)),L5)",
+        "tree": "(((((t7:1,t8:1):1,t5:1):1,t3:1):1,((t1:1,t2:1):1,t4:1):1):1,t6:1);",
+        "totalParsimony": 831,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#56645f"
+      },
+      {
+        "id": "T21",
+        "signature": "((((L0,L1),L3),((L6,L7),L4)),(L2,L5))",
+        "tree": "((((t1:1,t2:1):1,t4:1):1,((t7:1,t8:1):1,t5:1):1):1,(t3:1,t6:1):1);",
+        "totalParsimony": 829,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#177f72"
+      },
+      {
+        "id": "T22",
+        "signature": "((((L2,L5),L3),(L0,L1)),((L6,L7),L4))",
+        "tree": "((((t3:1,t6:1):1,t4:1):1,(t1:1,t2:1):1):1,((t7:1,t8:1):1,t5:1):1);",
+        "totalParsimony": 831,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#d46d35"
+      },
+      {
+        "id": "T23",
+        "signature": "((((L0,L1),(L2,L3)),((L4,L7),L6)),L5)",
+        "tree": "((((t1:1,t2:1):1,(t3:1,t4:1):1):1,((t5:1,t8:1):1,t7:1):1):1,t6:1);",
+        "totalParsimony": 781,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#6658d3"
+      },
+      {
+        "id": "T24",
+        "signature": "(((((L0,L1),(L2,L3)),L6),(L4,L7)),L5)",
+        "tree": "(((((t1:1,t2:1):1,(t3:1,t4:1):1):1,t7:1):1,(t5:1,t8:1):1):1,t6:1);",
+        "totalParsimony": 798,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#cc3d6e"
+      },
+      {
+        "id": "T25",
+        "signature": "(((((L0,L1),(L2,L3)),(L4,L7)),L6),L5)",
+        "tree": "(((((t1:1,t2:1):1,(t3:1,t4:1):1):1,(t5:1,t8:1):1):1,t7:1):1,t6:1);",
+        "totalParsimony": 805,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#719e2b"
+      },
+      {
+        "id": "T26",
+        "signature": "(((((L0,L1),(L2,L3)),(L4,L7)),L5),L6)",
+        "tree": "(((((t1:1,t2:1):1,(t3:1,t4:1):1):1,(t5:1,t8:1):1):1,t6:1):1,t7:1);",
+        "totalParsimony": 805,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#2575b8"
+      },
+      {
+        "id": "T27",
+        "signature": "((((L0,L1),(L2,L3)),(L4,L7)),(L5,L6))",
+        "tree": "((((t1:1,t2:1):1,(t3:1,t4:1):1):1,(t5:1,t8:1):1):1,(t6:1,t7:1):1);",
+        "totalParsimony": 805,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#a45d1a"
+      },
+      {
+        "id": "T28",
+        "signature": "((((((L6,L7),L4),L0),L1),(L2,L3)),L5)",
+        "tree": "((((((t7:1,t8:1):1,t5:1):1,t1:1):1,t2:1):1,(t3:1,t4:1):1):1,t6:1);",
+        "totalParsimony": 842,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#0e918c"
+      },
+      {
+        "id": "T29",
+        "signature": "(((((L6,L7),L4),L0),((L2,L3),L1)),L5)",
+        "tree": "(((((t7:1,t8:1):1,t5:1):1,t1:1):1,((t3:1,t4:1):1,t2:1):1):1,t6:1);",
+        "totalParsimony": 844,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#8c4eb2"
+      },
+      {
+        "id": "T30",
+        "signature": "(((((L0,L1),(L2,L3)),L4),(L6,L7)),L5)",
+        "tree": "(((((t1:1,t2:1):1,(t3:1,t4:1):1):1,t5:1):1,(t7:1,t8:1):1):1,t6:1);",
+        "totalParsimony": 769,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#56645f"
+      },
+      {
+        "id": "T31",
+        "signature": "(((((L0,L1),(L2,L3)),L4),L5),(L6,L7))",
+        "tree": "(((((t1:1,t2:1):1,(t3:1,t4:1):1):1,t5:1):1,t6:1):1,(t7:1,t8:1):1);",
+        "totalParsimony": 769,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#177f72"
+      }
+    ],
+    "runs": [
+      {
+        "id": "P1",
+        "start": 1,
+        "end": 1200,
+        "stateId": "T1",
+        "stateIndex": 0,
+        "dataParsimony": 757
+      }
+    ],
+    "breakpoints": [],
+    "iterations": [
+      {
+        "start": 1,
+        "iteration": 1,
+        "graphStates": 11,
+        "graphEdges": 10,
+        "occupiedStates": 1,
+        "mastersEvaluated": 11,
+        "neighboursEnumerated": 116,
+        "neighboursPriced": 96,
+        "statesAdded": 10,
+        "objective": 757,
+        "masterStateId": "T1",
+        "bestOmittedIntervalGain": 0,
+        "elapsedMs": 92.09236400000009
+      },
+      {
+        "start": 1,
+        "iteration": 2,
+        "graphStates": 21,
+        "graphEdges": 20,
+        "occupiedStates": 1,
+        "mastersEvaluated": 21,
+        "neighboursEnumerated": 116,
+        "neighboursPriced": 96,
+        "statesAdded": 10,
+        "objective": 757,
+        "masterStateId": "T1",
+        "bestOmittedIntervalGain": 0,
+        "elapsedMs": 102.80558199999996
+      },
+      {
+        "start": 1,
+        "iteration": 3,
+        "graphStates": 31,
+        "graphEdges": 30,
+        "occupiedStates": 1,
+        "mastersEvaluated": 31,
+        "neighboursEnumerated": 116,
+        "neighboursPriced": 96,
+        "statesAdded": 10,
+        "objective": 757,
+        "masterStateId": "T1",
+        "bestOmittedIntervalGain": 0,
+        "elapsedMs": 160.42943699999978
+      },
+      {
+        "start": 2,
+        "iteration": 1,
+        "graphStates": 11,
+        "graphEdges": 10,
+        "occupiedStates": 1,
+        "mastersEvaluated": 11,
+        "neighboursEnumerated": 108,
+        "neighboursPriced": 96,
+        "statesAdded": 10,
+        "objective": 757,
+        "masterStateId": "T1",
+        "bestOmittedIntervalGain": 0,
+        "elapsedMs": 65.08982699999979
+      },
+      {
+        "start": 2,
+        "iteration": 2,
+        "graphStates": 21,
+        "graphEdges": 20,
+        "occupiedStates": 1,
+        "mastersEvaluated": 21,
+        "neighboursEnumerated": 108,
+        "neighboursPriced": 96,
+        "statesAdded": 10,
+        "objective": 757,
+        "masterStateId": "T1",
+        "bestOmittedIntervalGain": 0,
+        "elapsedMs": 89.98175600000013
+      },
+      {
+        "start": 2,
+        "iteration": 3,
+        "graphStates": 31,
+        "graphEdges": 30,
+        "occupiedStates": 1,
+        "mastersEvaluated": 31,
+        "neighboursEnumerated": 108,
+        "neighboursPriced": 88,
+        "statesAdded": 10,
+        "objective": 757,
+        "masterStateId": "T1",
+        "bestOmittedIntervalGain": 0,
+        "elapsedMs": 121.9690899999996
+      },
+      {
+        "start": 3,
+        "iteration": 1,
+        "graphStates": 11,
+        "graphEdges": 10,
+        "occupiedStates": 1,
+        "mastersEvaluated": 11,
+        "neighboursEnumerated": 112,
+        "neighboursPriced": 96,
+        "statesAdded": 10,
+        "objective": 757,
+        "masterStateId": "T1",
+        "bestOmittedIntervalGain": 0,
+        "elapsedMs": 51.68097100000068
+      },
+      {
+        "start": 3,
+        "iteration": 2,
+        "graphStates": 21,
+        "graphEdges": 20,
+        "occupiedStates": 1,
+        "mastersEvaluated": 21,
+        "neighboursEnumerated": 112,
+        "neighboursPriced": 96,
+        "statesAdded": 10,
+        "objective": 757,
+        "masterStateId": "T1",
+        "bestOmittedIntervalGain": 0,
+        "elapsedMs": 81.91335299999992
+      },
+      {
+        "start": 3,
+        "iteration": 3,
+        "graphStates": 31,
+        "graphEdges": 30,
+        "occupiedStates": 1,
+        "mastersEvaluated": 31,
+        "neighboursEnumerated": 112,
+        "neighboursPriced": 92,
+        "statesAdded": 10,
+        "objective": 757,
+        "masterStateId": "T1",
+        "bestOmittedIntervalGain": 0,
+        "elapsedMs": 232.1921910000001
+      },
+      {
+        "start": 4,
+        "iteration": 1,
+        "graphStates": 11,
+        "graphEdges": 10,
+        "occupiedStates": 1,
+        "mastersEvaluated": 11,
+        "neighboursEnumerated": 120,
+        "neighboursPriced": 96,
+        "statesAdded": 10,
+        "objective": 757,
+        "masterStateId": "T5",
+        "bestOmittedIntervalGain": 0,
+        "elapsedMs": 56.82281899999998
+      },
+      {
+        "start": 4,
+        "iteration": 2,
+        "graphStates": 21,
+        "graphEdges": 23,
+        "occupiedStates": 1,
+        "mastersEvaluated": 21,
+        "neighboursEnumerated": 116,
+        "neighboursPriced": 96,
+        "statesAdded": 10,
+        "objective": 757,
+        "masterStateId": "T5",
+        "bestOmittedIntervalGain": 0,
+        "elapsedMs": 134.9662760000001
+      },
+      {
+        "start": 4,
+        "iteration": 3,
+        "graphStates": 31,
+        "graphEdges": 33,
+        "occupiedStates": 1,
+        "mastersEvaluated": 31,
+        "neighboursEnumerated": 116,
+        "neighboursPriced": 96,
+        "statesAdded": 10,
+        "objective": 757,
+        "masterStateId": "T5",
+        "bestOmittedIntervalGain": 0,
+        "elapsedMs": 185.95770900000025
+      }
+    ],
+    "lowerBoundKind": "adaptive-restricted-rspr-graph",
+    "certificate": "Exact joint master/path optimum on the final verified rooted-SPR graph. Outer rooted-tree-space expansion is budgeted; no global topology-space optimum is claimed."
+  },
+  "network": {
+    "status": "complete",
+    "objective": 755.0720000000049,
+    "dataParsimony": 733,
+    "masterTree": "(((((t1:1,t2:1):1,(t3:1,t4:1):1):1,(t7:1,t8:1):1):1,t5:1):1,t6:1);",
+    "masterStateId": "R1:T2",
+    "boundaryConvention": "open",
+    "overlapCap": 2,
+    "uncertaintyTolerance": 2,
+    "maximumOverlapUsed": 2,
+    "templates": [
+      {
+        "id": "R1",
+        "bit": 0,
+        "move": {
+          "prunedTaxa": [
+            "t5"
+          ],
+          "sourceSiblingTaxa": [
+            "t1",
+            "t2",
+            "t3",
+            "t4",
+            "t6",
+            "t7",
+            "t8"
+          ],
+          "destinationTaxa": [
+            "t7",
+            "t8"
+          ],
+          "destinationIsRoot": false
+        },
+        "sourceContexts": [
+          "(((((L0,L1),(L2,L3)),(L6,L7)),L4),L5)",
+          "(((((L0,L1),(L2,L3)),L7),(L4,L6)),L5)"
+        ],
+        "topologicallySilentMasks": [],
+        "reticulationNode": "N15",
+        "backgroundParentNode": "N1",
+        "alternateParentNode": "N16",
+        "recipientChildNode": "N13",
+        "donorChildNode": "N10"
+      },
+      {
+        "id": "R2",
+        "bit": 1,
+        "move": {
+          "prunedTaxa": [
+            "t7"
+          ],
+          "sourceSiblingTaxa": [
+            "t8"
+          ],
+          "destinationTaxa": [
+            "t5"
+          ],
+          "destinationIsRoot": false
+        },
+        "sourceContexts": [
+          "(((((L0,L1),(L2,L3)),(L6,L7)),L4),L5)",
+          "((((L0,L1),(L2,L3)),((L6,L7),L4)),L5)"
+        ],
+        "topologicallySilentMasks": [],
+        "reticulationNode": "N17",
+        "backgroundParentNode": "N10",
+        "alternateParentNode": "N18",
+        "recipientChildNode": "N11",
+        "donorChildNode": "N13"
+      }
+    ],
+    "occurrences": [
+      {
+        "id": "E1",
+        "templateId": "R1",
+        "start": 692,
+        "end": 1200,
+        "leftCensored": false,
+        "rightCensored": true,
+        "maximumConcurrentEvents": 2,
+        "openingGap": 0.007999999991625373,
+        "closingGap": 0,
+        "openingIntervalLow": 661,
+        "openingIntervalHigh": 775,
+        "closingIntervalLow": 1200,
+        "closingIntervalHigh": 1200
+      },
+      {
+        "id": "E2",
+        "templateId": "R2",
+        "start": 692,
+        "end": 1200,
+        "leftCensored": false,
+        "rightCensored": true,
+        "maximumConcurrentEvents": 2,
+        "openingGap": 0.007999999991625373,
+        "closingGap": 0,
+        "openingIntervalLow": 661,
+        "openingIntervalHigh": 775,
+        "closingIntervalLow": 1200,
+        "closingIntervalHigh": 1200
+      }
+    ],
+    "trees": [
+      {
+        "id": "NTree1",
+        "signature": "(((((L0,L1),(L2,L3)),(L6,L7)),L4),L5)",
+        "tree": "(((((t1:1,t2:1):1,(t3:1,t4:1):1):1,(t7:1,t8:1):1):1,t5:1):1,t6:1);",
+        "masks": [
+          0
+        ],
+        "occupiedSpan": 691,
+        "color": "#177f72"
+      },
+      {
+        "id": "NTree2",
+        "signature": "((((L0,L1),(L2,L3)),((L4,L6),L7)),L5)",
+        "tree": "((((t1:1,t2:1):1,(t3:1,t4:1):1):1,(t8:1,(t5:1,t7:1):1):1):1,t6:1);",
+        "masks": [
+          3
+        ],
+        "occupiedSpan": 509,
+        "color": "#d46d35"
+      }
+    ],
+    "runs": [
+      {
+        "id": "B1",
+        "start": 1,
+        "end": 691,
+        "mask": 0,
+        "activeTemplateIds": [],
+        "treeId": "NTree1",
+        "treeIndex": 0,
+        "dataParsimony": 317
+      },
+      {
+        "id": "B2",
+        "start": 692,
+        "end": 1200,
+        "mask": 3,
+        "activeTemplateIds": [
+          "R1",
+          "R2"
+        ],
+        "treeId": "NTree2",
+        "treeIndex": 1,
+        "dataParsimony": 416
+      }
+    ],
+    "breakpointGaps": [
+      {
+        "afterSite": 691,
+        "intervalLow": 691,
+        "intervalHigh": 691,
+        "gap": 0.007999999991625373
+      }
+    ],
+    "search": [
+      {
+        "reticulations": 0,
+        "candidatesScored": 8,
+        "temporallyRejected": 0,
+        "beamRetained": 8,
+        "bestObjective": 757,
+        "bestDataParsimony": 757,
+        "bestOverlap": 0,
+        "elapsedMs": 40.76652400000057
+      },
+      {
+        "reticulations": 1,
+        "candidatesScored": 103,
+        "temporallyRejected": 8,
+        "beamRetained": 8,
+        "bestObjective": 756.0360000000097,
+        "bestDataParsimony": 743,
+        "bestOverlap": 1,
+        "elapsedMs": 399.9248549999993
+      },
+      {
+        "reticulations": 2,
+        "candidatesScored": 187,
+        "temporallyRejected": 18,
+        "beamRetained": 8,
+        "bestObjective": 755.0720000000049,
+        "bestDataParsimony": 733,
+        "bestOverlap": 2,
+        "elapsedMs": 903.2864879999997
+      },
+      {
+        "reticulations": 3,
+        "candidatesScored": 318,
+        "temporallyRejected": 48,
+        "beamRetained": 8,
+        "bestObjective": 758.0720000000049,
+        "bestDataParsimony": 733,
+        "bestOverlap": 2,
+        "elapsedMs": 2138.5664799999995
+      },
+      {
+        "reticulations": 4,
+        "candidatesScored": 492,
+        "temporallyRejected": 104,
+        "beamRetained": 8,
+        "bestObjective": 761.0720000000049,
+        "bestDataParsimony": 733,
+        "bestOverlap": 2,
+        "elapsedMs": 5101.016713999999
+      }
+    ],
+    "paretoFrontier": [
+      {
+        "reticulations": 0,
+        "occurrences": 0,
+        "dataParsimony": 757,
+        "objective": 757,
+        "maximumOverlap": 0
+      },
+      {
+        "reticulations": 1,
+        "occurrences": 1,
+        "dataParsimony": 743,
+        "objective": 756.0360000000097,
+        "maximumOverlap": 1
+      },
+      {
+        "reticulations": 2,
+        "occurrences": 2,
+        "dataParsimony": 733,
+        "objective": 755.0720000000049,
+        "maximumOverlap": 2
+      }
+    ],
+    "temporal": {
+      "status": "rank-feasible",
+      "message": "The compiled switching DAG satisfies donor–recipient equality and strict ancestry constraints under an unconstrained rank assignment.",
+      "conflictingTemplates": []
+    },
+    "certificate": "Every retained switching DAG was scored by an exact mask dynamic program over all masks within the selected overlap cap. Distinct master candidates from every inferred root start seed the joint network beam, and donor-time/strict-ancestry infeasibility is enforced as a hard lazy cut. The outer rooted-network beam and event-template pool remain budgeted; no global network-space optimum is claimed."
+  },
+  "diagnostics": {
+    "engine": "independent-typescript-worker",
+    "initialTreeMethod": "internal-neighbor-joining-multiscale",
+    "scoreMethod": "fitch",
+    "transitionCost": 1,
+    "transversionCost": 1,
+    "informativeSites": 426,
+    "dyadicSeeds": 16,
+    "rootPlacements": 4,
+    "candidateEventTemplates": 22,
+    "graphStates": 31,
+    "graphEdges": 30,
+    "pathNetworkObjectiveDifference": -1.9279999999951087,
+    "resourceLimited": true,
+    "warnings": [
+      "The rooted-tree graph or root-placement universe was budget limited; increase advanced search budgets to test stability."
+    ]
+  },
+  "timings": {
+    "pathSearchMs": 1383.6677119999995,
+    "networkSearchMs": 8607.790975,
+    "totalMs": 9991.808705
+  },
+  "eventsCsv": "Occurrence,Template,Start,End,Left censored,Right censored,Maximum overlap,Opening gap,Closing gap,Opening interval low,Opening interval high,Closing interval low,Closing interval high,Pruned taxa,Source sibling,Destination taxa,Destination is root\nE1,R1,692,1200,false,true,2,0.007999999991625373,0,661,775,1200,1200,t5,t1; t2; t3; t4; t6; t7; t8,t7; t8,false\nE2,R2,692,1200,false,true,2,0.007999999991625373,0,661,775,1200,1200,t7,t8,t5,false\n",
+  "localTreesTsv": "left\tright\ttree_id\tmask\tactive_templates\tparsimony\tnewick\n1\t691\tNTree1\t0\t\t317\t(((((t1:1,t2:1):1,(t3:1,t4:1):1):1,(t7:1,t8:1):1):1,t5:1):1,t6:1);\n692\t1200\tNTree2\t3\tR1;R2\t416\t((((t1:1,t2:1):1,(t3:1,t4:1):1):1,(t8:1,(t5:1,t7:1):1):1):1,t6:1);\n",
+  "breakpointsTsv": "after_site\tinterval_low\tinterval_high\tmin_marginal_gap\tnew_mask\tactive_templates\n691\t691\t691\t0.007999999991625373\t3\tR1;R2\n",
+  "networkJson": "{\n  \"schemaVersion\": 1,\n  \"method\": \"jemspr\",\n  \"taxaNames\": [\n    \"t1\",\n    \"t2\",\n    \"t3\",\n    \"t4\",\n    \"t5\",\n    \"t6\",\n    \"t7\",\n    \"t8\"\n  ],\n  \"switchingNetwork\": {\n    \"root\": \"N0\",\n    \"nodes\": [\n      {\n        \"id\": \"N0\",\n        \"kind\": \"root\",\n        \"parents\": [],\n        \"children\": [\n          \"N1\",\n          \"N14\"\n        ]\n      },\n      {\n        \"id\": \"N1\",\n        \"kind\": \"tree\",\n        \"parents\": [\n          \"N0\"\n        ],\n        \"children\": [\n          \"N2\",\n          \"N15\"\n        ]\n      },\n      {\n        \"id\": \"N2\",\n        \"kind\": \"tree\",\n        \"parents\": [\n          \"N1\"\n        ],\n        \"children\": [\n          \"N3\",\n          \"N16\"\n        ]\n      },\n      {\n        \"id\": \"N3\",\n        \"kind\": \"tree\",\n        \"parents\": [\n          \"N2\"\n        ],\n        \"children\": [\n          \"N4\",\n          \"N7\"\n        ]\n      },\n      {\n        \"id\": \"N4\",\n        \"kind\": \"tree\",\n        \"parents\": [\n          \"N3\"\n        ],\n        \"children\": [\n          \"N5\",\n          \"N6\"\n        ]\n      },\n      {\n        \"id\": \"N5\",\n        \"kind\": \"leaf\",\n        \"leaf\": 0,\n        \"parents\": [\n          \"N4\"\n        ],\n        \"children\": []\n      },\n      {\n        \"id\": \"N6\",\n        \"kind\": \"leaf\",\n        \"leaf\": 1,\n        \"parents\": [\n          \"N4\"\n        ],\n        \"children\": []\n      },\n      {\n        \"id\": \"N7\",\n        \"kind\": \"tree\",\n        \"parents\": [\n          \"N3\"\n        ],\n        \"children\": [\n          \"N8\",\n          \"N9\"\n        ]\n      },\n      {\n        \"id\": \"N8\",\n        \"kind\": \"leaf\",\n        \"leaf\": 2,\n        \"parents\": [\n          \"N7\"\n        ],\n        \"children\": []\n      },\n      {\n        \"id\": \"N9\",\n        \"kind\": \"leaf\",\n        \"leaf\": 3,\n        \"parents\": [\n          \"N7\"\n        ],\n        \"children\": []\n      },\n      {\n        \"id\": \"N10\",\n        \"kind\": \"tree\",\n        \"parents\": [\n          \"N16\"\n        ],\n        \"children\": [\n          \"N12\",\n          \"N17\"\n        ]\n      },\n      {\n        \"id\": \"N11\",\n        \"kind\": \"leaf\",\n        \"leaf\": 6,\n        \"parents\": [\n          \"N17\"\n        ],\n        \"children\": []\n      },\n      {\n        \"id\": \"N12\",\n        \"kind\": \"leaf\",\n        \"leaf\": 7,\n        \"parents\": [\n          \"N10\"\n        ],\n        \"children\": []\n      },\n      {\n        \"id\": \"N13\",\n        \"kind\": \"leaf\",\n        \"leaf\": 4,\n        \"parents\": [\n          \"N18\"\n        ],\n        \"children\": []\n      },\n      {\n        \"id\": \"N14\",\n        \"kind\": \"leaf\",\n        \"leaf\": 5,\n        \"parents\": [\n          \"N0\"\n        ],\n        \"children\": []\n      },\n      {\n        \"id\": \"N15\",\n        \"kind\": \"reticulation\",\n        \"parents\": [\n          \"N1\",\n          \"N16\"\n        ],\n        \"children\": [\n          \"N18\"\n        ]\n      },\n      {\n        \"id\": \"N16\",\n        \"kind\": \"attachment\",\n        \"parents\": [\n          \"N2\"\n        ],\n        \"children\": [\n          \"N10\",\n          \"N15\"\n        ]\n      },\n      {\n        \"id\": \"N17\",\n        \"kind\": \"reticulation\",\n        \"parents\": [\n          \"N10\",\n          \"N18\"\n        ],\n        \"children\": [\n          \"N11\"\n        ]\n      },\n      {\n        \"id\": \"N18\",\n        \"kind\": \"attachment\",\n        \"parents\": [\n          \"N15\"\n        ],\n        \"children\": [\n          \"N13\",\n          \"N17\"\n        ]\n      }\n    ],\n    \"reticulations\": [\n      {\n        \"bit\": 0,\n        \"move\": {\n          \"pruned\": [\n            4\n          ],\n          \"sourceSibling\": [\n            0,\n            1,\n            2,\n            3,\n            5,\n            6,\n            7\n          ],\n          \"destination\": [\n            6,\n            7\n          ],\n          \"destinationIsRoot\": false\n        },\n        \"sourceContextMask\": 0,\n        \"sourceContextSignature\": \"(((((L0,L1),(L2,L3)),(L6,L7)),L4),L5)\",\n        \"reticulationNode\": \"N15\",\n        \"backgroundParentNode\": \"N1\",\n        \"alternateParentNode\": \"N16\",\n        \"recipientChildNode\": \"N13\",\n        \"donorChildNode\": \"N10\"\n      },\n      {\n        \"bit\": 1,\n        \"move\": {\n          \"pruned\": [\n            6\n          ],\n          \"sourceSibling\": [\n            7\n          ],\n          \"destination\": [\n            4\n          ],\n          \"destinationIsRoot\": false\n        },\n        \"sourceContextMask\": 0,\n        \"sourceContextSignature\": \"(((((L0,L1),(L2,L3)),(L6,L7)),L4),L5)\",\n        \"reticulationNode\": \"N17\",\n        \"backgroundParentNode\": \"N10\",\n        \"alternateParentNode\": \"N18\",\n        \"recipientChildNode\": \"N11\",\n        \"donorChildNode\": \"N13\"\n      }\n    ]\n  },\n  \"masterTree\": \"(((((t1:1,t2:1):1,(t3:1,t4:1):1):1,(t7:1,t8:1):1):1,t5:1):1,t6:1);\",\n  \"templates\": [\n    {\n      \"id\": \"R1\",\n      \"bit\": 0,\n      \"move\": {\n        \"prunedTaxa\": [\n          \"t5\"\n        ],\n        \"sourceSiblingTaxa\": [\n          \"t1\",\n          \"t2\",\n          \"t3\",\n          \"t4\",\n          \"t6\",\n          \"t7\",\n          \"t8\"\n        ],\n        \"destinationTaxa\": [\n          \"t7\",\n          \"t8\"\n        ],\n        \"destinationIsRoot\": false\n      },\n      \"sourceContexts\": [\n        \"(((((L0,L1),(L2,L3)),(L6,L7)),L4),L5)\",\n        \"(((((L0,L1),(L2,L3)),L7),(L4,L6)),L5)\"\n      ],\n      \"topologicallySilentMasks\": [],\n      \"reticulationNode\": \"N15\",\n      \"backgroundParentNode\": \"N1\",\n      \"alternateParentNode\": \"N16\",\n      \"recipientChildNode\": \"N13\",\n      \"donorChildNode\": \"N10\"\n    },\n    {\n      \"id\": \"R2\",\n      \"bit\": 1,\n      \"move\": {\n        \"prunedTaxa\": [\n          \"t7\"\n        ],\n        \"sourceSiblingTaxa\": [\n          \"t8\"\n        ],\n        \"destinationTaxa\": [\n          \"t5\"\n        ],\n        \"destinationIsRoot\": false\n      },\n      \"sourceContexts\": [\n        \"(((((L0,L1),(L2,L3)),(L6,L7)),L4),L5)\",\n        \"((((L0,L1),(L2,L3)),((L6,L7),L4)),L5)\"\n      ],\n      \"topologicallySilentMasks\": [],\n      \"reticulationNode\": \"N17\",\n      \"backgroundParentNode\": \"N10\",\n      \"alternateParentNode\": \"N18\",\n      \"recipientChildNode\": \"N11\",\n      \"donorChildNode\": \"N13\"\n    }\n  ],\n  \"occurrences\": [\n    {\n      \"id\": \"E1\",\n      \"templateId\": \"R1\",\n      \"start\": 692,\n      \"end\": 1200,\n      \"leftCensored\": false,\n      \"rightCensored\": true,\n      \"maximumConcurrentEvents\": 2,\n      \"openingGap\": 0.007999999991625373,\n      \"closingGap\": 0,\n      \"openingIntervalLow\": 661,\n      \"openingIntervalHigh\": 775,\n      \"closingIntervalLow\": 1200,\n      \"closingIntervalHigh\": 1200\n    },\n    {\n      \"id\": \"E2\",\n      \"templateId\": \"R2\",\n      \"start\": 692,\n      \"end\": 1200,\n      \"leftCensored\": false,\n      \"rightCensored\": true,\n      \"maximumConcurrentEvents\": 2,\n      \"openingGap\": 0.007999999991625373,\n      \"closingGap\": 0,\n      \"openingIntervalLow\": 661,\n      \"openingIntervalHigh\": 775,\n      \"closingIntervalLow\": 1200,\n      \"closingIntervalHigh\": 1200\n    }\n  ],\n  \"maskRuns\": [\n    {\n      \"id\": \"B1\",\n      \"start\": 1,\n      \"end\": 691,\n      \"mask\": 0,\n      \"activeTemplateIds\": [],\n      \"treeId\": \"NTree1\",\n      \"treeIndex\": 0,\n      \"dataParsimony\": 317\n    },\n    {\n      \"id\": \"B2\",\n      \"start\": 692,\n      \"end\": 1200,\n      \"mask\": 3,\n      \"activeTemplateIds\": [\n        \"R1\",\n        \"R2\"\n      ],\n      \"treeId\": \"NTree2\",\n      \"treeIndex\": 1,\n      \"dataParsimony\": 416\n    }\n  ],\n  \"temporal\": {\n    \"status\": \"rank-feasible\",\n    \"message\": \"The compiled switching DAG satisfies donor–recipient equality and strict ancestry constraints under an unconstrained rank assignment.\",\n    \"conflictingTemplates\": []\n  },\n  \"diagnostics\": {\n    \"engine\": \"independent-typescript-worker\",\n    \"initialTreeMethod\": \"internal-neighbor-joining-multiscale\",\n    \"scoreMethod\": \"fitch\",\n    \"transitionCost\": 1,\n    \"transversionCost\": 1,\n    \"informativeSites\": 426,\n    \"dyadicSeeds\": 16,\n    \"rootPlacements\": 4,\n    \"candidateEventTemplates\": 22,\n    \"graphStates\": 31,\n    \"graphEdges\": 30,\n    \"pathNetworkObjectiveDifference\": -1.9279999999951087,\n    \"resourceLimited\": true,\n    \"warnings\": [\n      \"The rooted-tree graph or root-placement universe was budget limited; increase advanced search budgets to test stability.\"\n    ]\n  }\n}"
+}

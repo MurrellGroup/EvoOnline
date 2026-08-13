@@ -515,9 +515,9 @@ export function searchRootedTreePath(alignment: JemsprAlignment, options: Jemspr
     neighbourScreen: Math.max(4, Math.round(options.neighbourScreen ?? 72)),
     frontierStates: Math.max(1, Math.round(options.frontierStates ?? 4)),
     nearImprovers: Math.max(0, Math.round(options.nearImprovers ?? 2)),
-    breakpointPenalty: options.pathBreakpointPenalty !== undefined && options.pathBreakpointPenalty > 0 ? options.pathBreakpointPenalty : Math.log2(alignment.sites + 1),
-    endpointPenalty: options.pathEndpointPenalty !== undefined && options.pathEndpointPenalty > 0 ? options.pathEndpointPenalty : Math.max(1, Math.log2(alignment.taxa) / 2),
-    spanPenalty: options.pathSpanPenalty !== undefined && options.pathSpanPenalty > 0 ? options.pathSpanPenalty : 1 / Math.max(80, minimumWindow),
+    breakpointPenalty: options.pathBreakpointPenalty !== undefined && options.pathBreakpointPenalty > 0 ? options.pathBreakpointPenalty : options.pathBreakpointPenalty === 0 ? Math.log2(alignment.sites + 1) : 4,
+    endpointPenalty: options.pathEndpointPenalty !== undefined && options.pathEndpointPenalty > 0 ? options.pathEndpointPenalty : options.pathEndpointPenalty === 0 ? Math.max(1, Math.log2(alignment.taxa) / 2) : 1,
+    spanPenalty: options.pathSpanPenalty !== undefined && options.pathSpanPenalty > 0 ? options.pathSpanPenalty : options.pathSpanPenalty === 0 ? 1 / Math.max(80, minimumWindow) : 0.002,
   };
   let best: InternalPathStartResult | undefined;
   const rootStarts: InternalPathStartResult[] = [];
@@ -547,8 +547,8 @@ export function shortestPathMoves(graph: RootedTreeGraph, from: number, to: numb
 export function pathSearchPenalties(alignment: JemsprAlignment, options: JemsprOptions): Readonly<{ breakpoint: number; endpoint: number; span: number }> {
   const minimumWindow = Math.max(16, Math.round(options.minimumWindow ?? Math.max(64, Math.min(250, alignment.sites / 8))));
   return {
-    breakpoint: options.pathBreakpointPenalty !== undefined && options.pathBreakpointPenalty > 0 ? options.pathBreakpointPenalty : Math.log2(alignment.sites + 1),
-    endpoint: options.pathEndpointPenalty !== undefined && options.pathEndpointPenalty > 0 ? options.pathEndpointPenalty : Math.max(1, Math.log2(alignment.taxa) / 2),
-    span: options.pathSpanPenalty !== undefined && options.pathSpanPenalty > 0 ? options.pathSpanPenalty : 1 / Math.max(80, minimumWindow),
+    breakpoint: options.pathBreakpointPenalty !== undefined && options.pathBreakpointPenalty > 0 ? options.pathBreakpointPenalty : options.pathBreakpointPenalty === 0 ? Math.log2(alignment.sites + 1) : 4,
+    endpoint: options.pathEndpointPenalty !== undefined && options.pathEndpointPenalty > 0 ? options.pathEndpointPenalty : options.pathEndpointPenalty === 0 ? Math.max(1, Math.log2(alignment.taxa) / 2) : 1,
+    span: options.pathSpanPenalty !== undefined && options.pathSpanPenalty > 0 ? options.pathSpanPenalty : options.pathSpanPenalty === 0 ? 1 / Math.max(80, minimumWindow) : 0.002,
   };
 }

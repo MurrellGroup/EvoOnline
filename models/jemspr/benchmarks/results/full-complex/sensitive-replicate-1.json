@@ -1,0 +1,2063 @@
+{
+  "method": "jemspr",
+  "schemaVersion": 1,
+  "taxa": 10,
+  "sites": 2400,
+  "informativeSites": 933,
+  "path": {
+    "objective": 1738.7440000000552,
+    "dataParsimony": 1711,
+    "masterStateId": "T37",
+    "states": [
+      {
+        "id": "T1",
+        "signature": "((((((L0,L1),L2),(L5,L6)),((L8,L9),L7)),L3),L4)",
+        "tree": "((((((t1:1,t2:1):1,t3:1):1,(t6:1,t7:1):1):1,((t9:1,t10:1):1,t8:1):1):1,t4:1):1,t5:1);",
+        "totalParsimony": 1888,
+        "occupiedSpan": 0,
+        "masterDistance": 2,
+        "color": "#177f72"
+      },
+      {
+        "id": "T2",
+        "signature": "(((((((L0,L1),L2),L5),L6),((L8,L9),L7)),L3),L4)",
+        "tree": "(((((((t1:1,t2:1):1,t3:1):1,t6:1):1,t7:1):1,((t9:1,t10:1):1,t8:1):1):1,t4:1):1,t5:1);",
+        "totalParsimony": 1879,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#d46d35"
+      },
+      {
+        "id": "T3",
+        "signature": "((((((L8,L9),L7),(L5,L6)),L3),((L0,L1),L2)),L4)",
+        "tree": "((((((t9:1,t10:1):1,t8:1):1,(t6:1,t7:1):1):1,t4:1):1,((t1:1,t2:1):1,t3:1):1):1,t5:1);",
+        "totalParsimony": 1925,
+        "occupiedSpan": 0,
+        "masterDistance": 2,
+        "color": "#6658d3"
+      },
+      {
+        "id": "T4",
+        "signature": "((((((L8,L9),L7),(L5,L6)),L3),L4),((L0,L1),L2))",
+        "tree": "((((((t9:1,t10:1):1,t8:1):1,(t6:1,t7:1):1):1,t4:1):1,t5:1):1,((t1:1,t2:1):1,t3:1):1);",
+        "totalParsimony": 1925,
+        "occupiedSpan": 0,
+        "masterDistance": 2,
+        "color": "#cc3d6e"
+      },
+      {
+        "id": "T5",
+        "signature": "(((((L8,L9),L7),(L5,L6)),L3),(((L0,L1),L2),L4))",
+        "tree": "(((((t9:1,t10:1):1,t8:1):1,(t6:1,t7:1):1):1,t4:1):1,(((t1:1,t2:1):1,t3:1):1,t5:1):1);",
+        "totalParsimony": 1925,
+        "occupiedSpan": 0,
+        "masterDistance": 2,
+        "color": "#719e2b"
+      },
+      {
+        "id": "T6",
+        "signature": "((((((L0,L1),L2),L4),(L5,L6)),((L8,L9),L7)),L3)",
+        "tree": "((((((t1:1,t2:1):1,t3:1):1,t5:1):1,(t6:1,t7:1):1):1,((t9:1,t10:1):1,t8:1):1):1,t4:1);",
+        "totalParsimony": 1924,
+        "occupiedSpan": 0,
+        "masterDistance": 3,
+        "color": "#2575b8"
+      },
+      {
+        "id": "T7",
+        "signature": "((((((L0,L1),L2),L5),(((L8,L9),L7),L6)),L3),L4)",
+        "tree": "((((((t1:1,t2:1):1,t3:1):1,t6:1):1,(((t9:1,t10:1):1,t8:1):1,t7:1):1):1,t4:1):1,t5:1);",
+        "totalParsimony": 1914,
+        "occupiedSpan": 0,
+        "masterDistance": 2,
+        "color": "#a45d1a"
+      },
+      {
+        "id": "T8",
+        "signature": "(((((L0,L1),L2),(L5,L6)),(((L8,L9),L3),L7)),L4)",
+        "tree": "(((((t1:1,t2:1):1,t3:1):1,(t6:1,t7:1):1):1,(((t9:1,t10:1):1,t4:1):1,t8:1):1):1,t5:1);",
+        "totalParsimony": 1917,
+        "occupiedSpan": 0,
+        "masterDistance": 2,
+        "color": "#0e918c"
+      },
+      {
+        "id": "T9",
+        "signature": "((((((L0,L1),(L2,L5)),L6),((L8,L9),L7)),L3),L4)",
+        "tree": "((((((t1:1,t2:1):1,(t3:1,t6:1):1):1,t7:1):1,((t9:1,t10:1):1,t8:1):1):1,t4:1):1,t5:1);",
+        "totalParsimony": 1958,
+        "occupiedSpan": 106,
+        "masterDistance": 2,
+        "color": "#8c4eb2"
+      },
+      {
+        "id": "T10",
+        "signature": "(((((((L0,L1),L2),((L8,L9),L7)),L6),L5),L3),L4)",
+        "tree": "(((((((t1:1,t2:1):1,t3:1):1,((t9:1,t10:1):1,t8:1):1):1,t7:1):1,t6:1):1,t4:1):1,t5:1);",
+        "totalParsimony": 1959,
+        "occupiedSpan": 181,
+        "masterDistance": 3,
+        "color": "#56645f"
+      },
+      {
+        "id": "T11",
+        "signature": "((((((L0,L1),L2),((L8,L9),L7)),(L5,L6)),L3),L4)",
+        "tree": "((((((t1:1,t2:1):1,t3:1):1,((t9:1,t10:1):1,t8:1):1):1,(t6:1,t7:1):1):1,t4:1):1,t5:1);",
+        "totalParsimony": 1924,
+        "occupiedSpan": 0,
+        "masterDistance": 2,
+        "color": "#177f72"
+      },
+      {
+        "id": "T12",
+        "signature": "(((((((L8,L9),L7),L6),((L0,L1),L2)),L3),L4),L5)",
+        "tree": "(((((((t9:1,t10:1):1,t8:1):1,t7:1):1,((t1:1,t2:1):1,t3:1):1):1,t4:1):1,t5:1):1,t6:1);",
+        "totalParsimony": 2014,
+        "occupiedSpan": 0,
+        "masterDistance": 3,
+        "color": "#d46d35"
+      },
+      {
+        "id": "T13",
+        "signature": "((((((((L0,L1),L2),L7),(L8,L9)),L6),L5),L3),L4)",
+        "tree": "((((((((t1:1,t2:1):1,t3:1):1,t8:1):1,(t9:1,t10:1):1):1,t7:1):1,t6:1):1,t4:1):1,t5:1);",
+        "totalParsimony": 2008,
+        "occupiedSpan": 0,
+        "masterDistance": 3,
+        "color": "#6658d3"
+      },
+      {
+        "id": "T14",
+        "signature": "((((((((L0,L1),L2),L5),L6),L7),(L8,L9)),L3),L4)",
+        "tree": "((((((((t1:1,t2:1):1,t3:1):1,t6:1):1,t7:1):1,t8:1):1,(t9:1,t10:1):1):1,t4:1):1,t5:1);",
+        "totalParsimony": 1871,
+        "occupiedSpan": 503,
+        "masterDistance": 1,
+        "color": "#cc3d6e"
+      },
+      {
+        "id": "T15",
+        "signature": "(((((L0,L1),L2),(L5,L6)),(((L8,L9),L7),L3)),L4)",
+        "tree": "(((((t1:1,t2:1):1,t3:1):1,(t6:1,t7:1):1):1,(((t9:1,t10:1):1,t8:1):1,t4:1):1):1,t5:1);",
+        "totalParsimony": 1900,
+        "occupiedSpan": 0,
+        "masterDistance": 3,
+        "color": "#719e2b"
+      },
+      {
+        "id": "T16",
+        "signature": "((((((L8,L9),L7),L6),((L0,L1),L2)),(L3,L5)),L4)",
+        "tree": "((((((t9:1,t10:1):1,t8:1):1,t7:1):1,((t1:1,t2:1):1,t3:1):1):1,(t4:1,t6:1):1):1,t5:1);",
+        "totalParsimony": 2011,
+        "occupiedSpan": 0,
+        "masterDistance": 3,
+        "color": "#2575b8"
+      },
+      {
+        "id": "T17",
+        "signature": "((((((((L0,L1),L2),(L8,L9)),L7),L6),L5),L3),L4)",
+        "tree": "((((((((t1:1,t2:1):1,t3:1):1,(t9:1,t10:1):1):1,t8:1):1,t7:1):1,t6:1):1,t4:1):1,t5:1);",
+        "totalParsimony": 1996,
+        "occupiedSpan": 0,
+        "masterDistance": 3,
+        "color": "#a45d1a"
+      },
+      {
+        "id": "T18",
+        "signature": "((((((L5,L6),L7),(L8,L9)),((L0,L1),L2)),L3),L4)",
+        "tree": "((((((t6:1,t7:1):1,t8:1):1,(t9:1,t10:1):1):1,((t1:1,t2:1):1,t3:1):1):1,t4:1):1,t5:1);",
+        "totalParsimony": 1938,
+        "occupiedSpan": 0,
+        "masterDistance": 2,
+        "color": "#0e918c"
+      },
+      {
+        "id": "T19",
+        "signature": "((((((L0,L1),L2),L5),L3),L4),(((L8,L9),L7),L6))",
+        "tree": "((((((t1:1,t2:1):1,t3:1):1,t6:1):1,t4:1):1,t5:1):1,(((t9:1,t10:1):1,t8:1):1,t7:1):1);",
+        "totalParsimony": 1943,
+        "occupiedSpan": 0,
+        "masterDistance": 3,
+        "color": "#8c4eb2"
+      },
+      {
+        "id": "T20",
+        "signature": "((((((L0,L1),L2),L5),L3),(((L8,L9),L7),L6)),L4)",
+        "tree": "((((((t1:1,t2:1):1,t3:1):1,t6:1):1,t4:1):1,(((t9:1,t10:1):1,t8:1):1,t7:1):1):1,t5:1);",
+        "totalParsimony": 1943,
+        "occupiedSpan": 146,
+        "masterDistance": 2,
+        "color": "#56645f"
+      },
+      {
+        "id": "T21",
+        "signature": "(((((L0,L1),L2),L5),L3),((((L8,L9),L7),L6),L4))",
+        "tree": "(((((t1:1,t2:1):1,t3:1):1,t6:1):1,t4:1):1,((((t9:1,t10:1):1,t8:1):1,t7:1):1,t5:1):1);",
+        "totalParsimony": 1943,
+        "occupiedSpan": 0,
+        "masterDistance": 3,
+        "color": "#177f72"
+      },
+      {
+        "id": "T22",
+        "signature": "((((((L8,L9),L7),L6),L4),(((L0,L1),L2),L5)),L3)",
+        "tree": "((((((t9:1,t10:1):1,t8:1):1,t7:1):1,t5:1):1,(((t1:1,t2:1):1,t3:1):1,t6:1):1):1,t4:1);",
+        "totalParsimony": 1943,
+        "occupiedSpan": 0,
+        "masterDistance": 3,
+        "color": "#d46d35"
+      },
+      {
+        "id": "T23",
+        "signature": "((((((L8,L9),L7),(L5,L6)),((L0,L1),L2)),L3),L4)",
+        "tree": "((((((t9:1,t10:1):1,t8:1):1,(t6:1,t7:1):1):1,((t1:1,t2:1):1,t3:1):1):1,t4:1):1,t5:1);",
+        "totalParsimony": 1927,
+        "occupiedSpan": 0,
+        "masterDistance": 2,
+        "color": "#6658d3"
+      },
+      {
+        "id": "T24",
+        "signature": "((((((((L0,L1),L2),L5),L6),L4),L7),(L8,L9)),L3)",
+        "tree": "((((((((t1:1,t2:1):1,t3:1):1,t6:1):1,t7:1):1,t5:1):1,t8:1):1,(t9:1,t10:1):1):1,t4:1);",
+        "totalParsimony": 1909,
+        "occupiedSpan": 0,
+        "masterDistance": 2,
+        "color": "#cc3d6e"
+      },
+      {
+        "id": "T25",
+        "signature": "((((((L0,L1),L2),L5),L6),(((L8,L9),L7),L3)),L4)",
+        "tree": "((((((t1:1,t2:1):1,t3:1):1,t6:1):1,t7:1):1,(((t9:1,t10:1):1,t8:1):1,t4:1):1):1,t5:1);",
+        "totalParsimony": 1899,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#719e2b"
+      },
+      {
+        "id": "T26",
+        "signature": "(((((L5,L6),L7),((L8,L9),L3)),((L0,L1),L2)),L4)",
+        "tree": "(((((t6:1,t7:1):1,t8:1):1,((t9:1,t10:1):1,t4:1):1):1,((t1:1,t2:1):1,t3:1):1):1,t5:1);",
+        "totalParsimony": 1920,
+        "occupiedSpan": 633,
+        "masterDistance": 1,
+        "color": "#2575b8"
+      },
+      {
+        "id": "T27",
+        "signature": "((((((L5,L6),L7),(L8,L9)),L3),((L0,L1),L2)),L4)",
+        "tree": "((((((t6:1,t7:1):1,t8:1):1,(t9:1,t10:1):1):1,t4:1):1,((t1:1,t2:1):1,t3:1):1):1,t5:1);",
+        "totalParsimony": 1924,
+        "occupiedSpan": 125,
+        "masterDistance": 2,
+        "color": "#a45d1a"
+      },
+      {
+        "id": "T28",
+        "signature": "(((((((L0,L1),L2),L5),L6),L3),((L8,L9),L7)),L4)",
+        "tree": "(((((((t1:1,t2:1):1,t3:1):1,t6:1):1,t7:1):1,t4:1):1,((t9:1,t10:1):1,t8:1):1):1,t5:1);",
+        "totalParsimony": 1902,
+        "occupiedSpan": 164,
+        "masterDistance": 2,
+        "color": "#0e918c"
+      },
+      {
+        "id": "T29",
+        "signature": "((((((L0,L1),L2),L5),L6),(((L8,L9),L3),L7)),L4)",
+        "tree": "((((((t1:1,t2:1):1,t3:1):1,t6:1):1,t7:1):1,(((t9:1,t10:1):1,t4:1):1,t8:1):1):1,t5:1);",
+        "totalParsimony": 1909,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#8c4eb2"
+      },
+      {
+        "id": "T30",
+        "signature": "(((((((L0,L1),L2),L6),L5),((L8,L9),L7)),L3),L4)",
+        "tree": "(((((((t1:1,t2:1):1,t3:1):1,t7:1):1,t6:1):1,((t9:1,t10:1):1,t8:1):1):1,t4:1):1,t5:1);",
+        "totalParsimony": 1923,
+        "occupiedSpan": 0,
+        "masterDistance": 2,
+        "color": "#56645f"
+      },
+      {
+        "id": "T31",
+        "signature": "(((((((L0,L1),L2),L5),L6),L4),L7),((L8,L9),L3))",
+        "tree": "(((((((t1:1,t2:1):1,t3:1):1,t6:1):1,t7:1):1,t5:1):1,t8:1):1,((t9:1,t10:1):1,t4:1):1);",
+        "totalParsimony": 1909,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#177f72"
+      },
+      {
+        "id": "T32",
+        "signature": "(((((L0,L1),L2),L5),(((L6,L7),(L8,L9)),L3)),L4)",
+        "tree": "(((((t1:1,t2:1):1,t3:1):1,t6:1):1,(((t7:1,t8:1):1,(t9:1,t10:1):1):1,t4:1):1):1,t5:1);",
+        "totalParsimony": 1945,
+        "occupiedSpan": 0,
+        "masterDistance": 2,
+        "color": "#d46d35"
+      },
+      {
+        "id": "T33",
+        "signature": "(((((L0,L1),L2),L5),L4),(((L6,L7),(L8,L9)),L3))",
+        "tree": "(((((t1:1,t2:1):1,t3:1):1,t6:1):1,t5:1):1,(((t7:1,t8:1):1,(t9:1,t10:1):1):1,t4:1):1);",
+        "totalParsimony": 1945,
+        "occupiedSpan": 0,
+        "masterDistance": 2,
+        "color": "#6658d3"
+      },
+      {
+        "id": "T34",
+        "signature": "(((((((L0,L1),L2),((L8,L9),L7)),L6),L4),L5),L3)",
+        "tree": "(((((((t1:1,t2:1):1,t3:1):1,((t9:1,t10:1):1,t8:1):1):1,t7:1):1,t5:1):1,t6:1):1,t4:1);",
+        "totalParsimony": 2017,
+        "occupiedSpan": 147,
+        "masterDistance": 4,
+        "color": "#cc3d6e"
+      },
+      {
+        "id": "T35",
+        "signature": "((((((L0,L1),L2),((L8,L9),L7)),L6),(L3,L5)),L4)",
+        "tree": "((((((t1:1,t2:1):1,t3:1):1,((t9:1,t10:1):1,t8:1):1):1,t7:1):1,(t4:1,t6:1):1):1,t5:1);",
+        "totalParsimony": 2017,
+        "occupiedSpan": 0,
+        "masterDistance": 4,
+        "color": "#719e2b"
+      },
+      {
+        "id": "T36",
+        "signature": "((((((L0,L1),L2),((L8,L9),L7)),L6),L4),(L3,L5))",
+        "tree": "((((((t1:1,t2:1):1,t3:1):1,((t9:1,t10:1):1,t8:1):1):1,t7:1):1,t5:1):1,(t4:1,t6:1):1);",
+        "totalParsimony": 2017,
+        "occupiedSpan": 0,
+        "masterDistance": 4,
+        "color": "#2575b8"
+      },
+      {
+        "id": "T37",
+        "signature": "(((((((L0,L1),L2),L5),L6),L7),((L8,L9),L3)),L4)",
+        "tree": "(((((((t1:1,t2:1):1,t3:1):1,t6:1):1,t7:1):1,t8:1):1,((t9:1,t10:1):1,t4:1):1):1,t5:1);",
+        "totalParsimony": 1887,
+        "occupiedSpan": 256,
+        "masterDistance": 0,
+        "color": "#a45d1a"
+      },
+      {
+        "id": "T38",
+        "signature": "(((((L0,L1),L2),L5),L6),(((L3,L4),(L8,L9)),L7))",
+        "tree": "(((((t1:1,t2:1):1,t3:1):1,t6:1):1,t7:1):1,(((t4:1,t5:1):1,(t9:1,t10:1):1):1,t8:1):1);",
+        "totalParsimony": 1871,
+        "occupiedSpan": 0,
+        "masterDistance": 2,
+        "color": "#0e918c"
+      },
+      {
+        "id": "T39",
+        "signature": "((((((L0,L1),L2),((L8,L9),L7)),L6),L5),(L3,L4))",
+        "tree": "((((((t1:1,t2:1):1,t3:1):1,((t9:1,t10:1):1,t8:1):1):1,t7:1):1,t6:1):1,(t4:1,t5:1):1);",
+        "totalParsimony": 1959,
+        "occupiedSpan": 0,
+        "masterDistance": 4,
+        "color": "#8c4eb2"
+      },
+      {
+        "id": "T40",
+        "signature": "(((((((L0,L1),L2),L5),L6),L7),L4),((L8,L9),L3))",
+        "tree": "(((((((t1:1,t2:1):1,t3:1):1,t6:1):1,t7:1):1,t8:1):1,t5:1):1,((t9:1,t10:1):1,t4:1):1);",
+        "totalParsimony": 1887,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#56645f"
+      },
+      {
+        "id": "T41",
+        "signature": "((((((L0,L1),L2),L5),L6),L7),(((L8,L9),L3),L4))",
+        "tree": "((((((t1:1,t2:1):1,t3:1):1,t6:1):1,t7:1):1,t8:1):1,(((t9:1,t10:1):1,t4:1):1,t5:1):1);",
+        "totalParsimony": 1887,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#177f72"
+      },
+      {
+        "id": "T42",
+        "signature": "(((((((L0,L1),L2),L5),L4),L6),L7),((L8,L9),L3))",
+        "tree": "(((((((t1:1,t2:1):1,t3:1):1,t6:1):1,t5:1):1,t7:1):1,t8:1):1,((t9:1,t10:1):1,t4:1):1);",
+        "totalParsimony": 1945,
+        "occupiedSpan": 139,
+        "masterDistance": 1,
+        "color": "#d46d35"
+      },
+      {
+        "id": "T43",
+        "signature": "((((((L0,L1),L2),L6),L5),(((L8,L9),L7),L3)),L4)",
+        "tree": "((((((t1:1,t2:1):1,t3:1):1,t7:1):1,t6:1):1,(((t9:1,t10:1):1,t8:1):1,t4:1):1):1,t5:1);",
+        "totalParsimony": 1938,
+        "occupiedSpan": 0,
+        "masterDistance": 4,
+        "color": "#6658d3"
+      },
+      {
+        "id": "T44",
+        "signature": "(((((L5,L6),L7),((L8,L9),L3)),L4),((L0,L1),L2))",
+        "tree": "(((((t6:1,t7:1):1,t8:1):1,((t9:1,t10:1):1,t4:1):1):1,t5:1):1,((t1:1,t2:1):1,t3:1):1);",
+        "totalParsimony": 1920,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#cc3d6e"
+      },
+      {
+        "id": "T45",
+        "signature": "((((L0,L1),L2),L4),(((L5,L6),L7),((L8,L9),L3)))",
+        "tree": "((((t1:1,t2:1):1,t3:1):1,t5:1):1,(((t6:1,t7:1):1,t8:1):1,((t9:1,t10:1):1,t4:1):1):1);",
+        "totalParsimony": 1920,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#719e2b"
+      },
+      {
+        "id": "T46",
+        "signature": "(((((L6,L7),(L8,L9)),L3),L4),(((L0,L1),L2),L5))",
+        "tree": "(((((t7:1,t8:1):1,(t9:1,t10:1):1):1,t4:1):1,t5:1):1,(((t1:1,t2:1):1,t3:1):1,t6:1):1);",
+        "totalParsimony": 1945,
+        "occupiedSpan": 0,
+        "masterDistance": 2,
+        "color": "#2575b8"
+      },
+      {
+        "id": "T47",
+        "signature": "((((((L0,L1),L2),L5),L6),L4),(((L8,L9),L3),L7))",
+        "tree": "((((((t1:1,t2:1):1,t3:1):1,t6:1):1,t7:1):1,t5:1):1,(((t9:1,t10:1):1,t4:1):1,t8:1):1);",
+        "totalParsimony": 1909,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#a45d1a"
+      },
+      {
+        "id": "T48",
+        "signature": "(((((L0,L1),L2),L5),L6),((((L8,L9),L3),L7),L4))",
+        "tree": "(((((t1:1,t2:1):1,t3:1):1,t6:1):1,t7:1):1,((((t9:1,t10:1):1,t4:1):1,t8:1):1,t5:1):1);",
+        "totalParsimony": 1909,
+        "occupiedSpan": 0,
+        "masterDistance": 1,
+        "color": "#0e918c"
+      }
+    ],
+    "runs": [
+      {
+        "id": "P1",
+        "start": 1,
+        "end": 125,
+        "stateId": "T27",
+        "stateIndex": 26,
+        "dataParsimony": 84
+      },
+      {
+        "id": "P2",
+        "start": 126,
+        "end": 628,
+        "stateId": "T14",
+        "stateIndex": 13,
+        "dataParsimony": 307
+      },
+      {
+        "id": "P3",
+        "start": 629,
+        "end": 792,
+        "stateId": "T28",
+        "stateIndex": 27,
+        "dataParsimony": 113
+      },
+      {
+        "id": "P4",
+        "start": 793,
+        "end": 898,
+        "stateId": "T9",
+        "stateIndex": 8,
+        "dataParsimony": 87
+      },
+      {
+        "id": "P5",
+        "start": 899,
+        "end": 1044,
+        "stateId": "T20",
+        "stateIndex": 19,
+        "dataParsimony": 142
+      },
+      {
+        "id": "P6",
+        "start": 1045,
+        "end": 1191,
+        "stateId": "T34",
+        "stateIndex": 33,
+        "dataParsimony": 127
+      },
+      {
+        "id": "P7",
+        "start": 1192,
+        "end": 1372,
+        "stateId": "T10",
+        "stateIndex": 9,
+        "dataParsimony": 181
+      },
+      {
+        "id": "P8",
+        "start": 1373,
+        "end": 1511,
+        "stateId": "T42",
+        "stateIndex": 41,
+        "dataParsimony": 79
+      },
+      {
+        "id": "P9",
+        "start": 1512,
+        "end": 1767,
+        "stateId": "T37",
+        "stateIndex": 36,
+        "dataParsimony": 157
+      },
+      {
+        "id": "P10",
+        "start": 1768,
+        "end": 2400,
+        "stateId": "T26",
+        "stateIndex": 25,
+        "dataParsimony": 434
+      }
+    ],
+    "breakpoints": [
+      {
+        "afterSite": 125,
+        "intervalLow": 125,
+        "intervalHigh": 125,
+        "fromStateId": "T27",
+        "toStateId": "T14",
+        "graphDistance": 1,
+        "edits": [
+          {
+            "prunedTaxa": [
+              "t1",
+              "t2",
+              "t3"
+            ],
+            "sourceSiblingTaxa": [
+              "t4",
+              "t6",
+              "t7",
+              "t8",
+              "t9",
+              "t10"
+            ],
+            "destinationTaxa": [
+              "t6"
+            ],
+            "destinationIsRoot": false
+          }
+        ],
+        "minMarginalGap": 0.0004999999657684384
+      },
+      {
+        "afterSite": 628,
+        "intervalLow": 628,
+        "intervalHigh": 628,
+        "fromStateId": "T14",
+        "toStateId": "T28",
+        "graphDistance": 1,
+        "edits": [
+          {
+            "prunedTaxa": [
+              "t1",
+              "t2",
+              "t3",
+              "t6",
+              "t7"
+            ],
+            "sourceSiblingTaxa": [
+              "t8"
+            ],
+            "destinationTaxa": [
+              "t4"
+            ],
+            "destinationIsRoot": false
+          }
+        ],
+        "minMarginalGap": 0.0004999999096071406
+      },
+      {
+        "afterSite": 792,
+        "intervalLow": 792,
+        "intervalHigh": 792,
+        "fromStateId": "T28",
+        "toStateId": "T9",
+        "graphDistance": 2,
+        "edits": [
+          {
+            "prunedTaxa": [
+              "t1",
+              "t2",
+              "t3",
+              "t6",
+              "t7"
+            ],
+            "sourceSiblingTaxa": [
+              "t4"
+            ],
+            "destinationTaxa": [
+              "t8",
+              "t9",
+              "t10"
+            ],
+            "destinationIsRoot": false
+          },
+          {
+            "prunedTaxa": [
+              "t1",
+              "t2"
+            ],
+            "sourceSiblingTaxa": [
+              "t3"
+            ],
+            "destinationTaxa": [
+              "t3",
+              "t6"
+            ],
+            "destinationIsRoot": false
+          }
+        ],
+        "minMarginalGap": 0
+      },
+      {
+        "afterSite": 898,
+        "intervalLow": 898,
+        "intervalHigh": 898,
+        "fromStateId": "T9",
+        "toStateId": "T20",
+        "graphDistance": 2,
+        "edits": [
+          {
+            "prunedTaxa": [
+              "t1",
+              "t2"
+            ],
+            "sourceSiblingTaxa": [
+              "t3",
+              "t6"
+            ],
+            "destinationTaxa": [
+              "t3"
+            ],
+            "destinationIsRoot": false
+          },
+          {
+            "prunedTaxa": [
+              "t1",
+              "t2",
+              "t3",
+              "t6"
+            ],
+            "sourceSiblingTaxa": [
+              "t7"
+            ],
+            "destinationTaxa": [
+              "t4"
+            ],
+            "destinationIsRoot": false
+          }
+        ],
+        "minMarginalGap": 0
+      },
+      {
+        "afterSite": 1044,
+        "intervalLow": 1044,
+        "intervalHigh": 1044,
+        "fromStateId": "T20",
+        "toStateId": "T34",
+        "graphDistance": 3,
+        "edits": [
+          {
+            "prunedTaxa": [
+              "t1",
+              "t2",
+              "t3",
+              "t6"
+            ],
+            "sourceSiblingTaxa": [
+              "t4"
+            ],
+            "destinationTaxa": [
+              "t7",
+              "t8",
+              "t9",
+              "t10"
+            ],
+            "destinationIsRoot": false
+          },
+          {
+            "prunedTaxa": [
+              "t1",
+              "t2",
+              "t3"
+            ],
+            "sourceSiblingTaxa": [
+              "t6"
+            ],
+            "destinationTaxa": [
+              "t8",
+              "t9",
+              "t10"
+            ],
+            "destinationIsRoot": false
+          },
+          {
+            "prunedTaxa": [
+              "t5"
+            ],
+            "sourceSiblingTaxa": [
+              "t1",
+              "t2",
+              "t3",
+              "t4",
+              "t6",
+              "t7",
+              "t8",
+              "t9",
+              "t10"
+            ],
+            "destinationTaxa": [
+              "t1",
+              "t2",
+              "t3",
+              "t7",
+              "t8",
+              "t9",
+              "t10"
+            ],
+            "destinationIsRoot": false
+          }
+        ],
+        "minMarginalGap": 0.0009999999094816303
+      },
+      {
+        "afterSite": 1191,
+        "intervalLow": 1191,
+        "intervalHigh": 1191,
+        "fromStateId": "T34",
+        "toStateId": "T10",
+        "graphDistance": 1,
+        "edits": [
+          {
+            "prunedTaxa": [
+              "t5"
+            ],
+            "sourceSiblingTaxa": [
+              "t1",
+              "t2",
+              "t3",
+              "t7",
+              "t8",
+              "t9",
+              "t10"
+            ],
+            "destinationTaxa": [
+              "t1",
+              "t2",
+              "t3",
+              "t4",
+              "t6",
+              "t7",
+              "t8",
+              "t9",
+              "t10"
+            ],
+            "destinationIsRoot": true
+          }
+        ],
+        "minMarginalGap": 0.0004999999096071406
+      },
+      {
+        "afterSite": 1372,
+        "intervalLow": 1372,
+        "intervalHigh": 1372,
+        "fromStateId": "T10",
+        "toStateId": "T42",
+        "graphDistance": 4,
+        "edits": [
+          {
+            "prunedTaxa": [
+              "t1",
+              "t2",
+              "t3"
+            ],
+            "sourceSiblingTaxa": [
+              "t8",
+              "t9",
+              "t10"
+            ],
+            "destinationTaxa": [
+              "t6"
+            ],
+            "destinationIsRoot": false
+          },
+          {
+            "prunedTaxa": [
+              "t1",
+              "t2",
+              "t3",
+              "t6"
+            ],
+            "sourceSiblingTaxa": [
+              "t7",
+              "t8",
+              "t9",
+              "t10"
+            ],
+            "destinationTaxa": [
+              "t7"
+            ],
+            "destinationIsRoot": false
+          },
+          {
+            "prunedTaxa": [
+              "t9",
+              "t10"
+            ],
+            "sourceSiblingTaxa": [
+              "t8"
+            ],
+            "destinationTaxa": [
+              "t4"
+            ],
+            "destinationIsRoot": false
+          },
+          {
+            "prunedTaxa": [
+              "t5"
+            ],
+            "sourceSiblingTaxa": [
+              "t1",
+              "t2",
+              "t3",
+              "t4",
+              "t6",
+              "t7",
+              "t8",
+              "t9",
+              "t10"
+            ],
+            "destinationTaxa": [
+              "t1",
+              "t2",
+              "t3",
+              "t6"
+            ],
+            "destinationIsRoot": false
+          }
+        ],
+        "minMarginalGap": 0.0009999999142564775
+      },
+      {
+        "afterSite": 1511,
+        "intervalLow": 1511,
+        "intervalHigh": 1511,
+        "fromStateId": "T42",
+        "toStateId": "T37",
+        "graphDistance": 1,
+        "edits": [
+          {
+            "prunedTaxa": [
+              "t5"
+            ],
+            "sourceSiblingTaxa": [
+              "t1",
+              "t2",
+              "t3",
+              "t6"
+            ],
+            "destinationTaxa": [
+              "t1",
+              "t2",
+              "t3",
+              "t4",
+              "t6",
+              "t7",
+              "t8",
+              "t9",
+              "t10"
+            ],
+            "destinationIsRoot": true
+          }
+        ],
+        "minMarginalGap": 0.0004999999300707714
+      },
+      {
+        "afterSite": 1767,
+        "intervalLow": 1767,
+        "intervalHigh": 1767,
+        "fromStateId": "T37",
+        "toStateId": "T26",
+        "graphDistance": 1,
+        "edits": [
+          {
+            "prunedTaxa": [
+              "t1",
+              "t2",
+              "t3"
+            ],
+            "sourceSiblingTaxa": [
+              "t6"
+            ],
+            "destinationTaxa": [
+              "t4",
+              "t6",
+              "t7",
+              "t8",
+              "t9",
+              "t10"
+            ],
+            "destinationIsRoot": false
+          }
+        ],
+        "minMarginalGap": 0.000499999930298145
+      }
+    ],
+    "iterations": [
+      {
+        "start": 1,
+        "iteration": 1,
+        "graphStates": 9,
+        "graphEdges": 8,
+        "occupiedStates": 4,
+        "mastersEvaluated": 9,
+        "neighboursEnumerated": 204,
+        "neighboursPriced": 112,
+        "statesAdded": 8,
+        "objective": 1804.2000000001,
+        "masterStateId": "T1",
+        "bestOmittedIntervalGain": 39.23299999996971,
+        "elapsedMs": 152.432163999998
+      },
+      {
+        "start": 1,
+        "iteration": 2,
+        "graphStates": 17,
+        "graphEdges": 27,
+        "occupiedStates": 7,
+        "mastersEvaluated": 17,
+        "neighboursEnumerated": 1026,
+        "neighboursPriced": 112,
+        "statesAdded": 8,
+        "objective": 1776.3895000000805,
+        "masterStateId": "T2",
+        "bestOmittedIntervalGain": 13.85450000008791,
+        "elapsedMs": 388.0824330000032
+      },
+      {
+        "start": 1,
+        "iteration": 3,
+        "graphStates": 25,
+        "graphEdges": 40,
+        "occupiedStates": 7,
+        "mastersEvaluated": 25,
+        "neighboursEnumerated": 998,
+        "neighboursPriced": 112,
+        "statesAdded": 8,
+        "objective": 1764.9760000000629,
+        "masterStateId": "T2",
+        "bestOmittedIntervalGain": 4.41300000001047,
+        "elapsedMs": 463.33392499998445
+      },
+      {
+        "start": 1,
+        "iteration": 4,
+        "graphStates": 33,
+        "graphEdges": 55,
+        "occupiedStates": 8,
+        "mastersEvaluated": 33,
+        "neighboursEnumerated": 990,
+        "neighboursPriced": 112,
+        "statesAdded": 8,
+        "objective": 1741.7430000000074,
+        "masterStateId": "T2",
+        "bestOmittedIntervalGain": 22.183500000079448,
+        "elapsedMs": 696.8842329999898
+      },
+      {
+        "start": 1,
+        "iteration": 5,
+        "graphStates": 41,
+        "graphEdges": 76,
+        "occupiedStates": 10,
+        "mastersEvaluated": 41,
+        "neighboursEnumerated": 1010,
+        "neighboursPriced": 112,
+        "statesAdded": 8,
+        "objective": 1739.348499999992,
+        "masterStateId": "T14",
+        "bestOmittedIntervalGain": 0.926500000020269,
+        "elapsedMs": 1165.5942740000028
+      },
+      {
+        "start": 1,
+        "iteration": 6,
+        "graphStates": 48,
+        "graphEdges": 90,
+        "occupiedStates": 10,
+        "mastersEvaluated": 48,
+        "neighboursEnumerated": 1006,
+        "neighboursPriced": 112,
+        "statesAdded": 7,
+        "objective": 1738.7440000000552,
+        "masterStateId": "T37",
+        "bestOmittedIntervalGain": 0.5000000000698037,
+        "elapsedMs": 1749.5624010000029
+      },
+      {
+        "start": 2,
+        "iteration": 1,
+        "graphStates": 9,
+        "graphEdges": 8,
+        "occupiedStates": 7,
+        "mastersEvaluated": 9,
+        "neighboursEnumerated": 196,
+        "neighboursPriced": 112,
+        "statesAdded": 8,
+        "objective": 1806.6105000000998,
+        "masterStateId": "T1",
+        "bestOmittedIntervalGain": 39.23299999996971,
+        "elapsedMs": 180.04541099999915
+      },
+      {
+        "start": 2,
+        "iteration": 2,
+        "graphStates": 17,
+        "graphEdges": 23,
+        "occupiedStates": 8,
+        "mastersEvaluated": 17,
+        "neighboursEnumerated": 956,
+        "neighboursPriced": 112,
+        "statesAdded": 8,
+        "objective": 1751.3799999999892,
+        "masterStateId": "T1",
+        "bestOmittedIntervalGain": 24.183500000079448,
+        "elapsedMs": 397.3410300000105
+      },
+      {
+        "start": 2,
+        "iteration": 3,
+        "graphStates": 25,
+        "graphEdges": 42,
+        "occupiedStates": 8,
+        "mastersEvaluated": 25,
+        "neighboursEnumerated": 962,
+        "neighboursPriced": 112,
+        "statesAdded": 8,
+        "objective": 1747.3960000000563,
+        "masterStateId": "T13",
+        "bestOmittedIntervalGain": 3.432000000007065,
+        "elapsedMs": 522.7017350000096
+      },
+      {
+        "start": 2,
+        "iteration": 4,
+        "graphStates": 33,
+        "graphEdges": 55,
+        "occupiedStates": 9,
+        "mastersEvaluated": 33,
+        "neighboursEnumerated": 954,
+        "neighboursPriced": 112,
+        "statesAdded": 8,
+        "objective": 1746.9900000000755,
+        "masterStateId": "T13",
+        "bestOmittedIntervalGain": 0.4060000000556556,
+        "elapsedMs": 709.9023610000149
+      },
+      {
+        "start": 2,
+        "iteration": 5,
+        "graphStates": 41,
+        "graphEdges": 69,
+        "occupiedStates": 9,
+        "mastersEvaluated": 41,
+        "neighboursEnumerated": 954,
+        "neighboursPriced": 112,
+        "statesAdded": 8,
+        "objective": 1746.4900000000755,
+        "masterStateId": "T13",
+        "bestOmittedIntervalGain": 0,
+        "elapsedMs": 1164.3901640000113
+      },
+      {
+        "start": 2,
+        "iteration": 6,
+        "graphStates": 48,
+        "graphEdges": 77,
+        "occupiedStates": 9,
+        "mastersEvaluated": 48,
+        "neighboursEnumerated": 954,
+        "neighboursPriced": 112,
+        "statesAdded": 7,
+        "objective": 1746.4900000000755,
+        "masterStateId": "T13",
+        "bestOmittedIntervalGain": 0,
+        "elapsedMs": 1164.7459730000119
+      },
+      {
+        "start": 3,
+        "iteration": 1,
+        "graphStates": 9,
+        "graphEdges": 8,
+        "occupiedStates": 4,
+        "mastersEvaluated": 9,
+        "neighboursEnumerated": 204,
+        "neighboursPriced": 112,
+        "statesAdded": 8,
+        "objective": 1794.1139999999766,
+        "masterStateId": "T3",
+        "bestOmittedIntervalGain": 39.23299999996971,
+        "elapsedMs": 180.31562999999733
+      },
+      {
+        "start": 3,
+        "iteration": 2,
+        "graphStates": 17,
+        "graphEdges": 26,
+        "occupiedStates": 8,
+        "mastersEvaluated": 17,
+        "neighboursEnumerated": 822,
+        "neighboursPriced": 112,
+        "statesAdded": 8,
+        "objective": 1747.1020000000094,
+        "masterStateId": "T3",
+        "bestOmittedIntervalGain": 22.183500000079448,
+        "elapsedMs": 345.00015300000086
+      },
+      {
+        "start": 3,
+        "iteration": 3,
+        "graphStates": 25,
+        "graphEdges": 49,
+        "occupiedStates": 8,
+        "mastersEvaluated": 25,
+        "neighboursEnumerated": 1018,
+        "neighboursPriced": 112,
+        "statesAdded": 8,
+        "objective": 1740.9655000000128,
+        "masterStateId": "T13",
+        "bestOmittedIntervalGain": 4.065000000015289,
+        "elapsedMs": 535.7017350000096
+      },
+      {
+        "start": 3,
+        "iteration": 4,
+        "graphStates": 33,
+        "graphEdges": 62,
+        "occupiedStates": 8,
+        "mastersEvaluated": 33,
+        "neighboursEnumerated": 1006,
+        "neighboursPriced": 112,
+        "statesAdded": 8,
+        "objective": 1740.9655000000128,
+        "masterStateId": "T13",
+        "bestOmittedIntervalGain": 0,
+        "elapsedMs": 766.9201290000055
+      },
+      {
+        "start": 3,
+        "iteration": 5,
+        "graphStates": 41,
+        "graphEdges": 71,
+        "occupiedStates": 9,
+        "mastersEvaluated": 41,
+        "neighboursEnumerated": 1006,
+        "neighboursPriced": 112,
+        "statesAdded": 8,
+        "objective": 1740.039000000011,
+        "masterStateId": "T13",
+        "bestOmittedIntervalGain": 0.9265000000366399,
+        "elapsedMs": 873.4999529999914
+      },
+      {
+        "start": 3,
+        "iteration": 6,
+        "graphStates": 48,
+        "graphEdges": 80,
+        "occupiedStates": 9,
+        "mastersEvaluated": 48,
+        "neighboursEnumerated": 1006,
+        "neighboursPriced": 112,
+        "statesAdded": 7,
+        "objective": 1740.039000000011,
+        "masterStateId": "T13",
+        "bestOmittedIntervalGain": 3.4788172342814505e-11,
+        "elapsedMs": 1467.372739000013
+      },
+      {
+        "start": 4,
+        "iteration": 1,
+        "graphStates": 9,
+        "graphEdges": 8,
+        "occupiedStates": 4,
+        "mastersEvaluated": 9,
+        "neighboursEnumerated": 218,
+        "neighboursPriced": 112,
+        "statesAdded": 8,
+        "objective": 1804.2000000001,
+        "masterStateId": "T1",
+        "bestOmittedIntervalGain": 39.23299999996971,
+        "elapsedMs": 189.9645319999836
+      },
+      {
+        "start": 4,
+        "iteration": 2,
+        "graphStates": 17,
+        "graphEdges": 21,
+        "occupiedStates": 5,
+        "mastersEvaluated": 17,
+        "neighboursEnumerated": 1068,
+        "neighboursPriced": 112,
+        "statesAdded": 8,
+        "objective": 1788.919000000052,
+        "masterStateId": "T4",
+        "bestOmittedIntervalGain": 14.000000000069804,
+        "elapsedMs": 599.2810100000061
+      },
+      {
+        "start": 4,
+        "iteration": 3,
+        "graphStates": 25,
+        "graphEdges": 33,
+        "occupiedStates": 7,
+        "mastersEvaluated": 25,
+        "neighboursEnumerated": 1080,
+        "neighboursPriced": 112,
+        "statesAdded": 8,
+        "objective": 1771.288000000073,
+        "masterStateId": "T4",
+        "bestOmittedIntervalGain": 6.753000000074962,
+        "elapsedMs": 601.2630960000097
+      },
+      {
+        "start": 4,
+        "iteration": 4,
+        "graphStates": 33,
+        "graphEdges": 47,
+        "occupiedStates": 8,
+        "mastersEvaluated": 33,
+        "neighboursEnumerated": 1082,
+        "neighboursPriced": 112,
+        "statesAdded": 8,
+        "objective": 1766.875000000073,
+        "masterStateId": "T4",
+        "bestOmittedIntervalGain": 4.413000000033662,
+        "elapsedMs": 904.6543360000069
+      },
+      {
+        "start": 4,
+        "iteration": 5,
+        "graphStates": 41,
+        "graphEdges": 59,
+        "occupiedStates": 8,
+        "mastersEvaluated": 41,
+        "neighboursEnumerated": 1082,
+        "neighboursPriced": 112,
+        "statesAdded": 8,
+        "objective": 1764.875000000073,
+        "masterStateId": "T4",
+        "bestOmittedIntervalGain": 2.0000000000989075,
+        "elapsedMs": 1041.199775999994
+      },
+      {
+        "start": 4,
+        "iteration": 6,
+        "graphStates": 48,
+        "graphEdges": 68,
+        "occupiedStates": 8,
+        "mastersEvaluated": 48,
+        "neighboursEnumerated": 1082,
+        "neighboursPriced": 112,
+        "statesAdded": 7,
+        "objective": 1764.875000000073,
+        "masterStateId": "T4",
+        "bestOmittedIntervalGain": 9.890754881780595e-11,
+        "elapsedMs": 1136.1315370000084
+      }
+    ],
+    "lowerBoundKind": "adaptive-restricted-rspr-graph",
+    "certificate": "Exact joint master/path optimum on the final verified rooted-SPR graph. Outer rooted-tree-space expansion is budgeted; no global topology-space optimum is claimed."
+  },
+  "network": {
+    "status": "complete",
+    "objective": 1743.412999999998,
+    "dataParsimony": 1721,
+    "masterTree": "(((((t6:1,t7:1):1,t8:1):1,((t9:1,t10:1):1,t4:1):1):1,((t1:1,t2:1):1,t3:1):1):1,t5:1);",
+    "masterStateId": "R1:T26",
+    "boundaryConvention": "open",
+    "overlapCap": 3,
+    "uncertaintyTolerance": 2,
+    "maximumOverlapUsed": 3,
+    "templates": [
+      {
+        "id": "R1",
+        "bit": 0,
+        "move": {
+          "prunedTaxa": [
+            "t1",
+            "t2",
+            "t3"
+          ],
+          "sourceSiblingTaxa": [
+            "t4",
+            "t6",
+            "t7",
+            "t8",
+            "t9",
+            "t10"
+          ],
+          "destinationTaxa": [
+            "t6"
+          ],
+          "destinationIsRoot": false
+        },
+        "sourceContexts": [
+          "(((((L5,L6),L7),((L8,L9),L3)),((L0,L1),L2)),L4)",
+          "((((((L8,L9),L7),(L5,L6)),L3),((L0,L1),L2)),L4)",
+          "(((((L3,L5),(L8,L9)),(L6,L7)),((L0,L1),L2)),L4)",
+          "((((((L8,L9),L7),L6),(L3,L5)),((L0,L1),L2)),L4)",
+          "((((((L0,L1),L2),L7),(L5,L6)),((L8,L9),L3)),L4)",
+          "((((((L0,L1),L2),((L8,L9),L7)),(L5,L6)),L3),L4)",
+          "((((((L0,L1),L2),L7),L6),((L3,L5),(L8,L9))),L4)",
+          "(((((L4,L5),L6),L7),((L8,L9),L3)),((L0,L1),L2))",
+          "(((((L4,L5),L6),((L8,L9),L7)),L3),((L0,L1),L2))",
+          "(((((L4,L5),L3),(L8,L9)),(L6,L7)),((L0,L1),L2))",
+          "(((((L0,L1),L2),L7),((L4,L5),L6)),((L8,L9),L3))"
+        ],
+        "topologicallySilentMasks": [
+          8,
+          10,
+          12,
+          24
+        ],
+        "reticulationNode": "N19",
+        "backgroundParentNode": "N1",
+        "alternateParentNode": "N20",
+        "recipientChildNode": "N13",
+        "donorChildNode": "N5"
+      },
+      {
+        "id": "R2",
+        "bit": 1,
+        "move": {
+          "prunedTaxa": [
+            "t9",
+            "t10"
+          ],
+          "sourceSiblingTaxa": [
+            "t4"
+          ],
+          "destinationTaxa": [
+            "t8"
+          ],
+          "destinationIsRoot": false
+        },
+        "sourceContexts": [
+          "(((((L5,L6),L7),((L8,L9),L3)),((L0,L1),L2)),L4)",
+          "(((((((L0,L1),L2),L5),L6),L7),((L8,L9),L3)),L4)",
+          "(((((L3,L5),(L8,L9)),(L6,L7)),((L0,L1),L2)),L4)",
+          "(((((((L0,L1),L2),L5),L3),(L8,L9)),(L6,L7)),L4)",
+          "((((((L0,L1),L2),L7),(L5,L6)),((L8,L9),L3)),L4)",
+          "((((((L0,L1),L2),L7),L6),((L3,L5),(L8,L9))),L4)",
+          "(((((L4,L5),L6),L7),((L8,L9),L3)),((L0,L1),L2))",
+          "(((((((L0,L1),L2),L5),L4),L6),L7),((L8,L9),L3))",
+          "(((((L4,L5),L3),(L8,L9)),(L6,L7)),((L0,L1),L2))",
+          "(((((L0,L1),L2),L7),((L4,L5),L6)),((L8,L9),L3))"
+        ],
+        "topologicallySilentMasks": [],
+        "reticulationNode": "N21",
+        "backgroundParentNode": "N8",
+        "alternateParentNode": "N22",
+        "recipientChildNode": "N9",
+        "donorChildNode": "N7"
+      },
+      {
+        "id": "R3",
+        "bit": 2,
+        "move": {
+          "prunedTaxa": [
+            "t1",
+            "t2",
+            "t3",
+            "t6"
+          ],
+          "sourceSiblingTaxa": [
+            "t7"
+          ],
+          "destinationTaxa": [
+            "t4"
+          ],
+          "destinationIsRoot": false
+        },
+        "sourceContexts": [
+          "(((((L5,L6),L7),((L8,L9),L3)),((L0,L1),L2)),L4)",
+          "(((((((L0,L1),L2),L5),L6),L7),((L8,L9),L3)),L4)",
+          "((((((L8,L9),L7),(L5,L6)),L3),((L0,L1),L2)),L4)",
+          "(((((((L0,L1),L2),L5),L6),((L8,L9),L7)),L3),L4)",
+          "((((((L0,L1),L2),L7),(L5,L6)),((L8,L9),L3)),L4)",
+          "((((((L0,L1),L2),((L8,L9),L7)),(L5,L6)),L3),L4)",
+          "(((((L4,L5),L6),L7),((L8,L9),L3)),((L0,L1),L2))",
+          "(((((((L0,L1),L2),L5),L4),L6),L7),((L8,L9),L3))",
+          "(((((L4,L5),L6),((L8,L9),L7)),L3),((L0,L1),L2))",
+          "(((((L0,L1),L2),L7),((L4,L5),L6)),((L8,L9),L3))"
+        ],
+        "topologicallySilentMasks": [],
+        "reticulationNode": "N23",
+        "backgroundParentNode": "N4",
+        "alternateParentNode": "N24",
+        "recipientChildNode": "N20",
+        "donorChildNode": "N12"
+      },
+      {
+        "id": "R4",
+        "bit": 3,
+        "move": {
+          "prunedTaxa": [
+            "t1",
+            "t2",
+            "t3"
+          ],
+          "sourceSiblingTaxa": [
+            "t4",
+            "t6",
+            "t7",
+            "t8",
+            "t9",
+            "t10"
+          ],
+          "destinationTaxa": [
+            "t8",
+            "t9",
+            "t10"
+          ],
+          "destinationIsRoot": false
+        },
+        "sourceContexts": [
+          "(((((L5,L6),L7),((L8,L9),L3)),((L0,L1),L2)),L4)",
+          "(((((((L0,L1),L2),L5),L6),L7),((L8,L9),L3)),L4)",
+          "((((((L8,L9),L7),(L5,L6)),L3),((L0,L1),L2)),L4)",
+          "(((((((L0,L1),L2),L5),L6),((L8,L9),L7)),L3),L4)",
+          "(((((L3,L5),(L8,L9)),(L6,L7)),((L0,L1),L2)),L4)",
+          "(((((((L0,L1),L2),L5),L3),(L8,L9)),(L6,L7)),L4)",
+          "((((((L8,L9),L7),L6),(L3,L5)),((L0,L1),L2)),L4)",
+          "(((((L4,L5),L6),L7),((L8,L9),L3)),((L0,L1),L2))",
+          "(((((((L0,L1),L2),L5),L4),L6),L7),((L8,L9),L3))",
+          "(((((L4,L5),L6),((L8,L9),L7)),L3),((L0,L1),L2))",
+          "(((((L4,L5),L3),(L8,L9)),(L6,L7)),((L0,L1),L2))"
+        ],
+        "topologicallySilentMasks": [],
+        "reticulationNode": "N25",
+        "backgroundParentNode": "N19",
+        "alternateParentNode": "N26",
+        "recipientChildNode": "N13",
+        "donorChildNode": "N22"
+      },
+      {
+        "id": "R5",
+        "bit": 4,
+        "move": {
+          "prunedTaxa": [
+            "t5"
+          ],
+          "sourceSiblingTaxa": [
+            "t1",
+            "t2",
+            "t3",
+            "t4",
+            "t6",
+            "t7",
+            "t8",
+            "t9",
+            "t10"
+          ],
+          "destinationTaxa": [
+            "t1",
+            "t2",
+            "t3",
+            "t6"
+          ],
+          "destinationIsRoot": false
+        },
+        "sourceContexts": [
+          "(((((L5,L6),L7),((L8,L9),L3)),((L0,L1),L2)),L4)",
+          "(((((((L0,L1),L2),L5),L6),L7),((L8,L9),L3)),L4)",
+          "((((((L8,L9),L7),(L5,L6)),L3),((L0,L1),L2)),L4)",
+          "(((((((L0,L1),L2),L5),L6),((L8,L9),L7)),L3),L4)",
+          "(((((L3,L5),(L8,L9)),(L6,L7)),((L0,L1),L2)),L4)",
+          "(((((((L0,L1),L2),L5),L3),(L8,L9)),(L6,L7)),L4)",
+          "((((((L8,L9),L7),L6),(L3,L5)),((L0,L1),L2)),L4)",
+          "((((((L0,L1),L2),L7),(L5,L6)),((L8,L9),L3)),L4)",
+          "((((((L0,L1),L2),((L8,L9),L7)),(L5,L6)),L3),L4)",
+          "((((((L0,L1),L2),L7),L6),((L3,L5),(L8,L9))),L4)"
+        ],
+        "topologicallySilentMasks": [],
+        "reticulationNode": "N27",
+        "backgroundParentNode": "N0",
+        "alternateParentNode": "N28",
+        "recipientChildNode": "N18",
+        "donorChildNode": "N20"
+      }
+    ],
+    "occurrences": [
+      {
+        "id": "E1",
+        "templateId": "R1",
+        "start": 180,
+        "end": 1034,
+        "leftCensored": false,
+        "rightCensored": false,
+        "maximumConcurrentEvents": 3,
+        "openingGap": 0.0005000000260224624,
+        "closingGap": 0,
+        "openingIntervalLow": 125,
+        "openingIntervalHigh": 201,
+        "closingIntervalLow": 1001,
+        "closingIntervalHigh": 1066
+      },
+      {
+        "id": "E2",
+        "templateId": "R1",
+        "start": 1401,
+        "end": 1752,
+        "leftCensored": false,
+        "rightCensored": false,
+        "maximumConcurrentEvents": 2,
+        "openingGap": 0.0004999999725896487,
+        "closingGap": 0.0004999999998744897,
+        "openingIntervalLow": 1189,
+        "openingIntervalHigh": 1419,
+        "closingIntervalLow": 1729,
+        "closingIntervalHigh": 1771
+      },
+      {
+        "id": "E3",
+        "templateId": "R2",
+        "start": 1,
+        "end": 59,
+        "leftCensored": true,
+        "rightCensored": false,
+        "maximumConcurrentEvents": 1,
+        "openingGap": 0,
+        "closingGap": 0.0005000000262498361,
+        "openingIntervalLow": 1,
+        "openingIntervalHigh": 1,
+        "closingIntervalLow": 57,
+        "closingIntervalHigh": 106
+      },
+      {
+        "id": "E4",
+        "templateId": "R2",
+        "start": 577,
+        "end": 1372,
+        "leftCensored": false,
+        "rightCensored": false,
+        "maximumConcurrentEvents": 3,
+        "openingGap": 0.0004999999810024747,
+        "closingGap": 0.0004999999694064172,
+        "openingIntervalLow": 540,
+        "openingIntervalHigh": 631,
+        "closingIntervalLow": 1359,
+        "closingIntervalHigh": 1439
+      },
+      {
+        "id": "E5",
+        "templateId": "R3",
+        "start": 911,
+        "end": 1197,
+        "leftCensored": false,
+        "rightCensored": false,
+        "maximumConcurrentEvents": 3,
+        "openingGap": 0.0004999999810024747,
+        "closingGap": 0.0004999999694064172,
+        "openingIntervalLow": 873,
+        "openingIntervalHigh": 947,
+        "closingIntervalLow": 1181,
+        "closingIntervalHigh": 1260
+      },
+      {
+        "id": "E6",
+        "templateId": "R4",
+        "start": 1035,
+        "end": 1372,
+        "leftCensored": false,
+        "rightCensored": false,
+        "maximumConcurrentEvents": 3,
+        "openingGap": 0,
+        "closingGap": 0.0004999999694064172,
+        "openingIntervalLow": 1024,
+        "openingIntervalHigh": 1066,
+        "closingIntervalLow": 1321,
+        "closingIntervalHigh": 1414
+      },
+      {
+        "id": "E7",
+        "templateId": "R5",
+        "start": 1373,
+        "end": 1511,
+        "leftCensored": false,
+        "rightCensored": false,
+        "maximumConcurrentEvents": 2,
+        "openingGap": 0.0004999999694064172,
+        "closingGap": 0.0004999999725896487,
+        "openingIntervalLow": 1359,
+        "openingIntervalHigh": 1423,
+        "closingIntervalLow": 1488,
+        "closingIntervalHigh": 1614
+      }
+    ],
+    "trees": [
+      {
+        "id": "NTree1",
+        "signature": "((((((L8,L9),L7),(L5,L6)),L3),((L0,L1),L2)),L4)",
+        "tree": "((((((t9:1,t10:1):1,t8:1):1,(t6:1,t7:1):1):1,t4:1):1,((t1:1,t2:1):1,t3:1):1):1,t5:1);",
+        "masks": [
+          2
+        ],
+        "occupiedSpan": 59,
+        "color": "#177f72"
+      },
+      {
+        "id": "NTree2",
+        "signature": "(((((L5,L6),L7),((L8,L9),L3)),((L0,L1),L2)),L4)",
+        "tree": "(((((t6:1,t7:1):1,t8:1):1,((t9:1,t10:1):1,t4:1):1):1,((t1:1,t2:1):1,t3:1):1):1,t5:1);",
+        "masks": [
+          0
+        ],
+        "occupiedSpan": 768,
+        "color": "#d46d35"
+      },
+      {
+        "id": "NTree3",
+        "signature": "(((((((L0,L1),L2),L5),L6),L7),((L8,L9),L3)),L4)",
+        "tree": "(((((((t1:1,t2:1):1,t3:1):1,t6:1):1,t7:1):1,t8:1):1,((t9:1,t10:1):1,t4:1):1):1,t5:1);",
+        "masks": [
+          1
+        ],
+        "occupiedSpan": 638,
+        "color": "#6658d3"
+      },
+      {
+        "id": "NTree4",
+        "signature": "(((((((L0,L1),L2),L5),L6),((L8,L9),L7)),L3),L4)",
+        "tree": "(((((((t1:1,t2:1):1,t3:1):1,t6:1):1,t7:1):1,((t9:1,t10:1):1,t8:1):1):1,t4:1):1,t5:1);",
+        "masks": [
+          3
+        ],
+        "occupiedSpan": 334,
+        "color": "#cc3d6e"
+      },
+      {
+        "id": "NTree5",
+        "signature": "((((((L0,L1),L2),L5),L3),(((L8,L9),L7),L6)),L4)",
+        "tree": "(((t7:1,((t9:1,t10:1):1,t8:1):1):1,(t4:1,(((t1:1,t2:1):1,t3:1):1,t6:1):1):1):1,t5:1);",
+        "masks": [
+          7
+        ],
+        "occupiedSpan": 124,
+        "color": "#719e2b"
+      },
+      {
+        "id": "NTree6",
+        "signature": "((((((L0,L1),L2),((L8,L9),L7)),L6),(L3,L5)),L4)",
+        "tree": "(((t7:1,(((t9:1,t10:1):1,t8:1):1,((t1:1,t2:1):1,t3:1):1):1):1,(t4:1,t6:1):1):1,t5:1);",
+        "masks": [
+          14
+        ],
+        "occupiedSpan": 163,
+        "color": "#2575b8"
+      },
+      {
+        "id": "NTree7",
+        "signature": "((((((L0,L1),L2),((L8,L9),L7)),(L5,L6)),L3),L4)",
+        "tree": "((((t6:1,t7:1):1,(((t9:1,t10:1):1,t8:1):1,((t1:1,t2:1):1,t3:1):1):1):1,t4:1):1,t5:1);",
+        "masks": [
+          10
+        ],
+        "occupiedSpan": 175,
+        "color": "#a45d1a"
+      },
+      {
+        "id": "NTree8",
+        "signature": "(((((L4,L5),L6),L7),((L8,L9),L3)),((L0,L1),L2))",
+        "tree": "((((t7:1,(t6:1,t5:1):1):1,t8:1):1,((t9:1,t10:1):1,t4:1):1):1,((t1:1,t2:1):1,t3:1):1);",
+        "masks": [
+          16
+        ],
+        "occupiedSpan": 28,
+        "color": "#0e918c"
+      },
+      {
+        "id": "NTree9",
+        "signature": "(((((((L0,L1),L2),L5),L4),L6),L7),((L8,L9),L3))",
+        "tree": "(((t7:1,((((t1:1,t2:1):1,t3:1):1,t6:1):1,t5:1):1):1,t8:1):1,((t9:1,t10:1):1,t4:1):1);",
+        "masks": [
+          17
+        ],
+        "occupiedSpan": 111,
+        "color": "#8c4eb2"
+      }
+    ],
+    "runs": [
+      {
+        "id": "B1",
+        "start": 1,
+        "end": 59,
+        "mask": 2,
+        "activeTemplateIds": [
+          "R2"
+        ],
+        "treeId": "NTree1",
+        "treeIndex": 0,
+        "dataParsimony": 46
+      },
+      {
+        "id": "B2",
+        "start": 60,
+        "end": 179,
+        "mask": 0,
+        "activeTemplateIds": [],
+        "treeId": "NTree2",
+        "treeIndex": 1,
+        "dataParsimony": 82
+      },
+      {
+        "id": "B3",
+        "start": 180,
+        "end": 576,
+        "mask": 1,
+        "activeTemplateIds": [
+          "R1"
+        ],
+        "treeId": "NTree3",
+        "treeIndex": 2,
+        "dataParsimony": 211
+      },
+      {
+        "id": "B4",
+        "start": 577,
+        "end": 910,
+        "mask": 3,
+        "activeTemplateIds": [
+          "R1",
+          "R2"
+        ],
+        "treeId": "NTree4",
+        "treeIndex": 3,
+        "dataParsimony": 276
+      },
+      {
+        "id": "B5",
+        "start": 911,
+        "end": 1034,
+        "mask": 7,
+        "activeTemplateIds": [
+          "R1",
+          "R2",
+          "R3"
+        ],
+        "treeId": "NTree5",
+        "treeIndex": 4,
+        "dataParsimony": 118
+      },
+      {
+        "id": "B6",
+        "start": 1035,
+        "end": 1197,
+        "mask": 14,
+        "activeTemplateIds": [
+          "R2",
+          "R3",
+          "R4"
+        ],
+        "treeId": "NTree6",
+        "treeIndex": 5,
+        "dataParsimony": 143
+      },
+      {
+        "id": "B7",
+        "start": 1198,
+        "end": 1372,
+        "mask": 10,
+        "activeTemplateIds": [
+          "R2",
+          "R4"
+        ],
+        "treeId": "NTree7",
+        "treeIndex": 6,
+        "dataParsimony": 176
+      },
+      {
+        "id": "B8",
+        "start": 1373,
+        "end": 1400,
+        "mask": 16,
+        "activeTemplateIds": [
+          "R5"
+        ],
+        "treeId": "NTree8",
+        "treeIndex": 7,
+        "dataParsimony": 18
+      },
+      {
+        "id": "B9",
+        "start": 1401,
+        "end": 1511,
+        "mask": 17,
+        "activeTemplateIds": [
+          "R1",
+          "R5"
+        ],
+        "treeId": "NTree9",
+        "treeIndex": 8,
+        "dataParsimony": 60
+      },
+      {
+        "id": "B10",
+        "start": 1512,
+        "end": 1752,
+        "mask": 1,
+        "activeTemplateIds": [
+          "R1"
+        ],
+        "treeId": "NTree3",
+        "treeIndex": 2,
+        "dataParsimony": 151
+      },
+      {
+        "id": "B11",
+        "start": 1753,
+        "end": 2400,
+        "mask": 0,
+        "activeTemplateIds": [],
+        "treeId": "NTree2",
+        "treeIndex": 1,
+        "dataParsimony": 440
+      }
+    ],
+    "breakpointGaps": [
+      {
+        "afterSite": 59,
+        "intervalLow": 59,
+        "intervalHigh": 59,
+        "gap": 0.0005000000262498361
+      },
+      {
+        "afterSite": 179,
+        "intervalLow": 179,
+        "intervalHigh": 179,
+        "gap": 0.0005000000260224624
+      },
+      {
+        "afterSite": 576,
+        "intervalLow": 576,
+        "intervalHigh": 576,
+        "gap": 0.0004999999810024747
+      },
+      {
+        "afterSite": 910,
+        "intervalLow": 910,
+        "intervalHigh": 910,
+        "gap": 0.0004999999810024747
+      },
+      {
+        "afterSite": 1034,
+        "intervalLow": 1034,
+        "intervalHigh": 1034,
+        "gap": 0
+      },
+      {
+        "afterSite": 1197,
+        "intervalLow": 1197,
+        "intervalHigh": 1197,
+        "gap": 0.0004999999694064172
+      },
+      {
+        "afterSite": 1372,
+        "intervalLow": 1372,
+        "intervalHigh": 1372,
+        "gap": 0.0004999999694064172
+      },
+      {
+        "afterSite": 1400,
+        "intervalLow": 1400,
+        "intervalHigh": 1400,
+        "gap": 0.0004999999725896487
+      },
+      {
+        "afterSite": 1511,
+        "intervalLow": 1511,
+        "intervalHigh": 1511,
+        "gap": 0.0004999999725896487
+      },
+      {
+        "afterSite": 1752,
+        "intervalLow": 1752,
+        "intervalHigh": 1752,
+        "gap": 0.0004999999998744897
+      }
+    ],
+    "search": [
+      {
+        "reticulations": 0,
+        "candidatesScored": 8,
+        "temporallyRejected": 0,
+        "beamRetained": 8,
+        "bestObjective": 1871,
+        "bestDataParsimony": 1871,
+        "bestOverlap": 0,
+        "elapsedMs": 136.1694429999916
+      },
+      {
+        "reticulations": 1,
+        "candidatesScored": 47,
+        "temporallyRejected": 0,
+        "beamRetained": 8,
+        "bestObjective": 1797.786500000034,
+        "bestDataParsimony": 1793,
+        "bestOverlap": 1,
+        "elapsedMs": 380.6032309999864
+      },
+      {
+        "reticulations": 2,
+        "candidatesScored": 78,
+        "temporallyRejected": 9,
+        "beamRetained": 8,
+        "bestObjective": 1772.2140000000154,
+        "bestDataParsimony": 1762,
+        "bestOverlap": 2,
+        "elapsedMs": 786.186790000007
+      },
+      {
+        "reticulations": 3,
+        "candidatesScored": 150,
+        "temporallyRejected": 24,
+        "beamRetained": 8,
+        "bestObjective": 1761.2660000000142,
+        "bestDataParsimony": 1745,
+        "bestOverlap": 3,
+        "elapsedMs": 2027.1699389999849
+      },
+      {
+        "reticulations": 4,
+        "candidatesScored": 248,
+        "temporallyRejected": 60,
+        "beamRetained": 8,
+        "bestObjective": 1748.357500000012,
+        "bestDataParsimony": 1730,
+        "bestOverlap": 3,
+        "elapsedMs": 6745.289212999982
+      },
+      {
+        "reticulations": 5,
+        "candidatesScored": 452,
+        "temporallyRejected": 68,
+        "beamRetained": 8,
+        "bestObjective": 1743.412999999998,
+        "bestDataParsimony": 1721,
+        "bestOverlap": 3,
+        "elapsedMs": 23921.95348200001
+      },
+      {
+        "reticulations": 6,
+        "candidatesScored": 736,
+        "temporallyRejected": 152,
+        "beamRetained": 8,
+        "bestObjective": 1743.531999999998,
+        "bestDataParsimony": 1720,
+        "bestOverlap": 3,
+        "elapsedMs": 63196.27369100001
+      }
+    ],
+    "paretoFrontier": [
+      {
+        "reticulations": 0,
+        "occurrences": 0,
+        "dataParsimony": 1871,
+        "objective": 1871,
+        "maximumOverlap": 0
+      },
+      {
+        "reticulations": 1,
+        "occurrences": 1,
+        "dataParsimony": 1793,
+        "objective": 1797.786500000034,
+        "maximumOverlap": 1
+      },
+      {
+        "reticulations": 2,
+        "occurrences": 3,
+        "dataParsimony": 1762,
+        "objective": 1772.2140000000154,
+        "maximumOverlap": 2
+      },
+      {
+        "reticulations": 3,
+        "occurrences": 5,
+        "dataParsimony": 1745,
+        "objective": 1761.2660000000142,
+        "maximumOverlap": 3
+      },
+      {
+        "reticulations": 4,
+        "occurrences": 6,
+        "dataParsimony": 1730,
+        "objective": 1748.357500000012,
+        "maximumOverlap": 3
+      },
+      {
+        "reticulations": 5,
+        "occurrences": 7,
+        "dataParsimony": 1721,
+        "objective": 1743.412999999998,
+        "maximumOverlap": 3
+      },
+      {
+        "reticulations": 6,
+        "occurrences": 9,
+        "dataParsimony": 1720,
+        "objective": 1743.531999999998,
+        "maximumOverlap": 3
+      }
+    ],
+    "temporal": {
+      "status": "rank-feasible",
+      "message": "The compiled switching DAG satisfies donor–recipient equality and strict ancestry constraints under an unconstrained rank assignment.",
+      "conflictingTemplates": []
+    },
+    "certificate": "Every retained switching DAG was scored by an exact mask dynamic program over all masks within the selected overlap cap. Distinct master candidates from every inferred root start seed the joint network beam, and donor-time/strict-ancestry infeasibility is enforced as a hard lazy cut. The outer rooted-network beam and event-template pool remain budgeted; no global network-space optimum is claimed."
+  },
+  "diagnostics": {
+    "engine": "independent-typescript-worker",
+    "initialTreeMethod": "internal-neighbor-joining-multiscale",
+    "scoreMethod": "fitch",
+    "transitionCost": 1,
+    "transversionCost": 1,
+    "informativeSites": 933,
+    "dyadicSeeds": 18,
+    "rootPlacements": 4,
+    "candidateEventTemplates": 24,
+    "graphStates": 48,
+    "graphEdges": 90,
+    "pathNetworkObjectiveDifference": 4.668999999942798,
+    "resourceLimited": true,
+    "warnings": [
+      "The rooted-tree graph or root-placement universe was budget limited; increase advanced search budgets to test stability.",
+      "The selected history touches the overlap cap; rerun with a larger cap to test whether the optimum changes."
+    ]
+  },
+  "timings": {
+    "pathSearchMs": 17420.69431000002,
+    "networkSearchMs": 97321.68676500002,
+    "totalMs": 114743.40721500001
+  },
+  "eventsCsv": "Occurrence,Template,Start,End,Left censored,Right censored,Maximum overlap,Opening gap,Closing gap,Opening interval low,Opening interval high,Closing interval low,Closing interval high,Pruned taxa,Source sibling,Destination taxa,Destination is root\nE1,R1,180,1034,false,false,3,0.0005000000260224624,0,125,201,1001,1066,t1; t2; t3,t4; t6; t7; t8; t9; t10,t6,false\nE2,R1,1401,1752,false,false,2,0.0004999999725896487,0.0004999999998744897,1189,1419,1729,1771,t1; t2; t3,t4; t6; t7; t8; t9; t10,t6,false\nE3,R2,1,59,true,false,1,0,0.0005000000262498361,1,1,57,106,t9; t10,t4,t8,false\nE4,R2,577,1372,false,false,3,0.0004999999810024747,0.0004999999694064172,540,631,1359,1439,t9; t10,t4,t8,false\nE5,R3,911,1197,false,false,3,0.0004999999810024747,0.0004999999694064172,873,947,1181,1260,t1; t2; t3; t6,t7,t4,false\nE6,R4,1035,1372,false,false,3,0,0.0004999999694064172,1024,1066,1321,1414,t1; t2; t3,t4; t6; t7; t8; t9; t10,t8; t9; t10,false\nE7,R5,1373,1511,false,false,2,0.0004999999694064172,0.0004999999725896487,1359,1423,1488,1614,t5,t1; t2; t3; t4; t6; t7; t8; t9; t10,t1; t2; t3; t6,false\n",
+  "localTreesTsv": "left\tright\ttree_id\tmask\tactive_templates\tparsimony\tnewick\n1\t59\tNTree1\t2\tR2\t46\t((((((t9:1,t10:1):1,t8:1):1,(t6:1,t7:1):1):1,t4:1):1,((t1:1,t2:1):1,t3:1):1):1,t5:1);\n60\t179\tNTree2\t0\t\t82\t(((((t6:1,t7:1):1,t8:1):1,((t9:1,t10:1):1,t4:1):1):1,((t1:1,t2:1):1,t3:1):1):1,t5:1);\n180\t576\tNTree3\t1\tR1\t211\t(((((((t1:1,t2:1):1,t3:1):1,t6:1):1,t7:1):1,t8:1):1,((t9:1,t10:1):1,t4:1):1):1,t5:1);\n577\t910\tNTree4\t3\tR1;R2\t276\t(((((((t1:1,t2:1):1,t3:1):1,t6:1):1,t7:1):1,((t9:1,t10:1):1,t8:1):1):1,t4:1):1,t5:1);\n911\t1034\tNTree5\t7\tR1;R2;R3\t118\t(((t7:1,((t9:1,t10:1):1,t8:1):1):1,(t4:1,(((t1:1,t2:1):1,t3:1):1,t6:1):1):1):1,t5:1);\n1035\t1197\tNTree6\t14\tR2;R3;R4\t143\t(((t7:1,(((t9:1,t10:1):1,t8:1):1,((t1:1,t2:1):1,t3:1):1):1):1,(t4:1,t6:1):1):1,t5:1);\n1198\t1372\tNTree7\t10\tR2;R4\t176\t((((t6:1,t7:1):1,(((t9:1,t10:1):1,t8:1):1,((t1:1,t2:1):1,t3:1):1):1):1,t4:1):1,t5:1);\n1373\t1400\tNTree8\t16\tR5\t18\t((((t7:1,(t6:1,t5:1):1):1,t8:1):1,((t9:1,t10:1):1,t4:1):1):1,((t1:1,t2:1):1,t3:1):1);\n1401\t1511\tNTree9\t17\tR1;R5\t60\t(((t7:1,((((t1:1,t2:1):1,t3:1):1,t6:1):1,t5:1):1):1,t8:1):1,((t9:1,t10:1):1,t4:1):1);\n1512\t1752\tNTree3\t1\tR1\t151\t(((((((t1:1,t2:1):1,t3:1):1,t6:1):1,t7:1):1,t8:1):1,((t9:1,t10:1):1,t4:1):1):1,t5:1);\n1753\t2400\tNTree2\t0\t\t440\t(((((t6:1,t7:1):1,t8:1):1,((t9:1,t10:1):1,t4:1):1):1,((t1:1,t2:1):1,t3:1):1):1,t5:1);\n",
+  "breakpointsTsv": "after_site\tinterval_low\tinterval_high\tmin_marginal_gap\tnew_mask\tactive_templates\n59\t59\t59\t0.0005000000262498361\t0\t\n179\t179\t179\t0.0005000000260224624\t1\tR1\n576\t576\t576\t0.0004999999810024747\t3\tR1;R2\n910\t910\t910\t0.0004999999810024747\t7\tR1;R2;R3\n1034\t1034\t1034\t0\t14\tR2;R3;R4\n1197\t1197\t1197\t0.0004999999694064172\t10\tR2;R4\n1372\t1372\t1372\t0.0004999999694064172\t16\tR5\n1400\t1400\t1400\t0.0004999999725896487\t17\tR1;R5\n1511\t1511\t1511\t0.0004999999725896487\t1\tR1\n1752\t1752\t1752\t0.0004999999998744897\t0\t\n",
+  "networkJson": "{\n  \"schemaVersion\": 1,\n  \"method\": \"jemspr\",\n  \"taxaNames\": [\n    \"t1\",\n    \"t2\",\n    \"t3\",\n    \"t4\",\n    \"t5\",\n    \"t6\",\n    \"t7\",\n    \"t8\",\n    \"t9\",\n    \"t10\"\n  ],\n  \"switchingNetwork\": {\n    \"root\": \"N0\",\n    \"nodes\": [\n      {\n        \"id\": \"N0\",\n        \"kind\": \"root\",\n        \"parents\": [],\n        \"children\": [\n          \"N1\",\n          \"N27\"\n        ]\n      },\n      {\n        \"id\": \"N1\",\n        \"kind\": \"tree\",\n        \"parents\": [\n          \"N0\"\n        ],\n        \"children\": [\n          \"N2\",\n          \"N19\"\n        ]\n      },\n      {\n        \"id\": \"N2\",\n        \"kind\": \"tree\",\n        \"parents\": [\n          \"N1\"\n        ],\n        \"children\": [\n          \"N3\",\n          \"N8\"\n        ]\n      },\n      {\n        \"id\": \"N3\",\n        \"kind\": \"tree\",\n        \"parents\": [\n          \"N2\"\n        ],\n        \"children\": [\n          \"N4\",\n          \"N26\"\n        ]\n      },\n      {\n        \"id\": \"N4\",\n        \"kind\": \"tree\",\n        \"parents\": [\n          \"N3\"\n        ],\n        \"children\": [\n          \"N6\",\n          \"N23\"\n        ]\n      },\n      {\n        \"id\": \"N5\",\n        \"kind\": \"leaf\",\n        \"leaf\": 5,\n        \"parents\": [\n          \"N20\"\n        ],\n        \"children\": []\n      },\n      {\n        \"id\": \"N6\",\n        \"kind\": \"leaf\",\n        \"leaf\": 6,\n        \"parents\": [\n          \"N4\"\n        ],\n        \"children\": []\n      },\n      {\n        \"id\": \"N7\",\n        \"kind\": \"leaf\",\n        \"leaf\": 7,\n        \"parents\": [\n          \"N22\"\n        ],\n        \"children\": []\n      },\n      {\n        \"id\": \"N8\",\n        \"kind\": \"tree\",\n        \"parents\": [\n          \"N2\"\n        ],\n        \"children\": [\n          \"N21\",\n          \"N24\"\n        ]\n      },\n      {\n        \"id\": \"N9\",\n        \"kind\": \"tree\",\n        \"parents\": [\n          \"N21\"\n        ],\n        \"children\": [\n          \"N10\",\n          \"N11\"\n        ]\n      },\n      {\n        \"id\": \"N10\",\n        \"kind\": \"leaf\",\n        \"leaf\": 8,\n        \"parents\": [\n          \"N9\"\n        ],\n        \"children\": []\n      },\n      {\n        \"id\": \"N11\",\n        \"kind\": \"leaf\",\n        \"leaf\": 9,\n        \"parents\": [\n          \"N9\"\n        ],\n        \"children\": []\n      },\n      {\n        \"id\": \"N12\",\n        \"kind\": \"leaf\",\n        \"leaf\": 3,\n        \"parents\": [\n          \"N24\"\n        ],\n        \"children\": []\n      },\n      {\n        \"id\": \"N13\",\n        \"kind\": \"tree\",\n        \"parents\": [\n          \"N25\"\n        ],\n        \"children\": [\n          \"N14\",\n          \"N17\"\n        ]\n      },\n      {\n        \"id\": \"N14\",\n        \"kind\": \"tree\",\n        \"parents\": [\n          \"N13\"\n        ],\n        \"children\": [\n          \"N15\",\n          \"N16\"\n        ]\n      },\n      {\n        \"id\": \"N15\",\n        \"kind\": \"leaf\",\n        \"leaf\": 0,\n        \"parents\": [\n          \"N14\"\n        ],\n        \"children\": []\n      },\n      {\n        \"id\": \"N16\",\n        \"kind\": \"leaf\",\n        \"leaf\": 1,\n        \"parents\": [\n          \"N14\"\n        ],\n        \"children\": []\n      },\n      {\n        \"id\": \"N17\",\n        \"kind\": \"leaf\",\n        \"leaf\": 2,\n        \"parents\": [\n          \"N13\"\n        ],\n        \"children\": []\n      },\n      {\n        \"id\": \"N18\",\n        \"kind\": \"leaf\",\n        \"leaf\": 4,\n        \"parents\": [\n          \"N27\"\n        ],\n        \"children\": []\n      },\n      {\n        \"id\": \"N19\",\n        \"kind\": \"reticulation\",\n        \"parents\": [\n          \"N1\",\n          \"N20\"\n        ],\n        \"children\": [\n          \"N25\"\n        ]\n      },\n      {\n        \"id\": \"N20\",\n        \"kind\": \"attachment\",\n        \"parents\": [\n          \"N28\"\n        ],\n        \"children\": [\n          \"N5\",\n          \"N19\"\n        ]\n      },\n      {\n        \"id\": \"N21\",\n        \"kind\": \"reticulation\",\n        \"parents\": [\n          \"N8\",\n          \"N22\"\n        ],\n        \"children\": [\n          \"N9\"\n        ]\n      },\n      {\n        \"id\": \"N22\",\n        \"kind\": \"attachment\",\n        \"parents\": [\n          \"N26\"\n        ],\n        \"children\": [\n          \"N7\",\n          \"N21\"\n        ]\n      },\n      {\n        \"id\": \"N23\",\n        \"kind\": \"reticulation\",\n        \"parents\": [\n          \"N4\",\n          \"N24\"\n        ],\n        \"children\": [\n          \"N28\"\n        ]\n      },\n      {\n        \"id\": \"N24\",\n        \"kind\": \"attachment\",\n        \"parents\": [\n          \"N8\"\n        ],\n        \"children\": [\n          \"N12\",\n          \"N23\"\n        ]\n      },\n      {\n        \"id\": \"N25\",\n        \"kind\": \"reticulation\",\n        \"parents\": [\n          \"N19\",\n          \"N26\"\n        ],\n        \"children\": [\n          \"N13\"\n        ]\n      },\n      {\n        \"id\": \"N26\",\n        \"kind\": \"attachment\",\n        \"parents\": [\n          \"N3\"\n        ],\n        \"children\": [\n          \"N22\",\n          \"N25\"\n        ]\n      },\n      {\n        \"id\": \"N27\",\n        \"kind\": \"reticulation\",\n        \"parents\": [\n          \"N0\",\n          \"N28\"\n        ],\n        \"children\": [\n          \"N18\"\n        ]\n      },\n      {\n        \"id\": \"N28\",\n        \"kind\": \"attachment\",\n        \"parents\": [\n          \"N23\"\n        ],\n        \"children\": [\n          \"N20\",\n          \"N27\"\n        ]\n      }\n    ],\n    \"reticulations\": [\n      {\n        \"bit\": 0,\n        \"move\": {\n          \"pruned\": [\n            0,\n            1,\n            2\n          ],\n          \"sourceSibling\": [\n            3,\n            5,\n            6,\n            7,\n            8,\n            9\n          ],\n          \"destination\": [\n            5\n          ],\n          \"destinationIsRoot\": false\n        },\n        \"sourceContextMask\": 0,\n        \"sourceContextSignature\": \"(((((L5,L6),L7),((L8,L9),L3)),((L0,L1),L2)),L4)\",\n        \"reticulationNode\": \"N19\",\n        \"backgroundParentNode\": \"N1\",\n        \"alternateParentNode\": \"N20\",\n        \"recipientChildNode\": \"N13\",\n        \"donorChildNode\": \"N5\"\n      },\n      {\n        \"bit\": 1,\n        \"move\": {\n          \"pruned\": [\n            8,\n            9\n          ],\n          \"sourceSibling\": [\n            3\n          ],\n          \"destination\": [\n            7\n          ],\n          \"destinationIsRoot\": false\n        },\n        \"sourceContextMask\": 0,\n        \"sourceContextSignature\": \"(((((L5,L6),L7),((L8,L9),L3)),((L0,L1),L2)),L4)\",\n        \"reticulationNode\": \"N21\",\n        \"backgroundParentNode\": \"N8\",\n        \"alternateParentNode\": \"N22\",\n        \"recipientChildNode\": \"N9\",\n        \"donorChildNode\": \"N7\"\n      },\n      {\n        \"bit\": 2,\n        \"move\": {\n          \"pruned\": [\n            0,\n            1,\n            2,\n            5\n          ],\n          \"sourceSibling\": [\n            6\n          ],\n          \"destination\": [\n            3\n          ],\n          \"destinationIsRoot\": false\n        },\n        \"sourceContextMask\": 1,\n        \"sourceContextSignature\": \"(((((((L0,L1),L2),L5),L6),L7),((L8,L9),L3)),L4)\",\n        \"reticulationNode\": \"N23\",\n        \"backgroundParentNode\": \"N4\",\n        \"alternateParentNode\": \"N24\",\n        \"recipientChildNode\": \"N20\",\n        \"donorChildNode\": \"N12\"\n      },\n      {\n        \"bit\": 3,\n        \"move\": {\n          \"pruned\": [\n            0,\n            1,\n            2\n          ],\n          \"sourceSibling\": [\n            3,\n            5,\n            6,\n            7,\n            8,\n            9\n          ],\n          \"destination\": [\n            7,\n            8,\n            9\n          ],\n          \"destinationIsRoot\": false\n        },\n        \"sourceContextMask\": 2,\n        \"sourceContextSignature\": \"((((((L8,L9),L7),(L5,L6)),L3),((L0,L1),L2)),L4)\",\n        \"reticulationNode\": \"N25\",\n        \"backgroundParentNode\": \"N19\",\n        \"alternateParentNode\": \"N26\",\n        \"recipientChildNode\": \"N13\",\n        \"donorChildNode\": \"N22\"\n      },\n      {\n        \"bit\": 4,\n        \"move\": {\n          \"pruned\": [\n            4\n          ],\n          \"sourceSibling\": [\n            0,\n            1,\n            2,\n            3,\n            5,\n            6,\n            7,\n            8,\n            9\n          ],\n          \"destination\": [\n            0,\n            1,\n            2,\n            5\n          ],\n          \"destinationIsRoot\": false\n        },\n        \"sourceContextMask\": 1,\n        \"sourceContextSignature\": \"(((((((L0,L1),L2),L5),L6),L7),((L8,L9),L3)),L4)\",\n        \"reticulationNode\": \"N27\",\n        \"backgroundParentNode\": \"N0\",\n        \"alternateParentNode\": \"N28\",\n        \"recipientChildNode\": \"N18\",\n        \"donorChildNode\": \"N20\"\n      }\n    ]\n  },\n  \"masterTree\": \"(((((t6:1,t7:1):1,t8:1):1,((t9:1,t10:1):1,t4:1):1):1,((t1:1,t2:1):1,t3:1):1):1,t5:1);\",\n  \"templates\": [\n    {\n      \"id\": \"R1\",\n      \"bit\": 0,\n      \"move\": {\n        \"prunedTaxa\": [\n          \"t1\",\n          \"t2\",\n          \"t3\"\n        ],\n        \"sourceSiblingTaxa\": [\n          \"t4\",\n          \"t6\",\n          \"t7\",\n          \"t8\",\n          \"t9\",\n          \"t10\"\n        ],\n        \"destinationTaxa\": [\n          \"t6\"\n        ],\n        \"destinationIsRoot\": false\n      },\n      \"sourceContexts\": [\n        \"(((((L5,L6),L7),((L8,L9),L3)),((L0,L1),L2)),L4)\",\n        \"((((((L8,L9),L7),(L5,L6)),L3),((L0,L1),L2)),L4)\",\n        \"(((((L3,L5),(L8,L9)),(L6,L7)),((L0,L1),L2)),L4)\",\n        \"((((((L8,L9),L7),L6),(L3,L5)),((L0,L1),L2)),L4)\",\n        \"((((((L0,L1),L2),L7),(L5,L6)),((L8,L9),L3)),L4)\",\n        \"((((((L0,L1),L2),((L8,L9),L7)),(L5,L6)),L3),L4)\",\n        \"((((((L0,L1),L2),L7),L6),((L3,L5),(L8,L9))),L4)\",\n        \"(((((L4,L5),L6),L7),((L8,L9),L3)),((L0,L1),L2))\",\n        \"(((((L4,L5),L6),((L8,L9),L7)),L3),((L0,L1),L2))\",\n        \"(((((L4,L5),L3),(L8,L9)),(L6,L7)),((L0,L1),L2))\",\n        \"(((((L0,L1),L2),L7),((L4,L5),L6)),((L8,L9),L3))\"\n      ],\n      \"topologicallySilentMasks\": [\n        8,\n        10,\n        12,\n        24\n      ],\n      \"reticulationNode\": \"N19\",\n      \"backgroundParentNode\": \"N1\",\n      \"alternateParentNode\": \"N20\",\n      \"recipientChildNode\": \"N13\",\n      \"donorChildNode\": \"N5\"\n    },\n    {\n      \"id\": \"R2\",\n      \"bit\": 1,\n      \"move\": {\n        \"prunedTaxa\": [\n          \"t9\",\n          \"t10\"\n        ],\n        \"sourceSiblingTaxa\": [\n          \"t4\"\n        ],\n        \"destinationTaxa\": [\n          \"t8\"\n        ],\n        \"destinationIsRoot\": false\n      },\n      \"sourceContexts\": [\n        \"(((((L5,L6),L7),((L8,L9),L3)),((L0,L1),L2)),L4)\",\n        \"(((((((L0,L1),L2),L5),L6),L7),((L8,L9),L3)),L4)\",\n        \"(((((L3,L5),(L8,L9)),(L6,L7)),((L0,L1),L2)),L4)\",\n        \"(((((((L0,L1),L2),L5),L3),(L8,L9)),(L6,L7)),L4)\",\n        \"((((((L0,L1),L2),L7),(L5,L6)),((L8,L9),L3)),L4)\",\n        \"((((((L0,L1),L2),L7),L6),((L3,L5),(L8,L9))),L4)\",\n        \"(((((L4,L5),L6),L7),((L8,L9),L3)),((L0,L1),L2))\",\n        \"(((((((L0,L1),L2),L5),L4),L6),L7),((L8,L9),L3))\",\n        \"(((((L4,L5),L3),(L8,L9)),(L6,L7)),((L0,L1),L2))\",\n        \"(((((L0,L1),L2),L7),((L4,L5),L6)),((L8,L9),L3))\"\n      ],\n      \"topologicallySilentMasks\": [],\n      \"reticulationNode\": \"N21\",\n      \"backgroundParentNode\": \"N8\",\n      \"alternateParentNode\": \"N22\",\n      \"recipientChildNode\": \"N9\",\n      \"donorChildNode\": \"N7\"\n    },\n    {\n      \"id\": \"R3\",\n      \"bit\": 2,\n      \"move\": {\n        \"prunedTaxa\": [\n          \"t1\",\n          \"t2\",\n          \"t3\",\n          \"t6\"\n        ],\n        \"sourceSiblingTaxa\": [\n          \"t7\"\n        ],\n        \"destinationTaxa\": [\n          \"t4\"\n        ],\n        \"destinationIsRoot\": false\n      },\n      \"sourceContexts\": [\n        \"(((((L5,L6),L7),((L8,L9),L3)),((L0,L1),L2)),L4)\",\n        \"(((((((L0,L1),L2),L5),L6),L7),((L8,L9),L3)),L4)\",\n        \"((((((L8,L9),L7),(L5,L6)),L3),((L0,L1),L2)),L4)\",\n        \"(((((((L0,L1),L2),L5),L6),((L8,L9),L7)),L3),L4)\",\n        \"((((((L0,L1),L2),L7),(L5,L6)),((L8,L9),L3)),L4)\",\n        \"((((((L0,L1),L2),((L8,L9),L7)),(L5,L6)),L3),L4)\",\n        \"(((((L4,L5),L6),L7),((L8,L9),L3)),((L0,L1),L2))\",\n        \"(((((((L0,L1),L2),L5),L4),L6),L7),((L8,L9),L3))\",\n        \"(((((L4,L5),L6),((L8,L9),L7)),L3),((L0,L1),L2))\",\n        \"(((((L0,L1),L2),L7),((L4,L5),L6)),((L8,L9),L3))\"\n      ],\n      \"topologicallySilentMasks\": [],\n      \"reticulationNode\": \"N23\",\n      \"backgroundParentNode\": \"N4\",\n      \"alternateParentNode\": \"N24\",\n      \"recipientChildNode\": \"N20\",\n      \"donorChildNode\": \"N12\"\n    },\n    {\n      \"id\": \"R4\",\n      \"bit\": 3,\n      \"move\": {\n        \"prunedTaxa\": [\n          \"t1\",\n          \"t2\",\n          \"t3\"\n        ],\n        \"sourceSiblingTaxa\": [\n          \"t4\",\n          \"t6\",\n          \"t7\",\n          \"t8\",\n          \"t9\",\n          \"t10\"\n        ],\n        \"destinationTaxa\": [\n          \"t8\",\n          \"t9\",\n          \"t10\"\n        ],\n        \"destinationIsRoot\": false\n      },\n      \"sourceContexts\": [\n        \"(((((L5,L6),L7),((L8,L9),L3)),((L0,L1),L2)),L4)\",\n        \"(((((((L0,L1),L2),L5),L6),L7),((L8,L9),L3)),L4)\",\n        \"((((((L8,L9),L7),(L5,L6)),L3),((L0,L1),L2)),L4)\",\n        \"(((((((L0,L1),L2),L5),L6),((L8,L9),L7)),L3),L4)\",\n        \"(((((L3,L5),(L8,L9)),(L6,L7)),((L0,L1),L2)),L4)\",\n        \"(((((((L0,L1),L2),L5),L3),(L8,L9)),(L6,L7)),L4)\",\n        \"((((((L8,L9),L7),L6),(L3,L5)),((L0,L1),L2)),L4)\",\n        \"(((((L4,L5),L6),L7),((L8,L9),L3)),((L0,L1),L2))\",\n        \"(((((((L0,L1),L2),L5),L4),L6),L7),((L8,L9),L3))\",\n        \"(((((L4,L5),L6),((L8,L9),L7)),L3),((L0,L1),L2))\",\n        \"(((((L4,L5),L3),(L8,L9)),(L6,L7)),((L0,L1),L2))\"\n      ],\n      \"topologicallySilentMasks\": [],\n      \"reticulationNode\": \"N25\",\n      \"backgroundParentNode\": \"N19\",\n      \"alternateParentNode\": \"N26\",\n      \"recipientChildNode\": \"N13\",\n      \"donorChildNode\": \"N22\"\n    },\n    {\n      \"id\": \"R5\",\n      \"bit\": 4,\n      \"move\": {\n        \"prunedTaxa\": [\n          \"t5\"\n        ],\n        \"sourceSiblingTaxa\": [\n          \"t1\",\n          \"t2\",\n          \"t3\",\n          \"t4\",\n          \"t6\",\n          \"t7\",\n          \"t8\",\n          \"t9\",\n          \"t10\"\n        ],\n        \"destinationTaxa\": [\n          \"t1\",\n          \"t2\",\n          \"t3\",\n          \"t6\"\n        ],\n        \"destinationIsRoot\": false\n      },\n      \"sourceContexts\": [\n        \"(((((L5,L6),L7),((L8,L9),L3)),((L0,L1),L2)),L4)\",\n        \"(((((((L0,L1),L2),L5),L6),L7),((L8,L9),L3)),L4)\",\n        \"((((((L8,L9),L7),(L5,L6)),L3),((L0,L1),L2)),L4)\",\n        \"(((((((L0,L1),L2),L5),L6),((L8,L9),L7)),L3),L4)\",\n        \"(((((L3,L5),(L8,L9)),(L6,L7)),((L0,L1),L2)),L4)\",\n        \"(((((((L0,L1),L2),L5),L3),(L8,L9)),(L6,L7)),L4)\",\n        \"((((((L8,L9),L7),L6),(L3,L5)),((L0,L1),L2)),L4)\",\n        \"((((((L0,L1),L2),L7),(L5,L6)),((L8,L9),L3)),L4)\",\n        \"((((((L0,L1),L2),((L8,L9),L7)),(L5,L6)),L3),L4)\",\n        \"((((((L0,L1),L2),L7),L6),((L3,L5),(L8,L9))),L4)\"\n      ],\n      \"topologicallySilentMasks\": [],\n      \"reticulationNode\": \"N27\",\n      \"backgroundParentNode\": \"N0\",\n      \"alternateParentNode\": \"N28\",\n      \"recipientChildNode\": \"N18\",\n      \"donorChildNode\": \"N20\"\n    }\n  ],\n  \"occurrences\": [\n    {\n      \"id\": \"E1\",\n      \"templateId\": \"R1\",\n      \"start\": 180,\n      \"end\": 1034,\n      \"leftCensored\": false,\n      \"rightCensored\": false,\n      \"maximumConcurrentEvents\": 3,\n      \"openingGap\": 0.0005000000260224624,\n      \"closingGap\": 0,\n      \"openingIntervalLow\": 125,\n      \"openingIntervalHigh\": 201,\n      \"closingIntervalLow\": 1001,\n      \"closingIntervalHigh\": 1066\n    },\n    {\n      \"id\": \"E2\",\n      \"templateId\": \"R1\",\n      \"start\": 1401,\n      \"end\": 1752,\n      \"leftCensored\": false,\n      \"rightCensored\": false,\n      \"maximumConcurrentEvents\": 2,\n      \"openingGap\": 0.0004999999725896487,\n      \"closingGap\": 0.0004999999998744897,\n      \"openingIntervalLow\": 1189,\n      \"openingIntervalHigh\": 1419,\n      \"closingIntervalLow\": 1729,\n      \"closingIntervalHigh\": 1771\n    },\n    {\n      \"id\": \"E3\",\n      \"templateId\": \"R2\",\n      \"start\": 1,\n      \"end\": 59,\n      \"leftCensored\": true,\n      \"rightCensored\": false,\n      \"maximumConcurrentEvents\": 1,\n      \"openingGap\": 0,\n      \"closingGap\": 0.0005000000262498361,\n      \"openingIntervalLow\": 1,\n      \"openingIntervalHigh\": 1,\n      \"closingIntervalLow\": 57,\n      \"closingIntervalHigh\": 106\n    },\n    {\n      \"id\": \"E4\",\n      \"templateId\": \"R2\",\n      \"start\": 577,\n      \"end\": 1372,\n      \"leftCensored\": false,\n      \"rightCensored\": false,\n      \"maximumConcurrentEvents\": 3,\n      \"openingGap\": 0.0004999999810024747,\n      \"closingGap\": 0.0004999999694064172,\n      \"openingIntervalLow\": 540,\n      \"openingIntervalHigh\": 631,\n      \"closingIntervalLow\": 1359,\n      \"closingIntervalHigh\": 1439\n    },\n    {\n      \"id\": \"E5\",\n      \"templateId\": \"R3\",\n      \"start\": 911,\n      \"end\": 1197,\n      \"leftCensored\": false,\n      \"rightCensored\": false,\n      \"maximumConcurrentEvents\": 3,\n      \"openingGap\": 0.0004999999810024747,\n      \"closingGap\": 0.0004999999694064172,\n      \"openingIntervalLow\": 873,\n      \"openingIntervalHigh\": 947,\n      \"closingIntervalLow\": 1181,\n      \"closingIntervalHigh\": 1260\n    },\n    {\n      \"id\": \"E6\",\n      \"templateId\": \"R4\",\n      \"start\": 1035,\n      \"end\": 1372,\n      \"leftCensored\": false,\n      \"rightCensored\": false,\n      \"maximumConcurrentEvents\": 3,\n      \"openingGap\": 0,\n      \"closingGap\": 0.0004999999694064172,\n      \"openingIntervalLow\": 1024,\n      \"openingIntervalHigh\": 1066,\n      \"closingIntervalLow\": 1321,\n      \"closingIntervalHigh\": 1414\n    },\n    {\n      \"id\": \"E7\",\n      \"templateId\": \"R5\",\n      \"start\": 1373,\n      \"end\": 1511,\n      \"leftCensored\": false,\n      \"rightCensored\": false,\n      \"maximumConcurrentEvents\": 2,\n      \"openingGap\": 0.0004999999694064172,\n      \"closingGap\": 0.0004999999725896487,\n      \"openingIntervalLow\": 1359,\n      \"openingIntervalHigh\": 1423,\n      \"closingIntervalLow\": 1488,\n      \"closingIntervalHigh\": 1614\n    }\n  ],\n  \"maskRuns\": [\n    {\n      \"id\": \"B1\",\n      \"start\": 1,\n      \"end\": 59,\n      \"mask\": 2,\n      \"activeTemplateIds\": [\n        \"R2\"\n      ],\n      \"treeId\": \"NTree1\",\n      \"treeIndex\": 0,\n      \"dataParsimony\": 46\n    },\n    {\n      \"id\": \"B2\",\n      \"start\": 60,\n      \"end\": 179,\n      \"mask\": 0,\n      \"activeTemplateIds\": [],\n      \"treeId\": \"NTree2\",\n      \"treeIndex\": 1,\n      \"dataParsimony\": 82\n    },\n    {\n      \"id\": \"B3\",\n      \"start\": 180,\n      \"end\": 576,\n      \"mask\": 1,\n      \"activeTemplateIds\": [\n        \"R1\"\n      ],\n      \"treeId\": \"NTree3\",\n      \"treeIndex\": 2,\n      \"dataParsimony\": 211\n    },\n    {\n      \"id\": \"B4\",\n      \"start\": 577,\n      \"end\": 910,\n      \"mask\": 3,\n      \"activeTemplateIds\": [\n        \"R1\",\n        \"R2\"\n      ],\n      \"treeId\": \"NTree4\",\n      \"treeIndex\": 3,\n      \"dataParsimony\": 276\n    },\n    {\n      \"id\": \"B5\",\n      \"start\": 911,\n      \"end\": 1034,\n      \"mask\": 7,\n      \"activeTemplateIds\": [\n        \"R1\",\n        \"R2\",\n        \"R3\"\n      ],\n      \"treeId\": \"NTree5\",\n      \"treeIndex\": 4,\n      \"dataParsimony\": 118\n    },\n    {\n      \"id\": \"B6\",\n      \"start\": 1035,\n      \"end\": 1197,\n      \"mask\": 14,\n      \"activeTemplateIds\": [\n        \"R2\",\n        \"R3\",\n        \"R4\"\n      ],\n      \"treeId\": \"NTree6\",\n      \"treeIndex\": 5,\n      \"dataParsimony\": 143\n    },\n    {\n      \"id\": \"B7\",\n      \"start\": 1198,\n      \"end\": 1372,\n      \"mask\": 10,\n      \"activeTemplateIds\": [\n        \"R2\",\n        \"R4\"\n      ],\n      \"treeId\": \"NTree7\",\n      \"treeIndex\": 6,\n      \"dataParsimony\": 176\n    },\n    {\n      \"id\": \"B8\",\n      \"start\": 1373,\n      \"end\": 1400,\n      \"mask\": 16,\n      \"activeTemplateIds\": [\n        \"R5\"\n      ],\n      \"treeId\": \"NTree8\",\n      \"treeIndex\": 7,\n      \"dataParsimony\": 18\n    },\n    {\n      \"id\": \"B9\",\n      \"start\": 1401,\n      \"end\": 1511,\n      \"mask\": 17,\n      \"activeTemplateIds\": [\n        \"R1\",\n        \"R5\"\n      ],\n      \"treeId\": \"NTree9\",\n      \"treeIndex\": 8,\n      \"dataParsimony\": 60\n    },\n    {\n      \"id\": \"B10\",\n      \"start\": 1512,\n      \"end\": 1752,\n      \"mask\": 1,\n      \"activeTemplateIds\": [\n        \"R1\"\n      ],\n      \"treeId\": \"NTree3\",\n      \"treeIndex\": 2,\n      \"dataParsimony\": 151\n    },\n    {\n      \"id\": \"B11\",\n      \"start\": 1753,\n      \"end\": 2400,\n      \"mask\": 0,\n      \"activeTemplateIds\": [],\n      \"treeId\": \"NTree2\",\n      \"treeIndex\": 1,\n      \"dataParsimony\": 440\n    }\n  ],\n  \"temporal\": {\n    \"status\": \"rank-feasible\",\n    \"message\": \"The compiled switching DAG satisfies donor–recipient equality and strict ancestry constraints under an unconstrained rank assignment.\",\n    \"conflictingTemplates\": []\n  },\n  \"diagnostics\": {\n    \"engine\": \"independent-typescript-worker\",\n    \"initialTreeMethod\": \"internal-neighbor-joining-multiscale\",\n    \"scoreMethod\": \"fitch\",\n    \"transitionCost\": 1,\n    \"transversionCost\": 1,\n    \"informativeSites\": 933,\n    \"dyadicSeeds\": 18,\n    \"rootPlacements\": 4,\n    \"candidateEventTemplates\": 24,\n    \"graphStates\": 48,\n    \"graphEdges\": 90,\n    \"pathNetworkObjectiveDifference\": 4.668999999942798,\n    \"resourceLimited\": true,\n    \"warnings\": [\n      \"The rooted-tree graph or root-placement universe was budget limited; increase advanced search budgets to test stability.\",\n      \"The selected history touches the overlap cap; rerun with a larger cap to test whether the optimum changes.\"\n    ]\n  }\n}"
+}

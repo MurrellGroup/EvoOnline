@@ -9,9 +9,9 @@ import type {
   JemsprOptions,
   JemsprTemporalCheck,
 } from "./types.js";
-import { scoreTree, totalScore } from "./parsimony.js";
+import { scoreTree, scoreTreeSubset, totalScore } from "./parsimony.js";
 import { shortestPathMoves, type InternalPathSearchResult, type InternalPathStartResult } from "./path-search.js";
-import { publicMove, treeSignature, treeToNewick, type InternalSprMove, type RootedNode } from "./tree.js";
+import { enumerateRootedSprNeighbours, publicMove, treeSignature, treeToNewick, type InternalSprMove, type RootedNode } from "./tree.js";
 import {
   compileReticulation,
   displayNetwork,
@@ -26,6 +26,15 @@ interface EventCandidate {
   readonly move: InternalSprMove;
   support: number;
   depth: number;
+}
+
+interface ContextEventCandidate {
+  readonly key: string;
+  readonly context: number;
+  readonly move: InternalSprMove;
+  readonly residualGain: number;
+  readonly guideSupport: number;
+  readonly bridgePriority: number;
 }
 
 interface MasterStart {
@@ -48,6 +57,8 @@ interface NetworkEvaluation {
   readonly maximumOverlap: number;
   readonly occurrences: number;
   readonly displaySetKey: string;
+  /** Search-only priority for a latent event prefix; never enters the model objective. */
+  readonly bridgePriority: number;
 }
 
 interface DisplayScore {
@@ -72,6 +83,15 @@ interface NetworkConfig {
   readonly boundaryConvention: "closed" | "open" | "penalized-open";
   readonly censorPenalty: number;
   readonly uncertaintyTolerance: number;
+}
+
+export interface FixedSwitchingNetworkEvaluation {
+  readonly objective: number;
+  readonly dataParsimony: number;
+  readonly masks: readonly number[];
+  readonly maskPath: Int32Array;
+  readonly maximumOverlap: number;
+  readonly occurrences: number;
 }
 
 export interface InternalNetworkSearchResult {
@@ -156,6 +176,144 @@ function eventPool(alignment: JemsprAlignment, starts: readonly MasterStart[], l
   return [...candidates.values()]
     .sort((a, b) => b.support - a.support || a.depth - b.depth || a.key.localeCompare(b.key))
     .slice(0, limit);
+}
+
+function evenlySpacedIndexes(length: number, limit: number): readonly number[] {
+  if (length <= limit) return Array.from({ length }, (_value, index) => index);
+  const selected: number[] = [];
+  for (let index = 0; index < limit; index += 1) selected.push(Math.min(length - 1, Math.floor(index * (length - 1) / Math.max(1, limit - 1))));
+  return [...new Set(selected)];
+}
+
+function occupiedReticulationBits(evaluation: NetworkEvaluation): number {
+  let occupied = 0;
+  for (const mask of evaluation.maskPath) occupied |= mask;
+  return occupied;
+}
+
+function usedReticulationCount(evaluation: NetworkEvaluation): number {
+  return popcount(occupiedReticulationBits(evaluation));
+}
+
+/**
+ * Re-price one-rSPR events inside the displays available in a partial
+ * switching network. Full network scores remain exact; this is only a
+ * deterministic, bounded proposal screen.
+ */
+function contextualEventPool(
+  parent: NetworkEvaluation,
+  alignment: JemsprAlignment,
+  guidePool: readonly EventCandidate[],
+  config: NetworkConfig,
+): readonly ContextEventCandidate[] {
+  const stateByMask = new Map(parent.masks.map((mask, index) => [mask, index]));
+  const spans = new Map<number, number>();
+  for (let site = 0; site < parent.maskPath.length; site += 1) {
+    const mask = parent.maskPath[site]!;
+    spans.set(mask, (spans.get(mask) ?? 0) + alignment.cellEnds[site]! - alignment.cellStarts[site]!);
+  }
+  // An unoccupied mask may still be the necessary source context for a
+  // coordinated next event, so rank it by its unpenalized latent data gain.
+  const latentGain = new Map<number, number>();
+  for (const mask of parent.masks) {
+    const state = stateByMask.get(mask)!;
+    let gain = 0;
+    for (let site = 0; site < parent.maskPath.length; site += 1) {
+      const selected = stateByMask.get(parent.maskPath[site]!)!;
+      gain += Math.max(0, parent.maskDisplays[selected]!.scores[site]! - parent.maskDisplays[state]!.scores[site]!);
+    }
+    latentGain.set(mask, gain);
+  }
+  const contextLimit = Math.min(parent.masks.length, Math.max(3, Math.min(10, config.overlapCap * 2 + 2)));
+  const contexts = parent.masks.slice().sort((a, b) => {
+    const aOccupied = (spans.get(a) ?? 0) > 0 ? 1 : 0;
+    const bOccupied = (spans.get(b) ?? 0) > 0 ? 1 : 0;
+    return bOccupied - aOccupied
+      || (spans.get(b) ?? 0) - (spans.get(a) ?? 0)
+      || (latentGain.get(b) ?? 0) - (latentGain.get(a) ?? 0)
+      || popcount(b) - popcount(a)
+      || a - b;
+  }).slice(0, contextLimit);
+  if (!contexts.includes(0) && parent.masks.includes(0)) contexts[contexts.length - 1] = 0;
+
+  const guideByMove = new Map(guidePool.map((candidate) => [candidate.key, candidate.support]));
+  const proposals = new Map<string, ContextEventCandidate>();
+  const proxyLimit = Math.max(64, config.poolSize * 8);
+  for (const context of contexts) {
+    const state = stateByMask.get(context)!;
+    const display = parent.maskDisplays[state]!;
+    const occupiedInformative: number[] = [];
+    for (let index = 0; index < alignment.informativePositions.length; index += 1) {
+      const site = alignment.informativePositions[index]!;
+      if (parent.maskPath[site] === context) occupiedInformative.push(index);
+    }
+    const sampleSource = occupiedInformative.length > 0
+      ? occupiedInformative
+      : Array.from({ length: alignment.informativePositions.length }, (_value, index) => index);
+    const sample = evenlySpacedIndexes(sampleSource.length, 48).map((index) => sampleSource[index]!);
+    const baseline = scoreTreeSubset(display.tree, alignment, sample, config.method, config.transition, config.transversion);
+    const neighbours = enumerateRootedSprNeighbours(display.tree);
+    const structuralIndexes = new Set(evenlySpacedIndexes(neighbours.length, proxyLimit));
+    // A path-derived bridge is always priced if it is legal in this context.
+    for (let index = 0; index < neighbours.length; index += 1) if (guideByMove.has(moveKey(neighbours[index]!.move))) structuralIndexes.add(index);
+    for (const index of structuralIndexes) {
+      const neighbour = neighbours[index]!;
+      const key = `${context}:${moveKey(neighbour.move)}`;
+      const proxy = scoreTreeSubset(neighbour.tree, alignment, sample, config.method, config.transition, config.transversion);
+      const scale = occupiedInformative.length > 0 ? occupiedInformative.length / Math.max(1, sample.length) : 1;
+      const residualGain = (baseline - proxy) * scale;
+      const guideSupport = guideByMove.get(moveKey(neighbour.move)) ?? 0;
+      const normalizedSpan = (spans.get(context) ?? 0) / Math.max(1, alignment.sites);
+      proposals.set(key, {
+        key,
+        context,
+        move: neighbour.move,
+        residualGain,
+        guideSupport,
+        bridgePriority: residualGain + Math.log1p(guideSupport) / 8 + normalizedSpan / 100,
+      });
+    }
+    // Compilation, not this proxy screen, is the authoritative legality test.
+    const normalizedSpan = (spans.get(context) ?? 0) / Math.max(1, alignment.sites);
+    for (const guide of guidePool) {
+      const key = `${context}:${guide.key}`;
+      if (proposals.has(key)) continue;
+      proposals.set(key, {
+        key,
+        context,
+        move: guide.move,
+        residualGain: Number.NEGATIVE_INFINITY,
+        guideSupport: guide.support,
+        bridgePriority: Math.log1p(guide.support) / 8 + normalizedSpan / 100,
+      });
+    }
+  }
+
+  const values = [...proposals.values()];
+  const residual = values.slice().sort((a, b) => b.residualGain - a.residualGain || b.guideSupport - a.guideSupport || a.key.localeCompare(b.key));
+  const guided = values.slice().sort((a, b) => b.guideSupport - a.guideSupport || b.residualGain - a.residualGain || a.key.localeCompare(b.key));
+  const selected: ContextEventCandidate[] = [];
+  const selectedKeys = new Set<string>();
+  const add = (candidate: ContextEventCandidate | undefined): void => {
+    if (candidate === undefined || selectedKeys.has(candidate.key) || selected.length >= config.poolSize) return;
+    selectedKeys.add(candidate.key);
+    selected.push(candidate);
+  };
+  // Reserve at least one proposal per retained context before filling by score.
+  for (const context of contexts) add(residual.find((candidate) => candidate.context === context));
+  const residualQuota = Math.max(1, Math.ceil(config.poolSize * 0.6));
+  for (const candidate of residual) {
+    if (selected.length >= residualQuota) break;
+    add(candidate);
+  }
+  const guideQuota = Math.max(residualQuota, Math.ceil(config.poolSize * 0.85));
+  for (const candidate of guided) {
+    if (selected.length >= guideQuota) break;
+    add(candidate);
+  }
+  for (const candidate of residual) add(candidate);
+  for (const candidate of guided) add(candidate);
+  return selected;
 }
 
 function allowedMasks(q: number, overlapCap: number): readonly number[] {
@@ -322,6 +480,7 @@ function evaluateNetwork(
       maximumOverlap: 0,
       occurrences: 0,
       displaySetKey: maskDisplays[zeroIndex]?.signature ?? "",
+      bridgePriority: 0,
     };
   }
   const emit = (site: number, state: number): number => {
@@ -393,6 +552,71 @@ function evaluateNetwork(
     maximumOverlap,
     occurrences,
     displaySetKey: [...occupiedDisplays].sort().join("|"),
+    bridgePriority: 0,
+  };
+}
+
+function retainNetworkBeam(candidates: readonly NetworkEvaluation[], width: number): NetworkEvaluation[] {
+  const objective = candidates.slice().sort((a, b) => a.objective - b.objective || a.dataParsimony - b.dataParsimony || networkHash(a.network).localeCompare(networkHash(b.network)));
+  const fullyUsed = candidates.filter(allReticulationsUsed).sort((a, b) => a.objective - b.objective || a.dataParsimony - b.dataParsimony || networkHash(a.network).localeCompare(networkHash(b.network)));
+  const data = candidates.slice().sort((a, b) => a.dataParsimony - b.dataParsimony || a.objective - b.objective || networkHash(a.network).localeCompare(networkHash(b.network)));
+  const coverage = candidates.slice().sort((a, b) => usedReticulationCount(b) - usedReticulationCount(a) || a.objective - b.objective || networkHash(a.network).localeCompare(networkHash(b.network)));
+  const bridges = candidates.filter((candidate) => !allReticulationsUsed(candidate)).sort((a, b) => b.bridgePriority - a.bridgePriority || a.objectiveWithoutStructure - b.objectiveWithoutStructure || networkHash(a.network).localeCompare(networkHash(b.network)));
+  const selected: NetworkEvaluation[] = [];
+  const hashes = new Set<string>();
+  const add = (candidate: NetworkEvaluation | undefined): void => {
+    if (candidate === undefined || selected.length >= width) return;
+    const hash = networkHash(candidate.network);
+    if (hashes.has(hash)) return;
+    hashes.add(hash);
+    selected.push(candidate);
+  };
+  // Round-robin exploitation, data fit, and latent bridge retention. Distinct
+  // unused prefixes are deliberately not collapsed by occupied display set.
+  let cursor = 0;
+  while (selected.length < width && cursor < Math.max(objective.length, fullyUsed.length, data.length, coverage.length, bridges.length)) {
+    add(fullyUsed[cursor]);
+    add(objective[cursor]);
+    add(data[cursor]);
+    add(coverage[cursor]);
+    add(bridges[cursor]);
+    cursor += 1;
+  }
+  return selected.sort((a, b) => a.objective - b.objective || a.dataParsimony - b.dataParsimony || networkHash(a.network).localeCompare(networkHash(b.network)));
+}
+
+/** Exact fixed-network decoder exposed for diagnostics and finite-universe tests. */
+export function evaluateFixedSwitchingNetwork(
+  network: SwitchingNetwork,
+  alignment: JemsprAlignment,
+  options: JemsprOptions = {},
+): FixedSwitchingNetworkEvaluation | undefined {
+  const minimumWindow = Math.max(16, Math.round(options.minimumWindow ?? Math.max(64, Math.min(250, alignment.sites / 8))));
+  const config: NetworkConfig = {
+    method: options.scoreMethod ?? "fitch",
+    transition: Math.max(0, options.transitionCost ?? 1),
+    transversion: Math.max(0, options.transversionCost ?? 1),
+    maximumReticulations: network.reticulations.length,
+    overlapCap: Math.max(0, Math.min(6, Math.round(options.overlapCap ?? network.reticulations.length))),
+    beamWidth: 1,
+    poolSize: 1,
+    openPenalty: options.eventOpenPenalty !== undefined && options.eventOpenPenalty >= 0 ? options.eventOpenPenalty : 2,
+    closePenalty: options.eventClosePenalty !== undefined && options.eventClosePenalty >= 0 ? options.eventClosePenalty : 0,
+    breakpointPenalty: options.networkBreakpointPenalty !== undefined && options.networkBreakpointPenalty >= 0 ? options.networkBreakpointPenalty : 2,
+    spanPenalty: options.eventSpanPenalty !== undefined && options.eventSpanPenalty >= 0 ? options.eventSpanPenalty : 0.002,
+    reticulationPenalty: options.reticulationPenalty !== undefined && options.reticulationPenalty >= 0 ? options.reticulationPenalty : 2,
+    boundaryConvention: options.boundaryConvention ?? "open",
+    censorPenalty: options.boundaryCensorPenalty !== undefined && options.boundaryCensorPenalty >= 0 ? options.boundaryCensorPenalty : Math.log2(alignment.sites + 1) / 4,
+    uncertaintyTolerance: options.uncertaintyTolerance !== undefined && options.uncertaintyTolerance >= 0 ? options.uncertaintyTolerance : 2,
+  };
+  const evaluation = evaluateNetwork(network, alignment, config, new Map());
+  return evaluation === undefined ? undefined : {
+    objective: evaluation.objective,
+    dataParsimony: evaluation.dataParsimony,
+    masks: evaluation.masks,
+    maskPath: evaluation.maskPath,
+    maximumOverlap: evaluation.maximumOverlap,
+    occurrences: evaluation.occurrences,
   };
 }
 
@@ -464,7 +688,7 @@ function endpointInterval(
   };
 }
 
-function temporalCheck(network: SwitchingNetwork): JemsprTemporalCheck {
+export function checkNetworkTemporalFeasibility(network: SwitchingNetwork): JemsprTemporalCheck {
   const parent = Int32Array.from({ length: network.nodes.length }, (_value, index) => index);
   const find = (value: number): number => {
     let root = value;
@@ -660,8 +884,8 @@ function publicNetwork(
     breakpointGaps,
     search,
     paretoFrontier,
-    temporal: temporalCheck(evaluation.network),
-    certificate: "Every retained switching DAG was scored by an exact mask dynamic program over all masks within the selected overlap cap. Distinct master candidates from every inferred root start seed the joint network beam, and donor-time/strict-ancestry infeasibility is enforced as a hard lazy cut. The outer rooted-network beam and event-template pool remain budgeted; no global network-space optimum is claimed.",
+    temporal: checkNetworkTemporalFeasibility(evaluation.network),
+    certificate: "Every retained switching DAG was scored by an exact mask dynamic program over all masks within the selected overlap cap. Distinct master candidates from every inferred root start seed the joint network beam; residual rooted-SPR proposals are regenerated inside retained display contexts; latent bridge prefixes are retained separately from immediately profitable models; and donor-time/strict-ancestry infeasibility is enforced as a hard lazy cut. The outer rooted-network beam and proposal screens remain budgeted; no global network-space optimum is claimed.",
   };
 }
 
@@ -679,20 +903,21 @@ export function searchSwitchingNetwork(alignment: JemsprAlignment, path: Interna
     transition: Math.max(0, options.transitionCost ?? 1),
     transversion: Math.max(0, options.transversionCost ?? 1),
     maximumReticulations: Math.max(0, Math.min(10, Math.round(options.maximumReticulations ?? 5))),
-    overlapCap: Math.max(0, Math.min(6, Math.round(options.overlapCap ?? 2))),
-    beamWidth: Math.max(1, Math.round(options.networkBeamWidth ?? 6)),
-    poolSize: Math.max(1, Math.round(options.eventPoolSize ?? 14)),
-    openPenalty: options.eventOpenPenalty !== undefined && options.eventOpenPenalty >= 0 ? options.eventOpenPenalty : Math.log2(alignment.sites + 1) / 2,
+    overlapCap: Math.max(0, Math.min(6, Math.round(options.overlapCap ?? 3))),
+    beamWidth: Math.max(1, Math.round(options.networkBeamWidth ?? 8)),
+    poolSize: Math.max(1, Math.round(options.eventPoolSize ?? 20)),
+    openPenalty: options.eventOpenPenalty !== undefined && options.eventOpenPenalty >= 0 ? options.eventOpenPenalty : 2,
     closePenalty: options.eventClosePenalty !== undefined && options.eventClosePenalty >= 0 ? options.eventClosePenalty : 0,
-    breakpointPenalty: options.networkBreakpointPenalty !== undefined && options.networkBreakpointPenalty >= 0 ? options.networkBreakpointPenalty : Math.log2(alignment.sites + 1) / 2,
-    spanPenalty: options.eventSpanPenalty !== undefined && options.eventSpanPenalty >= 0 ? options.eventSpanPenalty : 1 / Math.max(80, minimumWindow),
-    reticulationPenalty: options.reticulationPenalty !== undefined && options.reticulationPenalty >= 0 ? options.reticulationPenalty : Math.max(1, Math.log2(alignment.taxa)),
+    breakpointPenalty: options.networkBreakpointPenalty !== undefined && options.networkBreakpointPenalty >= 0 ? options.networkBreakpointPenalty : 2,
+    spanPenalty: options.eventSpanPenalty !== undefined && options.eventSpanPenalty >= 0 ? options.eventSpanPenalty : 0.002,
+    reticulationPenalty: options.reticulationPenalty !== undefined && options.reticulationPenalty >= 0 ? options.reticulationPenalty : 2,
     boundaryConvention: options.boundaryConvention ?? "open",
     censorPenalty: options.boundaryCensorPenalty !== undefined && options.boundaryCensorPenalty >= 0 ? options.boundaryCensorPenalty : Math.log2(alignment.sites + 1) / 4,
     uncertaintyTolerance: options.uncertaintyTolerance !== undefined && options.uncertaintyTolerance >= 0 ? options.uncertaintyTolerance : 2,
   };
   const masterStarts = topMasterStarts(path, Math.max(1, config.beamWidth));
   const pool = eventPool(alignment, masterStarts, config.poolSize);
+  const attemptedTemplates = new Set(pool.map((candidate) => candidate.key));
   const cache = new Map<string, DisplayScore>();
   const initialStarted = performance.now();
   const initial = new Map<string, NetworkEvaluation>();
@@ -713,7 +938,6 @@ export function searchSwitchingNetwork(alignment: JemsprAlignment, path: Interna
     metricLabel: "network objective",
     metricValue: best.objective,
   });
-  let staleRounds = 0;
   for (let q = 1; q <= config.maximumReticulations; q += 1) {
     checkAbort(options.signal);
     const started = performance.now();
@@ -722,24 +946,22 @@ export function searchSwitchingNetwork(alignment: JemsprAlignment, path: Interna
     let temporallyRejected = 0;
     for (let parentIndex = 0; parentIndex < beam.length; parentIndex += 1) {
       const parent = beam[parentIndex]!;
-      const contextSpans = new Map<number, number>();
-      for (let site = 0; site < parent.maskPath.length; site += 1) contextSpans.set(parent.maskPath[site]!, (contextSpans.get(parent.maskPath[site]!) ?? 0) + alignment.cellEnds[site]! - alignment.cellStarts[site]!);
-      const contexts = parent.masks.slice().sort((a, b) => (contextSpans.get(b) ?? 0) - (contextSpans.get(a) ?? 0) || popcount(a) - popcount(b) || a - b);
-      for (const candidate of pool) {
-        for (const context of contexts) {
-          const child = compileReticulation(parent.network, context, candidate.move);
-          if (child === undefined) continue;
-          const hash = networkHash(child);
-          if (children.has(hash)) continue;
-          if (temporalCheck(child).status !== "rank-feasible") {
-            temporallyRejected += 1;
-            continue;
-          }
-          const evaluation = evaluateNetwork(child, alignment, config, cache);
-          if (evaluation !== undefined) {
-            scored += 1;
-            children.set(hash, evaluation);
-          }
+      const proposals = contextualEventPool(parent, alignment, pool, config);
+      for (const candidate of proposals) {
+        attemptedTemplates.add(moveKey(candidate.move));
+        const child = compileReticulation(parent.network, candidate.context, candidate.move);
+        if (child === undefined) continue;
+        const hash = networkHash(child);
+        const previous = children.get(hash);
+        if (previous !== undefined && previous.bridgePriority >= candidate.bridgePriority) continue;
+        if (previous === undefined && checkNetworkTemporalFeasibility(child).status !== "rank-feasible") {
+          temporallyRejected += 1;
+          continue;
+        }
+        const evaluation = evaluateNetwork(child, alignment, config, cache);
+        if (evaluation !== undefined) {
+          if (previous === undefined) scored += 1;
+          children.set(hash, { ...evaluation, bridgePriority: candidate.bridgePriority });
         }
       }
       options.onProgress?.("jemspr-network-search", Math.min(0.99, (q - 1 + (parentIndex + 1) / beam.length) / Math.max(1, config.maximumReticulations)), {
@@ -750,28 +972,17 @@ export function searchSwitchingNetwork(alignment: JemsprAlignment, path: Interna
         metricValue: scored,
       });
     }
-    const ranked = [...children.values()].sort((a, b) => a.objective - b.objective || a.network.reticulations.length - b.network.reticulations.length || networkHash(a.network).localeCompare(networkHash(b.network)));
-    const diverse: NetworkEvaluation[] = [];
-    const displayCounts = new Map<string, number>();
-    for (const candidate of ranked) {
-      const count = displayCounts.get(candidate.displaySetKey) ?? 0;
-      if (count >= 2) continue;
-      diverse.push(candidate);
-      displayCounts.set(candidate.displaySetKey, count + 1);
-      if (diverse.length >= config.beamWidth) break;
-    }
-    beam = diverse;
+    beam = retainNetworkBeam([...children.values()], config.beamWidth);
     if (beam.length === 0) {
       search.push({ reticulations: q, candidatesScored: scored, temporallyRejected, beamRetained: 0, bestObjective: best.objective, bestDataParsimony: best.dataParsimony, bestOverlap: best.maximumOverlap, elapsedMs: performance.now() - started });
       break;
     }
     const roundBest = beam[0]!;
     allBest.push(...beam);
-    const roundBestUsed = beam.find(allReticulationsUsed);
+    const roundBestUsed = beam.filter(allReticulationsUsed).sort((a, b) => a.objective - b.objective || a.dataParsimony - b.dataParsimony)[0];
     if (roundBestUsed !== undefined && roundBestUsed.objective < best.objective - 1e-8) {
       best = roundBestUsed;
-      staleRounds = 0;
-    } else staleRounds += 1;
+    }
     search.push({ reticulations: q, candidatesScored: scored, temporallyRejected, beamRetained: beam.length, bestObjective: roundBest.objective, bestDataParsimony: roundBest.dataParsimony, bestOverlap: roundBest.maximumOverlap, elapsedMs: performance.now() - started });
     options.onProgress?.("jemspr-network-search", q / Math.max(1, config.maximumReticulations), {
       message: `Exact mask DP for ${q} reticulation${q === 1 ? "" : "s"}: ${scored} compiled networks scored; ${temporallyRejected} failed the temporal lazy cut; ${beam.length} retained.`,
@@ -780,8 +991,7 @@ export function searchSwitchingNetwork(alignment: JemsprAlignment, path: Interna
       metricLabel: "network objective",
       metricValue: roundBest.objective,
     });
-    if (staleRounds >= 2) break;
   }
   const publicResult = publicNetwork(alignment, best, path, search, allBest, config);
-  return { public: publicResult, network: best.network, candidateTemplates: pool.length, serializableNetwork: networkToSerializable(best.network) };
+  return { public: publicResult, network: best.network, candidateTemplates: attemptedTemplates.size, serializableNetwork: networkToSerializable(best.network) };
 }

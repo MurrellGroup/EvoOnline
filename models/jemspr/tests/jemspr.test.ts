@@ -129,6 +129,42 @@ test("end-to-end JEMSPR recovers a sharp two-topology mosaic without external tr
   assert.equal(JSON.parse(result.networkJson).method, "jemspr");
 });
 
+test("multi-event search crosses non-improving reticulation layers without collapsing bridge prefixes", async () => {
+  const length = 80;
+  const patterns = [
+    ["A", "A", "G", "G"],
+    ["A", "G", "A", "G"],
+    ["A", "G", "G", "A"],
+  ];
+  const sequences = [0, 1, 2, 3].map((taxon) => patterns.map((pattern) => pattern[taxon]!.repeat(length)).join(""));
+  const fasta = sequences.map((sequence, index) => `>t${index}\n${sequence}`).join("\n");
+  const result = await analyzeJemspr(fasta, {
+    minimumWindow: 24,
+    maximumDyadicTrees: 10,
+    rootPlacements: 2,
+    maximumGraphStates: 24,
+    maximumGraphIterations: 6,
+    neighbourScreen: 40,
+    frontierStates: 4,
+    nearImprovers: 3,
+    pathBreakpointPenalty: 2,
+    pathEndpointPenalty: 0.5,
+    pathSpanPenalty: 0.001,
+    maximumReticulations: 5,
+    overlapCap: 3,
+    networkBeamWidth: 8,
+    eventPoolSize: 20,
+    eventOpenPenalty: 1,
+    networkBreakpointPenalty: 1,
+    eventSpanPenalty: 0.001,
+    reticulationPenalty: 2,
+  });
+  assert.equal(result.network.templates.length, 2);
+  assert.equal(result.network.runs.length, 3);
+  assert.deepEqual(result.network.runs.map((run) => [run.start, run.end]), [[1, 80], [81, 160], [161, 240]]);
+  assert.equal(result.network.search.at(-1)?.reticulations, 5, "the search must exhaust the requested depth rather than stop after two stale layers");
+});
+
 test("site-level decoding reports a tied endpoint range across an invariant run", async () => {
   const sequences = [
     "A".repeat(120),

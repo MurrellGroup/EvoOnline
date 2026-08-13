@@ -1,0 +1,10 @@
+{
+  "taxa": 8,
+  "sites": 1200,
+  "master": "(((t1:1,t2:1):1,(t3:1,t4:1):1):1,((t5:1,t6:1):1,(t7:1,t8:1):1):1);",
+  "networkReticulations": [],
+  "eventIntervals": [],
+  "breakpoints": [],
+  "maximumOverlap": 0,
+  "distinctLocalTrees": 1
+}

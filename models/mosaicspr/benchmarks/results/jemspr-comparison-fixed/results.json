@@ -1,0 +1,406 @@
+{
+  "truth": {
+    "taxa": 8,
+    "sites": 1200,
+    "master": "(((t1:1,t2:1):1,(t3:1,t4:1):1):1,((t5:1,t6:1):1,(t7:1,t8:1):1):1);",
+    "networkReticulations": [
+      {
+        "bit": 0,
+        "move": {
+          "pruned": [
+            0,
+            1
+          ],
+          "sourceSibling": [
+            2,
+            3
+          ],
+          "destination": [
+            3
+          ],
+          "destinationIsRoot": false
+        },
+        "sourceContextMask": 0,
+        "sourceContextSignature": "(((L0,L1),(L2,L3)),((L4,L5),(L6,L7)))",
+        "reticulationNode": 15,
+        "backgroundParentNode": 1,
+        "alternateParentNode": 16,
+        "recipientChildNode": 2,
+        "donorChildNode": 7
+      },
+      {
+        "bit": 1,
+        "move": {
+          "pruned": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "sourceSibling": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "destination": [
+            4
+          ],
+          "destinationIsRoot": false
+        },
+        "sourceContextMask": 1,
+        "sourceContextSignature": "((((L0,L1),L3),L2),((L4,L5),(L6,L7)))",
+        "reticulationNode": 17,
+        "backgroundParentNode": 1,
+        "alternateParentNode": 18,
+        "recipientChildNode": 5,
+        "donorChildNode": 10
+      },
+      {
+        "bit": 2,
+        "move": {
+          "pruned": [
+            2,
+            3,
+            4,
+            5
+          ],
+          "sourceSibling": [
+            6,
+            7
+          ],
+          "destination": [
+            7
+          ],
+          "destinationIsRoot": false
+        },
+        "sourceContextMask": 2,
+        "sourceContextSignature": "(((((L2,L3),L4),L5),(L6,L7)),(L0,L1))",
+        "reticulationNode": 19,
+        "backgroundParentNode": 8,
+        "alternateParentNode": 20,
+        "recipientChildNode": 9,
+        "donorChildNode": 14
+      },
+      {
+        "bit": 3,
+        "move": {
+          "pruned": [
+            0,
+            1,
+            2,
+            3,
+            4
+          ],
+          "sourceSibling": [
+            5
+          ],
+          "destination": [
+            6
+          ],
+          "destinationIsRoot": false
+        },
+        "sourceContextMask": 7,
+        "sourceContextSignature": "(((((((L0,L1),L3),L2),L4),L5),L7),L6)",
+        "reticulationNode": 21,
+        "backgroundParentNode": 9,
+        "alternateParentNode": 22,
+        "recipientChildNode": 18,
+        "donorChildNode": 13
+      }
+    ],
+    "eventIntervals": [
+      {
+        "bit": 0,
+        "start": 121,
+        "end": 528
+      },
+      {
+        "bit": 1,
+        "start": 325,
+        "end": 780
+      },
+      {
+        "bit": 2,
+        "start": 457,
+        "end": 624
+      },
+      {
+        "bit": 0,
+        "start": 697,
+        "end": 876
+      },
+      {
+        "bit": 3,
+        "start": 697,
+        "end": 1200
+      }
+    ],
+    "breakpoints": [
+      120,
+      324,
+      456,
+      528,
+      624,
+      696,
+      780,
+      876
+    ],
+    "maximumOverlap": 3,
+    "distinctLocalTrees": 9
+  },
+  "rows": [
+    {
+      "replicate": 1,
+      "method": "JEMSPR fixed web defaults",
+      "runtimeMs": 6421.8571360000005,
+      "proposalMs": 0,
+      "treeFitMs": 2248.207343,
+      "reconstructionMs": 4171.673274999999,
+      "siteUnrootedRf": 0.18349999999999872,
+      "exactTreeFraction": 0.37,
+      "breakpoint": {
+        "predicted": 3,
+        "truePositive": 3,
+        "precision": 1,
+        "recall": 0.375,
+        "f1": 0.5454545454545454,
+        "mae": 9.333333333333334
+      },
+      "runs": 4,
+      "distinctTrees": 4,
+      "templates": 3,
+      "occurrences": 3,
+      "maximumOverlap": 2,
+      "breakpointEvents": 3,
+      "totalSprEdits": null,
+      "maximumMasterSprDistance": null,
+      "proposalCount": null,
+      "seedTreeCount": 16
+    },
+    {
+      "replicate": 1,
+      "method": "JEMSPR expanded search",
+      "runtimeMs": 10360.389659,
+      "proposalMs": 0,
+      "treeFitMs": 3744.8670390000007,
+      "reconstructionMs": 6614.043088999999,
+      "siteUnrootedRf": 0.21249999999999913,
+      "exactTreeFraction": 0.37,
+      "breakpoint": {
+        "predicted": 2,
+        "truePositive": 2,
+        "precision": 1,
+        "recall": 0.25,
+        "f1": 0.4,
+        "mae": 15.5
+      },
+      "runs": 3,
+      "distinctTrees": 3,
+      "templates": 2,
+      "occurrences": 2,
+      "maximumOverlap": 2,
+      "breakpointEvents": 2,
+      "totalSprEdits": null,
+      "maximumMasterSprDistance": null,
+      "proposalCount": null,
+      "seedTreeCount": 16
+    },
+    {
+      "replicate": 1,
+      "method": "MosaicSPR web defaults",
+      "runtimeMs": 2716.8575450000026,
+      "proposalMs": 61.55504999999903,
+      "treeFitMs": 720.410871,
+      "reconstructionMs": 1932.615342000001,
+      "siteUnrootedRf": 0.18249999999999822,
+      "exactTreeFraction": 0.42583333333333334,
+      "breakpoint": {
+        "predicted": 2,
+        "truePositive": 2,
+        "precision": 1,
+        "recall": 0.25,
+        "f1": 0.4,
+        "mae": 14.5
+      },
+      "runs": 3,
+      "distinctTrees": 3,
+      "templates": null,
+      "occurrences": null,
+      "maximumOverlap": null,
+      "breakpointEvents": 2,
+      "totalSprEdits": 3,
+      "maximumMasterSprDistance": 1,
+      "proposalCount": 5,
+      "seedTreeCount": 7
+    },
+    {
+      "replicate": 2,
+      "method": "JEMSPR fixed web defaults",
+      "runtimeMs": 8289.669822,
+      "proposalMs": 0,
+      "treeFitMs": 2685.926523000002,
+      "reconstructionMs": 5602.134245000001,
+      "siteUnrootedRf": 0.16066666666666446,
+      "exactTreeFraction": 0.31333333333333335,
+      "breakpoint": {
+        "predicted": 3,
+        "truePositive": 3,
+        "precision": 1,
+        "recall": 0.375,
+        "f1": 0.5454545454545454,
+        "mae": 6.666666666666667
+      },
+      "runs": 4,
+      "distinctTrees": 3,
+      "templates": 2,
+      "occurrences": 2,
+      "maximumOverlap": 1,
+      "breakpointEvents": 3,
+      "totalSprEdits": null,
+      "maximumMasterSprDistance": null,
+      "proposalCount": null,
+      "seedTreeCount": 16
+    },
+    {
+      "replicate": 2,
+      "method": "JEMSPR expanded search",
+      "runtimeMs": 10504.508416,
+      "proposalMs": 0,
+      "treeFitMs": 2663.413303000001,
+      "reconstructionMs": 7840.580542,
+      "siteUnrootedRf": 0.16066666666666446,
+      "exactTreeFraction": 0.31333333333333335,
+      "breakpoint": {
+        "predicted": 3,
+        "truePositive": 3,
+        "precision": 1,
+        "recall": 0.375,
+        "f1": 0.5454545454545454,
+        "mae": 6.666666666666667
+      },
+      "runs": 4,
+      "distinctTrees": 3,
+      "templates": 2,
+      "occurrences": 2,
+      "maximumOverlap": 1,
+      "breakpointEvents": 3,
+      "totalSprEdits": null,
+      "maximumMasterSprDistance": null,
+      "proposalCount": null,
+      "seedTreeCount": 16
+    },
+    {
+      "replicate": 2,
+      "method": "MosaicSPR web defaults",
+      "runtimeMs": 2212.9462400000048,
+      "proposalMs": 33.24259199999506,
+      "treeFitMs": 714.4627680000049,
+      "reconstructionMs": 1463.2455039999986,
+      "siteUnrootedRf": 0.22999999999999754,
+      "exactTreeFraction": 0.08,
+      "breakpoint": {
+        "predicted": 2,
+        "truePositive": 2,
+        "precision": 1,
+        "recall": 0.25,
+        "f1": 0.4,
+        "mae": 0
+      },
+      "runs": 3,
+      "distinctTrees": 3,
+      "templates": null,
+      "occurrences": null,
+      "maximumOverlap": null,
+      "breakpointEvents": 2,
+      "totalSprEdits": 3,
+      "maximumMasterSprDistance": 1,
+      "proposalCount": 5,
+      "seedTreeCount": 8
+    },
+    {
+      "replicate": 3,
+      "method": "JEMSPR fixed web defaults",
+      "runtimeMs": 6793.9268100000045,
+      "proposalMs": 0,
+      "treeFitMs": 2737.7624940000023,
+      "reconstructionMs": 4055.6735700000063,
+      "siteUnrootedRf": 0.26000000000000156,
+      "exactTreeFraction": 0.32916666666666666,
+      "breakpoint": {
+        "predicted": 3,
+        "truePositive": 2,
+        "precision": 0.6666666666666666,
+        "recall": 0.25,
+        "f1": 0.36363636363636365,
+        "mae": 2
+      },
+      "runs": 4,
+      "distinctTrees": 3,
+      "templates": 3,
+      "occurrences": 4,
+      "maximumOverlap": 3,
+      "breakpointEvents": 3,
+      "totalSprEdits": null,
+      "maximumMasterSprDistance": null,
+      "proposalCount": null,
+      "seedTreeCount": 16
+    },
+    {
+      "replicate": 3,
+      "method": "JEMSPR expanded search",
+      "runtimeMs": 10422.828279000001,
+      "proposalMs": 0,
+      "treeFitMs": 4310.153290999995,
+      "reconstructionMs": 6112.178993000001,
+      "siteUnrootedRf": 0.26000000000000156,
+      "exactTreeFraction": 0.32916666666666666,
+      "breakpoint": {
+        "predicted": 3,
+        "truePositive": 2,
+        "precision": 0.6666666666666666,
+        "recall": 0.25,
+        "f1": 0.36363636363636365,
+        "mae": 2
+      },
+      "runs": 4,
+      "distinctTrees": 3,
+      "templates": 3,
+      "occurrences": 4,
+      "maximumOverlap": 3,
+      "breakpointEvents": 3,
+      "totalSprEdits": null,
+      "maximumMasterSprDistance": null,
+      "proposalCount": null,
+      "seedTreeCount": 16
+    },
+    {
+      "replicate": 3,
+      "method": "MosaicSPR web defaults",
+      "runtimeMs": 2687.155719000002,
+      "proposalMs": 29.887330999998085,
+      "treeFitMs": 753.1747729999988,
+      "reconstructionMs": 1902.7842939999973,
+      "siteUnrootedRf": 0.19650000000000212,
+      "exactTreeFraction": 0.335,
+      "breakpoint": {
+        "predicted": 3,
+        "truePositive": 2,
+        "precision": 0.6666666666666666,
+        "recall": 0.25,
+        "f1": 0.36363636363636365,
+        "mae": 9.5
+      },
+      "runs": 4,
+      "distinctTrees": 4,
+      "templates": null,
+      "occurrences": null,
+      "maximumOverlap": null,
+      "breakpointEvents": 3,
+      "totalSprEdits": 5,
+      "maximumMasterSprDistance": 2,
+      "proposalCount": 5,
+      "seedTreeCount": 9
+    }
+  ]
+}

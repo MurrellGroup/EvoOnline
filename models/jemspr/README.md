@@ -17,3 +17,13 @@ The numerical workflow is:
 9. donor–recipient equality plus strict-ancestry hard lazy cuts.
 
 The path graph and outer network beam are budgeted searches. Fixed-graph master/path inference and fixed-network overlap-mask inference are exact within their finite candidate universes. Result metadata states this distinction explicitly.
+
+## Benchmark
+
+The seeded benchmark constructs a rank-feasible four-reticulation switching DAG with crossing, nested, recurrent, simultaneous, and edge-censored events; simulates exact GTR sequence evolution with realistic rate heterogeneity; and reports nucleotide-weighted site-averaged unrooted RF, exact-tree span, ordered breakpoint matching, event complexity, fixed-planted-network diagnostics, runtime, and null false calls.
+
+```bash
+npm run benchmark:jemspr -- --quick --replicates 3
+```
+
+The measured report and raw outputs are under [`benchmarks/results`](benchmarks/results/BENCHMARK_REPORT.md). The current defaults remain unchanged: the tested balanced penalty profile was promising, but three null replicates are insufficient to calibrate a production default.
