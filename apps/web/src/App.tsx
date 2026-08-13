@@ -40,6 +40,7 @@ const stageLabels: Readonly<Record<string, string>> = {
   "fasttree-runtime": "Compiling the FastTree runtime",
   "tree-family": "Fitting segment, pair, triplet, and global trees",
   "tree-hmm-emissions": "Caching per-site tree likelihoods",
+  "spr-reconstruction": "Searching the unrestricted SPR topology graph",
   "tree-hmm": "Searching topology HMM subsets",
   "tree-refinement": "Refining Viterbi runs and trees",
   "tree-refinement-hmm": "Updating the refined topology HMM",

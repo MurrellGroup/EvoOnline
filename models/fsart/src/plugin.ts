@@ -15,7 +15,7 @@ export const fsartManifest: ModelManifest = {
   version: "0.1.0",
   title: "Fast Stepwise Approximate Recombination Test",
   shortTitle: "FSART",
-  description: "Aggregate pair-covered informative-triplet scans into consensus boundaries, fit a segment/pair/triplet tree family, and explore its cached site likelihoods with conservative or sparse topology HMMs.",
+  description: "Aggregate pair-covered informative-triplet scans, fit a local tree family, explore cached likelihoods with topology HMMs, and reconstruct an unknown master plus unrestricted multi-SPR local trees.",
   category: "recombination",
   inputSlots: [{
     id: "alignment",
@@ -28,6 +28,7 @@ export const fsartManifest: ModelManifest = {
     { id: "window", label: "Informative events per flank", description: "Each tested boundary compares this many informative pair-pattern events on either side.", type: "integer", default: 24, minimum: 8, maximum: 128, step: 2 },
     { id: "runFastTree", label: "Build the FastTree proposal family", description: "Fit a tree to every consensus segment, adjacent pair, adjacent triplet, and the whole alignment.", type: "boolean", default: true },
     { id: "runTreeHmm", label: "Search topology-mixture HMMs", description: "Recommended. Cache every retained topology's likelihood at every site, then use beam search plus add/drop/swap floating moves before an exact forward/backward fit.", type: "boolean", default: true },
+    { id: "runSprReconstruction", label: "Reconstruct explicit SPR events", description: "Recommended. Jointly revise an unknown master topology and a piecewise genomic path in an explicit SPR graph. A local tree may contain any number of composed SPR edits.", type: "boolean", default: true },
     { id: "criterion", label: "Topology-set criterion", description: "Lower is better. AICc is the default penalty for the rapidly searched joint tree-HMM reconstruction.", type: "select", default: "aicc", options: [{ value: "aicc", label: "AICc (recommended)" }, { value: "aic", label: "AIC" }, { value: "bic", label: "BIC" }] },
     { id: "fastTreeFastest", label: "Use FastTree's fastest topology search", description: "Faster and appropriate for this screening analysis, but may lose topology accuracy on difficult alignments.", type: "boolean", default: true },
     { id: "minimumSegmentLength", label: "Minimum tree segment length", description: "Hard spacing between consensus boundaries and minimum Viterbi run length. EvoOnline also requires enough columns to expect max(30, 2 × taxa) variable sites at the alignment's observed diversity.", type: "integer", default: 150, minimum: 60, maximum: 10000, step: 1, advanced: true },
@@ -46,10 +47,19 @@ export const fsartManifest: ModelManifest = {
     { id: "refineTreeHmm", label: "Refine Viterbi boundaries and trees", description: "Recommended. Refit each selected topology on its assigned Viterbi runs, rescore all sites, and iterate while recording—but not requiring—convergence.", type: "boolean", default: true },
     { id: "maximumRefinementIterations", label: "Maximum refinement iterations", description: "Bounded Viterbi → tree refit → site-rescore cycles.", type: "integer", default: 3, minimum: 1, maximum: 8, step: 1, advanced: true },
     { id: "refinementBoundaryTolerance", label: "Boundary convergence tolerance", description: "Maximum aligned-site shift considered stable when the selected topology set is unchanged.", type: "integer", default: 3, minimum: 0, maximum: 30, step: 1, advanced: true },
+    { id: "maximumSprStates", label: "SPR topology-state budget", description: "Maximum connected topology states retained by unrestricted SPR column generation. This is a compute budget, not a limit on edits active at a site.", type: "integer", default: 48, minimum: 8, maximum: 128, step: 4, advanced: true },
+    { id: "maximumSprIterations", label: "SPR expansion rounds", description: "Maximum successive one-SPR graph expansions. Repeated rounds permit arbitrarily composed derived trees; the budget only bounds runtime.", type: "integer", default: 12, minimum: 1, maximum: 40, step: 1, advanced: true },
+    { id: "sprBeamWidth", label: "SPR expansion beam", description: "New connected topology columns retained per expansion round.", type: "integer", default: 4, minimum: 1, maximum: 16, step: 1, advanced: true },
+    { id: "sprParsimonyScreenLimit", label: "SPR Fitch screen", description: "Complete one-SPR neighbours scored per round after diverse structural pre-screening. Increase for a stronger local-search certificate.", type: "integer", default: 96, minimum: 8, maximum: 512, step: 8, advanced: true },
+    { id: "maximumSprStarts", label: "Unknown-master starts", description: "Distinct best-parsimony FastTree seeds used for joint master/local-tree searches.", type: "integer", default: 3, minimum: 1, maximum: 12, step: 1, advanced: true },
+    { id: "sprSearchPatience", label: "SPR look-ahead patience", description: "Consecutive non-improving graph layers explored before stopping. This permits temporarily neutral intermediate edits without changing the unrestricted model.", type: "integer", default: 5, minimum: 1, maximum: 20, step: 1, advanced: true },
+    { id: "sprBreakpointPenalty", label: "SPR breakpoint penalty", description: "Zero selects the alignment-size MDL default; positive values override it in parsimony cost units.", type: "number", default: 0, minimum: 0, maximum: 100, step: 0.1, advanced: true },
+    { id: "sprMovePenalty", label: "Per-SPR edit penalty", description: "Zero selects the taxon-count MDL default. Applied to every edit, including multiple edits at one breakpoint.", type: "number", default: 0, minimum: 0, maximum: 100, step: 0.1, advanced: true },
+    { id: "sprMasterPenalty", label: "Master-description penalty", description: "Zero selects the default. Encourages a compact edit tape around the jointly revised master without fixing it.", type: "number", default: 0, minimum: 0, maximum: 100, step: 0.1, advanced: true },
   ],
   runtimes: ["browser-wasm"],
-  outputKinds: ["breakpoint-table", "breakpoint-uncertainty", "triplet-topology-trace", "tree-family", "viterbi-partition", "segment-trees", "linked-tanglegram", "tree-hmm", "interactive-switch-prior", "sparse-dirichlet-em", "switch-posterior", "svg", "csv"],
-  citation: "Informative-triplet scan inspired by RDP/RDP5 (Martin et al.); a CHMMera-inspired linear-time topology HMM searches cached FastTree site likelihoods under an information criterion. FSART remains an independent EvoOnline method, not exact RDP, BURT, or GARD software.",
+  outputKinds: ["breakpoint-table", "breakpoint-uncertainty", "triplet-topology-trace", "tree-family", "viterbi-partition", "segment-trees", "linked-tanglegram", "tree-hmm", "interactive-switch-prior", "sparse-dirichlet-em", "switch-posterior", "unrestricted-spr-graph", "master-tree", "spr-edit-tape", "svg", "csv"],
+  citation: "Informative-triplet scan inspired by RDP/RDP5 (Martin et al.); a CHMMera-inspired topology HMM searches cached FastTree site likelihoods. The separate parsimony-first reconstruction uses explicit unrooted-SPR graph expansion and exact minimum-duration path decoding; it reports its search certificate and does not claim global SPR optimality. FSART remains independent EvoOnline software, not exact RDP, BURT, or GARD.",
 };
 
 export function validateFsartWorkspace(workspace: PhyloWorkspaceSnapshot): ModelValidation {

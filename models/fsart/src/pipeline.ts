@@ -4,6 +4,7 @@ import { consensusBreakpointSignals } from "./merge.js";
 import { effectiveMinimumTreeSpan } from "./tree-bank.js";
 import { scanTripletShard } from "./scanner.js";
 import { skippedTreeHmm } from "./tree-hmm.js";
+import { skippedSprReconstruction } from "./spr-reconstruction.js";
 import type {
   FsartAlignment,
   FsartAnalysisOptions,
@@ -122,6 +123,7 @@ export function assembleScanResult(
     partition,
     treeHmm: skippedTreeHmm("Tree-HMM scoring is performed after local FastTree-WASM has generated fixed-topology site likelihoods.", options.criterion),
     treeHmmProfiles: [],
+    sprReconstruction: skippedSprReconstruction("The unrestricted SPR graph is built after the browser has generated the FastTree proposal family."),
     discordantClades: [],
     diagnostics,
     timings: { scanMs, hmmMs, mergeMs, totalMs: scanMs + hmmMs + mergeMs },
@@ -171,6 +173,13 @@ export function treeHmmToCsv(result: FsartAnalysisResult["treeHmm"]): string {
 
 export function replaceTreeHmm(result: FsartAnalysisResult, treeHmm: FsartAnalysisResult["treeHmm"]): FsartAnalysisResult {
   return { ...result, treeHmm, treeHmmCsv: treeHmmToCsv(treeHmm) };
+}
+
+export function replaceSprReconstruction(
+  result: FsartAnalysisResult,
+  sprReconstruction: FsartAnalysisResult["sprReconstruction"],
+): FsartAnalysisResult {
+  return { ...result, sprReconstruction };
 }
 
 export type { RefinedTripletSignal };

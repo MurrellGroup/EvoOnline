@@ -96,6 +96,27 @@ test("FSART renders consensus proposals, triplet topology evidence, topology HMM
       { id: "T1", sourceStart: 1, sourceEnd: 13, tree: "((a:0.1,b:0.1):0.1,c:0.2);", topologySignature: "t1", logLikelihood: -70, siteLogLikelihoods: Float64Array.from([...Array(12).fill(-1), ...Array(12).fill(-5)]), elapsedMs: 2 },
       { id: "T2", sourceStart: 14, sourceEnd: 24, tree: "((a:0.1,c:0.1):0.1,b:0.2);", topologySignature: "t2", logLikelihood: -70, siteLogLikelihoods: Float64Array.from([...Array(12).fill(-5), ...Array(12).fill(-1)]), elapsedMs: 2 },
     ],
+    sprReconstruction: {
+      status: "complete", scoreKind: "fitch-parsimony-mdl", objective: 31.2, parsimony: 28, nullParsimony: 35,
+      breakpointPenalty: 1.2, sprPenalty: 1.8, masterPenalty: 0.45, minimumRunLength: 8,
+      initialSeedStateId: "S1", masterStateId: "S2", masterChangedFromSeed: true,
+      states: [
+        { id: "S1", tree: "((a:0.1,b:0.1):0.1,(c:0.1,d:0.1):0.1);", topologySignature: "s1", seedDistance: 0, parsimony: 35, occupiedSites: 12, color: "#156f66" },
+        { id: "S2", tree: "((a:0.1,c:0.1):0.1,(b:0.1,d:0.1):0.1);", topologySignature: "s2", seedDistance: 1, parsimony: 34, occupiedSites: 12, color: "#e0664f" },
+      ],
+      runs: [
+        { id: "R1", start: 1, end: 12, stateId: "S1", stateIndex: 0, parsimony: 14 },
+        { id: "R2", start: 13, end: 24, stateId: "S2", stateIndex: 1, parsimony: 14 },
+      ],
+      derivations: [
+        { stateId: "S1", occupiedSites: 12, sprDistanceFromMaster: 1, edits: [{ step: 1, fromStateId: "S2", toStateId: "S1", prunedTaxa: ["a"], sourceSplit: ["a"], sourceAttachmentSplit: ["b"], destinationSplit: ["c"] }], alternativeShortestScripts: 1, alternativesCapped: false },
+        { stateId: "S2", occupiedSites: 12, sprDistanceFromMaster: 0, edits: [], alternativeShortestScripts: 1, alternativesCapped: false },
+      ],
+      events: [{ breakpoint: 12, fromStateId: "S1", toStateId: "S2", sprDistance: 1, edits: [{ step: 1, fromStateId: "S1", toStateId: "S2", prunedTaxa: ["a"], sourceSplit: ["a"], sourceAttachmentSplit: ["c"], destinationSplit: ["b"] }], alternativeShortestScripts: 1, alternativesCapped: false }],
+      iterations: [{ start: 1, iteration: 1, topologyStates: 2, occupiedStates: 2, candidatesEnumerated: 12, candidatesScored: 12, candidatesAdded: 1, objective: 31.2, improvement: 4.1, masterStateId: "S2", elapsedMs: 3 }],
+      certificate: { globalOptimal: false, completeOneSprNeighborhood: false, scope: "budgeted-column-generation", searchedStarts: 2, topologyStates: 2, graphEdges: 1, unconnectedSeedTopologies: 0, message: "Budgeted topology-space search." },
+      elapsedMs: 8, message: "Two local topology runs with one explicit SPR edit.",
+    },
     discordantClades: [{ betweenSegments: ["segment-1-13", "segment-14-24"], direction: "lost", taxa: ["a", "b"], size: 2 }],
     diagnostics: { taxa: 3, sites: 24, variableSites: 18, totalTriplets: 1, scannedTriplets: 1, tripletSampling: "exhaustive", pairCoverageGuaranteed: true, totalTaxonPairs: 3, informativeTriplets: 1, testedBoundaries: 10, scanWindow: 4, minimumTreeSpan: 12, expectedVariableSitesPerMinimumSpan: 9, parallelWorkers: 1, multipleTesting: "none-ranked-candidate-generation", breakpointUncertainty: "three-state-burt-style-hmm-rate-marginalization", intervalConditioning: "candidate-window-local-posterior-basin", exactBurtParity: false, baumWelch: false, scanner: "bitset-informative-event-g-test", pairEqualityCache: true, bitsetWords: 1 },
     timings: { totalMs: 120 }, breakpointCsv: "Rank\n1\n", partitionCsv: "Breakpoint\n13\n", treeHmmCsv: "Site\n1\n",
@@ -110,6 +131,9 @@ test("FSART renders consensus proposals, triplet topology evidence, topology HMM
   assert.match(markup, /linked topology comparison/);
   assert.match(markup, /Triplet topology trace/);
   assert.match(markup, /Refined Viterbi tree reconstruction/);
+  assert.match(markup, /Unknown-master, unrestricted SPR reconstruction/);
+  assert.match(markup, /Master-to-local derivations/);
+  assert.match(markup, /Event JSON/);
   assert.match(markup, /Exploratory participating-subtree candidates/);
   assert.match(markup, /FastTree 2.1.11 bioWASM/);
   assert.ok((markup.match(/Export SVG/g) ?? []).length >= 5);
