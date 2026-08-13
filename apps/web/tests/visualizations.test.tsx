@@ -23,9 +23,11 @@ import { CladeShiftResultsView } from "../src/components/CladeShiftResultsView.j
 import type { CladeShiftRunResult } from "../src/types.js";
 import { FsartResultsView } from "../src/components/FsartResultsView.js";
 import { MosaicSprResultsView } from "../src/components/MosaicSprResultsView.js";
+import { JemsprResultsView } from "../src/components/JemsprResultsView.js";
 import { alignComparisonTrees, countOrderCrossings } from "../src/lib/tree-comparison.js";
 import type { FsartAnalysisResult } from "@phylo-workbench/model-fsart/browser-source";
 import type { MosaicSprAnalysisResult } from "@phylo-workbench/model-mosaicspr/browser-source";
+import { analyzeJemspr } from "@phylo-workbench/model-jemspr/browser-source";
 import { modelRegistry } from "../src/model-registry.js";
 
 test("FSART and MosaicSPR are separately registered methods with non-overlapping SPR controls", () => {
@@ -36,6 +38,15 @@ test("FSART and MosaicSPR are separately registered methods with non-overlapping
   assert.notEqual(fsart.plugin, mosaic.plugin);
   assert.equal(fsart.plugin.manifest.parameters.some((parameter) => parameter.id === "maximumSprStates"), false);
   assert.equal(mosaic.plugin.manifest.parameters.some((parameter) => parameter.id === "maximumSprStates"), true);
+});
+
+test("JEMSPR is a third independent alignment-only recombination method with no proposal or FastTree controls", () => {
+  const jemspr = modelRegistry.find((entry) => entry.plugin.manifest.id === "jemspr");
+  assert.ok(jemspr);
+  assert.deepEqual(jemspr.plugin.manifest.inputSlots.map((slot) => slot.id), ["alignment"]);
+  assert.equal(jemspr.plugin.manifest.parameters.some((parameter) => /triplet|fasttree|proposal/i.test(parameter.id)), false);
+  assert.ok(jemspr.plugin.manifest.parameters.some((parameter) => parameter.id === "overlapCap"));
+  assert.ok(jemspr.plugin.manifest.parameters.some((parameter) => parameter.id === "maximumReticulations"));
 });
 
 test("deferred number fields accept replacement text and validate only when committed", () => {
@@ -175,6 +186,28 @@ test("MosaicSPR is a separate result studio with implied regional trees, taxon l
   assert.match(markup, /Master-to-local derivations/);
   assert.match(markup, /Event CSV/);
   assert.ok((markup.match(/Export SVG/g) ?? []).length >= 2);
+});
+
+test("JEMSPR renders coherent event lanes, linked implied trees, and the compiled switching DAG as independent SVGs", async () => {
+  const length = 80;
+  const sequences = [["A", "A"], ["A", "G"], ["G", "A"], ["G", "G"]]
+    .map(([left, right]) => left!.repeat(length / 2) + right!.repeat(length / 2));
+  const result = await analyzeJemspr(sequences.map((sequence, index) => `>t${index}\n${sequence}`).join("\n"), {
+    minimumWindow: 16, maximumDyadicTrees: 4, rootPlacements: 1,
+    maximumGraphStates: 10, maximumGraphIterations: 3, neighbourScreen: 16, frontierStates: 3, nearImprovers: 1,
+    pathBreakpointPenalty: 2, pathEndpointPenalty: 1, pathSpanPenalty: .001,
+    maximumReticulations: 2, overlapCap: 2, networkBeamWidth: 3, eventPoolSize: 6,
+    eventOpenPenalty: 1, networkBreakpointPenalty: 1, eventSpanPenalty: .001, reticulationPenalty: 1,
+  });
+  const markup = renderToStaticMarkup(<JemsprResultsView result={result} />);
+  assert.match(markup, /JEMSPR/);
+  assert.match(markup, /does not call FastTree, FSART, MosaicSPR/);
+  assert.match(markup, /Coherent genomic event history/);
+  assert.match(markup, /Implied regional phylogenies/);
+  assert.match(markup, /Compiled switching DAG/);
+  assert.match(markup, /Matching-taxon links/);
+  assert.match(markup, /Network JSON/);
+  assert.ok((markup.match(/Export SVG/g) ?? []).length >= 3);
 });
 
 test("DifFUBAR result studio renders a native SVG overview and export control", () => {

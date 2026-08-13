@@ -6,6 +6,7 @@ import { famePlugin, flavorPlugin, globalGammaPlugin } from "@phylo-workbench/mo
 import { cladeShiftPlugin } from "@phylo-workbench/model-cladeshift/browser-source";
 import { fsartPlugin, type FsartAnalysisResult } from "@phylo-workbench/model-fsart/browser-source";
 import { mosaicSprPlugin, type MosaicSprAnalysisResult } from "@phylo-workbench/model-mosaicspr/browser-source";
+import { jemsprPlugin, type JemsprAnalysisResult } from "@phylo-workbench/model-jemspr/browser-source";
 import type { ModelPlugin, ParameterValues } from "@phylo-workbench/model-sdk";
 import type { WidgetBridge } from "@phylo-workbench/viewer-bridge";
 import { ResultsView } from "./components/ResultsView.js";
@@ -16,6 +17,7 @@ import { GlobalGammaResultsView } from "./components/GlobalGammaResultsView.js";
 import { CladeShiftResultsView } from "./components/CladeShiftResultsView.js";
 import { FsartResultsView } from "./components/FsartResultsView.js";
 import { MosaicSprResultsView } from "./components/MosaicSprResultsView.js";
+import { JemsprResultsView } from "./components/JemsprResultsView.js";
 import { DifFubarClient, type RunProgress } from "./lib/diffubar-client.js";
 import { FubarClient } from "./lib/fubar-client.js";
 import { BsrelClient } from "./lib/bsrel-client.js";
@@ -23,6 +25,7 @@ import { BameClient } from "./lib/bame-client.js";
 import { CladeShiftClient } from "./lib/cladeshift-client.js";
 import { FsartClient } from "./lib/fsart-client.js";
 import { MosaicSprClient } from "./lib/mosaicspr-client.js";
+import { JemsprClient } from "./lib/jemspr-client.js";
 import type { BameRunResult, BsrelRunResult, CladeShiftRunResult, DifFubarRunResult, FubarRunResult, GlobalGammaRunResult } from "./types.js";
 
 export interface BrowserModelExecutor {
@@ -85,6 +88,10 @@ function FsartResult({ result, parameters }: ResultProps) {
 
 function MosaicSprResult({ result }: ResultProps) {
   return <MosaicSprResultsView result={result as MosaicSprAnalysisResult} />;
+}
+
+function JemsprResult({ result }: ResultProps) {
+  return <JemsprResultsView result={result as JemsprAnalysisResult} />;
 }
 
 export const modelRegistry: readonly BrowserModelRegistration[] = [
@@ -185,6 +192,17 @@ export const modelRegistry: readonly BrowserModelRegistration[] = [
       const output = result as MosaicSprAnalysisResult;
       const edits = output.reconstruction.events.reduce((total, event) => total + event.sprDistance, 0);
       return `MosaicSPR completed: ${output.reconstruction.runs.length} genomic regions, ${output.reconstruction.events.length} breakpoint events, and ${edits} explicit SPR edits.`;
+    },
+  },
+  {
+    plugin: jemsprPlugin,
+    glyph: "rSPR⁺",
+    runtimeLabel: "Independent rooted-SPR worker",
+    createExecutor: () => new JemsprClient(),
+    ResultView: JemsprResult,
+    completionMessage: (result) => {
+      const output = result as JemsprAnalysisResult;
+      return `JEMSPR completed: ${output.network.templates.length} coherent reticulation template${output.network.templates.length === 1 ? "" : "s"}, ${output.network.occurrences.length} event occurrence${output.network.occurrences.length === 1 ? "" : "s"}, and ${output.network.runs.length} genomic region${output.network.runs.length === 1 ? "" : "s"}.`;
     },
   },
 ];

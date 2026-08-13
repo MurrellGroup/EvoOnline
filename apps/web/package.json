@@ -19,6 +19,7 @@
     "@phylo-workbench/model-cladeshift": "*",
     "@phylo-workbench/model-fsart": "*",
     "@phylo-workbench/model-mosaicspr": "*",
+    "@phylo-workbench/model-jemspr": "*",
     "@phylo-workbench/model-sdk": "*",
     "@phylo-workbench/viewer-bridge": "*",
     "react": "^19.1.1",
