@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import type { SprEdit, SprReconstructionResult } from "@phylo-workbench/model-fsart/browser-source";
+import type { SprEdit, SprReconstructionResult } from "@phylo-workbench/model-mosaicspr/browser-source";
 import { downloadSvg } from "../lib/svg-export.js";
 import { PhylogramFigure } from "./PhylogramFigure.js";
 
@@ -16,7 +16,7 @@ function downloadText(text: string, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-export function FsartSprReconstructionFigure({ result }: { readonly result: SprReconstructionResult }) {
+export function MosaicSprReconstructionFigure({ result }: { readonly result: SprReconstructionResult }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [title, setTitle] = useState("Unrestricted SPR reconstruction along the alignment");
   const [selectedStateId, setSelectedStateId] = useState(result.masterStateId ?? result.states[0]?.id ?? "");
@@ -31,7 +31,7 @@ export function FsartSprReconstructionFigure({ result }: { readonly result: SprR
   const ticks = useMemo(() => Array.from({ length: 6 }, (_, index) => Math.max(1, Math.round(1 + index * (sites - 1) / 5))), [sites]);
 
   if (result.status !== "complete") return <div className="figure-empty"><strong>Explicit SPR reconstruction unavailable.</strong><span>{result.message}</span></div>;
-  return <div className="fsart-spr-reconstruction">
+  return <div className="mosaicspr-reconstruction">
     <p className="figure-note"><strong>This is the unrestricted event representation.</strong> The master is selected during search, not supplied or held fixed. Each local topology is a node in a connected graph of valid unrooted SPR edits, and a boundary may apply several edits at once. The exact run path is solved on the explored graph; the certificate below is candid about the outer topology-space search.</p>
     <div className="result-stats">
       <div><span>Jointly selected master</span><strong>{result.masterStateId}</strong><small>{result.masterChangedFromSeed ? `revised from ${result.initialSeedStateId}` : "same topology as winning seed"}</small></div>
@@ -71,7 +71,7 @@ export function FsartSprReconstructionFigure({ result }: { readonly result: SprR
     </article>
 
     <details className="result-panel" open><summary><span>Master and local topology viewer</span><small>Master is not fixed · choose any explored state · Newick download</small></summary><div className="result-panel__body">
-      <div className="selection-visibility bsrel-table-controls"><label><span>Topology state</span><select value={selectedStateId} onChange={(event) => setSelectedStateId(event.target.value)}>{result.states.map((state) => <option key={state.id} value={state.id}>{`${state.id}${state.id === result.masterStateId ? " · master" : ""} · ${state.occupiedSites} sites · ${derivationByState.get(state.id)?.sprDistanceFromMaster ?? "—"} SPR from master`}</option>)}</select></label>{selectedState !== undefined && <button type="button" className="button button--secondary" onClick={() => downloadText(selectedState.tree, `fsart-spr-${selectedState.id.toLowerCase()}.nwk`)}>Download Newick</button>}<button type="button" className="button button--secondary" onClick={() => downloadText(JSON.stringify(result, null, 2), "fsart-unrestricted-spr-reconstruction.json")}>Event JSON</button></div>
+      <div className="selection-visibility bsrel-table-controls"><label><span>Topology state</span><select value={selectedStateId} onChange={(event) => setSelectedStateId(event.target.value)}>{result.states.map((state) => <option key={state.id} value={state.id}>{`${state.id}${state.id === result.masterStateId ? " · master" : ""} · ${state.occupiedSites} sites · ${derivationByState.get(state.id)?.sprDistanceFromMaster ?? "—"} SPR from master`}</option>)}</select></label>{selectedState !== undefined && <button type="button" className="button button--secondary" onClick={() => downloadText(selectedState.tree, `mosaicspr-${selectedState.id.toLowerCase()}.nwk`)}>Download Newick</button>}<button type="button" className="button button--secondary" onClick={() => downloadText(JSON.stringify(result, null, 2), "mosaicspr-reconstruction.json")}>Event JSON</button></div>
       {selectedState !== undefined && <PhylogramFigure newick={selectedState.tree} tagged={false} />}
     </div></details>
 

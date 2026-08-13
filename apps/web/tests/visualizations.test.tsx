@@ -22,8 +22,21 @@ import type { GlobalGammaRunResult } from "../src/types.js";
 import { CladeShiftResultsView } from "../src/components/CladeShiftResultsView.js";
 import type { CladeShiftRunResult } from "../src/types.js";
 import { FsartResultsView } from "../src/components/FsartResultsView.js";
+import { MosaicSprResultsView } from "../src/components/MosaicSprResultsView.js";
 import { alignComparisonTrees, countOrderCrossings } from "../src/lib/tree-comparison.js";
 import type { FsartAnalysisResult } from "@phylo-workbench/model-fsart/browser-source";
+import type { MosaicSprAnalysisResult } from "@phylo-workbench/model-mosaicspr/browser-source";
+import { modelRegistry } from "../src/model-registry.js";
+
+test("FSART and MosaicSPR are separately registered methods with non-overlapping SPR controls", () => {
+  const fsart = modelRegistry.find((entry) => entry.plugin.manifest.id === "fsart");
+  const mosaic = modelRegistry.find((entry) => entry.plugin.manifest.id === "mosaic-spr");
+  assert.ok(fsart);
+  assert.ok(mosaic);
+  assert.notEqual(fsart.plugin, mosaic.plugin);
+  assert.equal(fsart.plugin.manifest.parameters.some((parameter) => parameter.id === "maximumSprStates"), false);
+  assert.equal(mosaic.plugin.manifest.parameters.some((parameter) => parameter.id === "maximumSprStates"), true);
+});
 
 test("deferred number fields accept replacement text and validate only when committed", () => {
   assert.equal(normalizeCommittedNumberDraft("", 17, 1, 100), 17);
@@ -96,7 +109,38 @@ test("FSART renders consensus proposals, triplet topology evidence, topology HMM
       { id: "T1", sourceStart: 1, sourceEnd: 13, tree: "((a:0.1,b:0.1):0.1,c:0.2);", topologySignature: "t1", logLikelihood: -70, siteLogLikelihoods: Float64Array.from([...Array(12).fill(-1), ...Array(12).fill(-5)]), elapsedMs: 2 },
       { id: "T2", sourceStart: 14, sourceEnd: 24, tree: "((a:0.1,c:0.1):0.1,b:0.2);", topologySignature: "t2", logLikelihood: -70, siteLogLikelihoods: Float64Array.from([...Array(12).fill(-5), ...Array(12).fill(-1)]), elapsedMs: 2 },
     ],
-    sprReconstruction: {
+    discordantClades: [{ betweenSegments: ["segment-1-13", "segment-14-24"], direction: "lost", taxa: ["a", "b"], size: 2 }],
+    diagnostics: { taxa: 3, sites: 24, variableSites: 18, totalTriplets: 1, scannedTriplets: 1, tripletSampling: "exhaustive", pairCoverageGuaranteed: true, totalTaxonPairs: 3, informativeTriplets: 1, testedBoundaries: 10, scanWindow: 4, minimumTreeSpan: 12, expectedVariableSitesPerMinimumSpan: 9, parallelWorkers: 1, multipleTesting: "none-ranked-candidate-generation", breakpointUncertainty: "three-state-burt-style-hmm-rate-marginalization", intervalConditioning: "candidate-window-local-posterior-basin", exactBurtParity: false, baumWelch: false, scanner: "bitset-informative-event-g-test", pairEqualityCache: true, bitsetWords: 1 },
+    timings: { totalMs: 120 }, breakpointCsv: "Rank\n1\n", partitionCsv: "Breakpoint\n13\n", treeHmmCsv: "Site\n1\n",
+  };
+  const markup = renderToStaticMarkup(<FsartResultsView result={result} />);
+  assert.match(markup, /Fast Stepwise Approximate Recombination Test/);
+  assert.match(markup, /without a multiple-comparisons admission gate/);
+  assert.match(markup, /Credible interval/);
+  assert.match(markup, /Approximate GARD competitor/);
+  assert.match(markup, /Conservative IC search: topology posterior and switching path/);
+  assert.match(markup, /Low-switch Viterbi retention/);
+  assert.match(markup, /linked topology comparison/);
+  assert.match(markup, /Triplet topology trace/);
+  assert.match(markup, /Refined Viterbi tree reconstruction/);
+  assert.match(markup, /Exploratory participating-subtree candidates/);
+  assert.match(markup, /FastTree 2.1.11 bioWASM/);
+  assert.ok((markup.match(/Export SVG/g) ?? []).length >= 5);
+});
+
+test("MosaicSPR is a separate result studio with implied regional trees, taxon links, and an executable edit tape", () => {
+  const result: MosaicSprAnalysisResult = {
+    method: "mosaic-spr",
+    taxa: 4,
+    sites: 24,
+    variableSites: 18,
+    proposals: [{ id: "BP1", rank: 1, breakpoint: 12, intervalLow: 10, intervalHigh: 14, supportLow: 9, supportHigh: 15, consensusScore: 7.2, evidence: 3.1, supportTriplets: 4, supportTaxa: 4 }],
+    proposalDiagnostics: { source: "fsart-triplet-plus-overlap", scannedTriplets: 4, informativeTriplets: 4, testedBoundaries: 18, pairCoverageGuaranteed: true, minimumTreeSpan: 8 },
+    draftTrees: [
+      { id: "GLOBAL", kind: "global", start: 1, end: 24, tree: "((a:0.1,b:0.1):0.1,(c:0.1,d:0.1):0.1);", logLikelihood: -120, elapsedMs: 4, topologySignature: "global" },
+      { id: "S2", kind: "segment", start: 13, end: 24, tree: "((a:0.1,c:0.1):0.1,(b:0.1,d:0.1):0.1);", logLikelihood: -54, elapsedMs: 3, topologySignature: "local" },
+    ],
+    reconstruction: {
       status: "complete", scoreKind: "fitch-parsimony-mdl", objective: 31.2, parsimony: 28, nullParsimony: 35,
       breakpointPenalty: 1.2, sprPenalty: 1.8, masterPenalty: 0.45, minimumRunLength: 8,
       initialSeedStateId: "S1", masterStateId: "S2", masterChangedFromSeed: true,
@@ -117,26 +161,20 @@ test("FSART renders consensus proposals, triplet topology evidence, topology HMM
       certificate: { globalOptimal: false, completeOneSprNeighborhood: false, scope: "budgeted-column-generation", searchedStarts: 2, topologyStates: 2, graphEdges: 1, unconnectedSeedTopologies: 0, message: "Budgeted topology-space search." },
       elapsedMs: 8, message: "Two local topology runs with one explicit SPR edit.",
     },
-    discordantClades: [{ betweenSegments: ["segment-1-13", "segment-14-24"], direction: "lost", taxa: ["a", "b"], size: 2 }],
-    diagnostics: { taxa: 3, sites: 24, variableSites: 18, totalTriplets: 1, scannedTriplets: 1, tripletSampling: "exhaustive", pairCoverageGuaranteed: true, totalTaxonPairs: 3, informativeTriplets: 1, testedBoundaries: 10, scanWindow: 4, minimumTreeSpan: 12, expectedVariableSitesPerMinimumSpan: 9, parallelWorkers: 1, multipleTesting: "none-ranked-candidate-generation", breakpointUncertainty: "three-state-burt-style-hmm-rate-marginalization", intervalConditioning: "candidate-window-local-posterior-basin", exactBurtParity: false, baumWelch: false, scanner: "bitset-informative-event-g-test", pairEqualityCache: true, bitsetWords: 1 },
-    timings: { totalMs: 120 }, breakpointCsv: "Rank\n1\n", partitionCsv: "Breakpoint\n13\n", treeHmmCsv: "Site\n1\n",
+    fastTreeVersion: "FastTree 2.1.11 bioWASM",
+    timings: { proposalMs: 3, fastTreeMs: 7, searchMs: 8, totalMs: 18 },
+    eventCsv: "Breakpoint after site\n12\n",
   };
-  const markup = renderToStaticMarkup(<FsartResultsView result={result} />);
-  assert.match(markup, /Fast Stepwise Approximate Recombination Test/);
-  assert.match(markup, /without a multiple-comparisons admission gate/);
-  assert.match(markup, /Credible interval/);
-  assert.match(markup, /Approximate GARD competitor/);
-  assert.match(markup, /Conservative IC search: topology posterior and switching path/);
-  assert.match(markup, /Low-switch Viterbi retention/);
-  assert.match(markup, /linked topology comparison/);
-  assert.match(markup, /Triplet topology trace/);
-  assert.match(markup, /Refined Viterbi tree reconstruction/);
-  assert.match(markup, /Unknown-master, unrestricted SPR reconstruction/);
+  const markup = renderToStaticMarkup(<MosaicSprResultsView result={result} />);
+  assert.match(markup, /MosaicSPR/);
+  assert.match(markup, /Regions and implied phylogenies/);
+  assert.match(markup, /implied by replaying MosaicSPR/);
+  assert.match(markup, /Select all regions/);
+  assert.match(markup, /Matching-taxon links/);
+  assert.match(markup, /Breakpoint-indexed SPR edit tape/);
   assert.match(markup, /Master-to-local derivations/);
-  assert.match(markup, /Event JSON/);
-  assert.match(markup, /Exploratory participating-subtree candidates/);
-  assert.match(markup, /FastTree 2.1.11 bioWASM/);
-  assert.ok((markup.match(/Export SVG/g) ?? []).length >= 5);
+  assert.match(markup, /Event CSV/);
+  assert.ok((markup.match(/Export SVG/g) ?? []).length >= 2);
 });
 
 test("DifFUBAR result studio renders a native SVG overview and export control", () => {

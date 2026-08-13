@@ -1,4 +1,4 @@
-import type { FsartAlignment } from "./types.js";
+import type { MosaicSprAlignment } from "./types.js";
 
 interface GraphNode {
   readonly id: number;
@@ -407,7 +407,7 @@ export function applySprMove(tree: string, move: SprMove): string {
 }
 
 /** Exact Fitch parsimony cost at every aligned site for a labelled tree. */
-export function fitchParsimonyBySite(tree: string, alignment: FsartAlignment): Uint16Array {
+export function fitchParsimonyBySite(tree: string, alignment: MosaicSprAlignment): Uint16Array {
   const graph = new NewickGraphReader(tree).parse();
   const taxa = tipNames(graph);
   if (taxa.length !== alignment.taxa || taxa.some((name, index) => name !== alignment.names.slice().sort()[index])) {

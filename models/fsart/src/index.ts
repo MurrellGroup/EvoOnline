@@ -4,8 +4,6 @@ export * from "./merge.js";
 export * from "./pipeline.js";
 export * from "./plugin.js";
 export * from "./scanner.js";
-export * from "./spr-reconstruction.js";
-export * from "./spr-tree.js";
 export * from "./stepwise.js";
 export * from "./tree-discordance.js";
 export * from "./tree-hmm.js";

@@ -5,6 +5,7 @@ import { bsrelPlugin } from "@phylo-workbench/model-bsrel/browser-source";
 import { famePlugin, flavorPlugin, globalGammaPlugin } from "@phylo-workbench/model-bame/browser-source";
 import { cladeShiftPlugin } from "@phylo-workbench/model-cladeshift/browser-source";
 import { fsartPlugin, type FsartAnalysisResult } from "@phylo-workbench/model-fsart/browser-source";
+import { mosaicSprPlugin, type MosaicSprAnalysisResult } from "@phylo-workbench/model-mosaicspr/browser-source";
 import type { ModelPlugin, ParameterValues } from "@phylo-workbench/model-sdk";
 import type { WidgetBridge } from "@phylo-workbench/viewer-bridge";
 import { ResultsView } from "./components/ResultsView.js";
@@ -14,12 +15,14 @@ import { BameResultsView } from "./components/BameResultsView.js";
 import { GlobalGammaResultsView } from "./components/GlobalGammaResultsView.js";
 import { CladeShiftResultsView } from "./components/CladeShiftResultsView.js";
 import { FsartResultsView } from "./components/FsartResultsView.js";
+import { MosaicSprResultsView } from "./components/MosaicSprResultsView.js";
 import { DifFubarClient, type RunProgress } from "./lib/diffubar-client.js";
 import { FubarClient } from "./lib/fubar-client.js";
 import { BsrelClient } from "./lib/bsrel-client.js";
 import { BameClient } from "./lib/bame-client.js";
 import { CladeShiftClient } from "./lib/cladeshift-client.js";
 import { FsartClient } from "./lib/fsart-client.js";
+import { MosaicSprClient } from "./lib/mosaicspr-client.js";
 import type { BameRunResult, BsrelRunResult, CladeShiftRunResult, DifFubarRunResult, FubarRunResult, GlobalGammaRunResult } from "./types.js";
 
 export interface BrowserModelExecutor {
@@ -78,6 +81,10 @@ function CladeShiftResult({ result, parameters, alignment }: ResultProps) {
 
 function FsartResult({ result, parameters }: ResultProps) {
   return <FsartResultsView result={result as FsartAnalysisResult} />;
+}
+
+function MosaicSprResult({ result }: ResultProps) {
+  return <MosaicSprResultsView result={result as MosaicSprAnalysisResult} />;
 }
 
 export const modelRegistry: readonly BrowserModelRegistration[] = [
@@ -166,6 +173,18 @@ export const modelRegistry: readonly BrowserModelRegistration[] = [
       const output = result as FsartAnalysisResult;
       const reconstruction = output.partition.status === "complete" ? `; ${output.partition.acceptedBreakpoints.length} refined Viterbi switch${output.partition.acceptedBreakpoints.length === 1 ? "" : "es"}` : "";
       return `FSART completed: ${output.breakpoints.length} consensus proposal${output.breakpoints.length === 1 ? "" : "s"}${reconstruction}.`;
+    },
+  },
+  {
+    plugin: mosaicSprPlugin,
+    glyph: "SPR",
+    runtimeLabel: "FastTree WASM · SPR worker",
+    createExecutor: (services) => new MosaicSprClient(services.getAlignmentBridge),
+    ResultView: MosaicSprResult,
+    completionMessage: (result) => {
+      const output = result as MosaicSprAnalysisResult;
+      const edits = output.reconstruction.events.reduce((total, event) => total + event.sprDistance, 0);
+      return `MosaicSPR completed: ${output.reconstruction.runs.length} genomic regions, ${output.reconstruction.events.length} breakpoint events, and ${edits} explicit SPR edits.`;
     },
   },
 ];

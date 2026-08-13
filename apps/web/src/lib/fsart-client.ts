@@ -6,7 +6,6 @@ import {
   findDiscordantClades,
   isFullyResolvedTopology,
   replacePartition,
-  replaceSprReconstruction,
   replaceTreeHmm,
   skippedPartition,
   skippedTreeHmm,
@@ -21,7 +20,6 @@ import {
   type TreeHmmResult,
   type TreeHmmRefinementIteration,
   type TreeHmmRefinementResult,
-  type SprReconstructionResult,
   type TripletSamplingPlan,
 } from "@phylo-workbench/model-fsart/browser-source";
 import type { ParameterValues } from "@phylo-workbench/model-sdk";
@@ -276,45 +274,6 @@ export class FsartClient {
       const familyMs = performance.now() - started;
       completed = { ...completed, timings: { ...completed.timings, fastTreeMs: familyMs, totalMs: (completed.timings.totalMs ?? 0) + familyMs } };
       familyCompleted = completed;
-      if (Boolean(parameters.runSprReconstruction ?? true)) {
-        const sprStarted = performance.now();
-        activeFastTreeStage = "spr-reconstruction";
-        activeFastTreeFraction = 0;
-        try {
-          const automaticPenalty = (value: unknown): number | undefined => {
-            const parsed = Number(value ?? 0);
-            return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
-          };
-          const breakpointPenalty = automaticPenalty(parameters.sprBreakpointPenalty);
-          const sprPenalty = automaticPenalty(parameters.sprMovePenalty);
-          const masterPenalty = automaticPenalty(parameters.sprMasterPenalty);
-          const spr = await this.fitSprReconstructionInWorker(
-            alignment,
-            familyTrees.map((candidate) => candidate.tree),
-            {
-              minimumRunLength: minimumSegmentLength,
-              maximumStates: Number(parameters.maximumSprStates ?? 48),
-              maximumIterations: Number(parameters.maximumSprIterations ?? 12),
-              beamWidth: Number(parameters.sprBeamWidth ?? 4),
-              parsimonyScreenLimit: Number(parameters.sprParsimonyScreenLimit ?? 96),
-              maximumStarts: Number(parameters.maximumSprStarts ?? 3),
-              patience: Number(parameters.sprSearchPatience ?? 5),
-              ...(breakpointPenalty === undefined ? {} : { breakpointPenalty }),
-              ...(sprPenalty === undefined ? {} : { sprPenalty }),
-              ...(masterPenalty === undefined ? {} : { masterPenalty }),
-            },
-            onProgress,
-            signal,
-          );
-          completed = replaceSprReconstruction(completed, spr);
-          const sprMs = performance.now() - sprStarted;
-          completed = { ...completed, timings: { ...completed.timings, sprReconstructionMs: sprMs, totalMs: (completed.timings.totalMs ?? 0) + sprMs } };
-          familyCompleted = completed;
-        } catch (error) {
-          if (signal.aborted) throw error;
-          onProgress({ stage: "spr-reconstruction", fraction: 1, message: `Unrestricted SPR reconstruction failed without invalidating FSART: ${error instanceof Error ? error.message : String(error)}` });
-        }
-      }
       if (!Boolean(parameters.runTreeHmm ?? true)) return replaceTreeHmm(completed, skippedTreeHmm("Rapid topology-set HMM search was disabled.", criterion));
 
       const treeHmmStarted = performance.now();
@@ -710,56 +669,6 @@ export class FsartClient {
         beamWidth,
         minimumRunLength,
         stage,
-      };
-      worker.postMessage(request);
-    }), signal);
-  }
-
-  private fitSprReconstructionInWorker(
-    alignment: string,
-    trees: readonly string[],
-    options: {
-      readonly minimumRunLength: number;
-      readonly maximumStates: number;
-      readonly maximumIterations: number;
-      readonly beamWidth: number;
-      readonly parsimonyScreenLimit: number;
-      readonly maximumStarts: number;
-      readonly patience: number;
-      readonly breakpointPenalty?: number;
-      readonly sprPenalty?: number;
-      readonly masterPenalty?: number;
-    },
-    onProgress: (progress: RunProgress) => void,
-    signal: AbortSignal,
-  ): Promise<SprReconstructionResult> {
-    const worker = this.workers[0] ?? this.createWorker();
-    if (this.workers.length === 0) this.workers = [worker];
-    const id = crypto.randomUUID();
-    return raceAbort(new Promise<SprReconstructionResult>((resolve, reject) => {
-      worker.onmessage = (event: MessageEvent<FsartWorkerResponse>) => {
-        const message = event.data;
-        if (message.id !== id) return;
-        if (message.type === "progress") onProgress({ stage: message.stage, fraction: message.fraction, ...message.detail });
-        else if (message.type === "spr-reconstruction-result") resolve(message.result);
-        else if (message.type === "error") reject(new Error(message.error));
-      };
-      worker.onerror = (event) => reject(new Error(event.message || "FSART unrestricted SPR worker failed."));
-      const request: FsartWorkerRequest = {
-        type: "spr-reconstruction",
-        id,
-        alignment,
-        trees,
-        minimumRunLength: options.minimumRunLength,
-        maximumStates: options.maximumStates,
-        maximumIterations: options.maximumIterations,
-        beamWidth: options.beamWidth,
-        parsimonyScreenLimit: options.parsimonyScreenLimit,
-        maximumStarts: options.maximumStarts,
-        patience: options.patience,
-        ...(options.breakpointPenalty === undefined ? {} : { breakpointPenalty: options.breakpointPenalty }),
-        ...(options.sprPenalty === undefined ? {} : { sprPenalty: options.sprPenalty }),
-        ...(options.masterPenalty === undefined ? {} : { masterPenalty: options.masterPenalty }),
       };
       worker.postMessage(request);
     }), signal);

@@ -1,6 +1,6 @@
 import { enumerateSprNeighbors, fitchParsimonyBySite, invertSprMove, topologySignature, type SprMove, type SprNeighbor } from "./spr-tree.js";
 import type {
-  FsartAlignment,
+  MosaicSprAlignment,
   SprBreakpointEvent,
   SprEdit,
   SprReconstructionOptions,
@@ -81,7 +81,7 @@ function signatureSplitDistance(first: string, second: string): number {
   return unique / 2;
 }
 
-function addState(graph: SearchGraph, tree: string, alignment: FsartAlignment, suppliedCosts?: Uint16Array): number {
+function addState(graph: SearchGraph, tree: string, alignment: MosaicSprAlignment, suppliedCosts?: Uint16Array): number {
   const signature = topologySignature(tree);
   const previous = graph.bySignature.get(signature);
   if (previous !== undefined) return previous;
@@ -304,7 +304,7 @@ function occupiedStates(decoded: DecodedPath): number[] {
 }
 
 function runSearch(
-  alignment: FsartAlignment,
+  alignment: MosaicSprAlignment,
   seedSignatures: readonly string[],
   seed: string,
   startNumber: number,
@@ -607,7 +607,7 @@ export function skippedSprReconstruction(message: string): SprReconstructionResu
  * generated SPR graph. Every graph edge is a real one-SPR operation; a change
  * at one breakpoint may traverse any number of those edges.
  */
-export function reconstructSprHistory(alignment: FsartAlignment, trees: readonly string[], supplied: SprReconstructionOptions = {}): SprReconstructionResult {
+export function reconstructSprHistory(alignment: MosaicSprAlignment, trees: readonly string[], supplied: SprReconstructionOptions = {}): SprReconstructionResult {
   const started = performance.now();
   const unique = new Map<string, string>();
   for (const tree of trees) {

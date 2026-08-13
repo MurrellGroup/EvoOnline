@@ -5,7 +5,6 @@ import {
   exploreTreeHmm,
   fitTreeHmm,
   parseFsartFasta,
-  reconstructSprHistory,
   scanTripletShard,
   type FsartAnalysisOptions,
   type FsartAnalysisResult,
@@ -15,7 +14,6 @@ import {
   type TreeHmmResult,
   type TreeHmmExplorationOptions,
   type TreeHmmExplorationResult,
-  type SprReconstructionResult,
   type InformationCriterion,
 } from "@phylo-workbench/model-fsart/browser-source";
 import type { ParameterValues } from "@phylo-workbench/model-sdk";
@@ -66,24 +64,7 @@ interface TreeHmmExploreRequest {
   readonly options: TreeHmmExplorationOptions;
 }
 
-interface SprReconstructionRequest {
-  readonly type: "spr-reconstruction";
-  readonly id: string;
-  readonly alignment: string;
-  readonly trees: readonly string[];
-  readonly minimumRunLength: number;
-  readonly maximumStates: number;
-  readonly maximumIterations: number;
-  readonly beamWidth: number;
-  readonly parsimonyScreenLimit: number;
-  readonly maximumStarts: number;
-  readonly patience: number;
-  readonly breakpointPenalty?: number;
-  readonly sprPenalty?: number;
-  readonly masterPenalty?: number;
-}
-
-type Request = ScanRequest | RefineRequest | TreeHmmRequest | TreeHmmExploreInitRequest | TreeHmmExploreRequest | SprReconstructionRequest;
+type Request = ScanRequest | RefineRequest | TreeHmmRequest | TreeHmmExploreInitRequest | TreeHmmExploreRequest;
 type Response =
   | { readonly type: "progress"; readonly id: string; readonly stage: string; readonly fraction: number; readonly detail: { readonly message: string; readonly current?: number; readonly total?: number; readonly metricLabel?: string; readonly metricValue?: number; readonly indeterminate?: boolean } }
   | { readonly type: "shard"; readonly id: string; readonly shard: ScanShardResult }
@@ -91,7 +72,6 @@ type Response =
   | { readonly type: "tree-hmm-result"; readonly id: string; readonly result: TreeHmmResult }
   | { readonly type: "tree-hmm-explore-ready"; readonly id: string; readonly profileCount: number }
   | { readonly type: "tree-hmm-explore-result"; readonly id: string; readonly result: TreeHmmExplorationResult }
-  | { readonly type: "spr-reconstruction-result"; readonly id: string; readonly result: SprReconstructionResult }
   | { readonly type: "error"; readonly id: string; readonly error: string };
 
 const scope = self as DedicatedWorkerGlobalScope;
@@ -163,27 +143,6 @@ scope.onmessage = (event: MessageEvent<Request>): void => {
           },
         });
         const response: Response = { type: "tree-hmm-result", id: request.id, result };
-        scope.postMessage(response);
-        return;
-      }
-      if (request.type === "spr-reconstruction") {
-        const result = reconstructSprHistory(alignmentFor(request.alignment), request.trees, {
-          minimumRunLength: request.minimumRunLength,
-          maximumStates: request.maximumStates,
-          maximumIterations: request.maximumIterations,
-          beamWidth: request.beamWidth,
-          parsimonyScreenLimit: request.parsimonyScreenLimit,
-          maximumStarts: request.maximumStarts,
-          patience: request.patience,
-          ...(request.breakpointPenalty === undefined ? {} : { breakpointPenalty: request.breakpointPenalty }),
-          ...(request.sprPenalty === undefined ? {} : { sprPenalty: request.sprPenalty }),
-          ...(request.masterPenalty === undefined ? {} : { masterPenalty: request.masterPenalty }),
-          onProgress: (fraction, detail) => {
-            const message: Response = { type: "progress", id: request.id, stage: "spr-reconstruction", fraction, detail };
-            scope.postMessage(message);
-          },
-        });
-        const response: Response = { type: "spr-reconstruction-result", id: request.id, result };
         scope.postMessage(response);
         return;
       }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseFsartFasta } from "../src/alignment.js";
-import { reconstructSprHistory } from "../src/spr-reconstruction.js";
+import { parseMosaicSprFasta } from "../src/alignment.js";
+import { reconstructSprHistory } from "../src/reconstruction.js";
 import { applySprMove, enumerateSprNeighbors, invertSprMove, topologySignature } from "../src/spr-tree.js";
 
 const BASE = "((A:1,B:1):1,(C:1,D:1):1,(E:1,F:1):1);";
@@ -11,7 +11,7 @@ function splits(tree: string): string[][] {
   return topologySignature(tree).split("::")[1]!.split("|").map((value) => value.split("\0"));
 }
 
-function alignmentFromBlocks(blocks: readonly { readonly tree: string; readonly sites: number }[]): ReturnType<typeof parseFsartFasta> {
+function alignmentFromBlocks(blocks: readonly { readonly tree: string; readonly sites: number }[]): ReturnType<typeof parseMosaicSprFasta> {
   const sequences = new Map(NAMES.map((name) => [name, ""]));
   for (const block of blocks) {
     const blockSplits = splits(block.tree);
@@ -20,7 +20,7 @@ function alignmentFromBlocks(blocks: readonly { readonly tree: string; readonly 
       for (const name of NAMES) sequences.set(name, `${sequences.get(name)!}${selected.includes(name) ? "A" : "C"}`);
     }
   }
-  return parseFsartFasta(NAMES.map((name) => `>${name}\n${sequences.get(name)!}`).join("\n"));
+  return parseMosaicSprFasta(NAMES.map((name) => `>${name}\n${sequences.get(name)!}`).join("\n"));
 }
 
 test("complete one-SPR enumeration has the expected six-tip neighbourhood", () => {
