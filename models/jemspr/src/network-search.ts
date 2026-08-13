@@ -11,7 +11,7 @@ import type {
 } from "./types.js";
 import { scoreTree, scoreTreeSubset, totalScore } from "./parsimony.js";
 import { shortestPathMoves, type InternalPathSearchResult, type InternalPathStartResult } from "./path-search.js";
-import { enumerateRootedSprNeighbours, publicMove, treeSignature, treeToNewick, type InternalSprMove, type RootedNode } from "./tree.js";
+import { iterateRootedSprNeighbours, publicMove, treeSignature, treeToNewick, type InternalSprMove, type RootedNode } from "./tree.js";
 import {
   compileReticulation,
   displayNetwork,
@@ -252,12 +252,9 @@ function contextualEventPool(
       : Array.from({ length: alignment.informativePositions.length }, (_value, index) => index);
     const sample = evenlySpacedIndexes(sampleSource.length, 48).map((index) => sampleSource[index]!);
     const baseline = scoreTreeSubset(display.tree, alignment, sample, config.method, config.transition, config.transversion);
-    const neighbours = enumerateRootedSprNeighbours(display.tree);
-    const structuralIndexes = new Set(evenlySpacedIndexes(neighbours.length, proxyLimit));
-    // A path-derived bridge is always priced if it is legal in this context.
-    for (let index = 0; index < neighbours.length; index += 1) if (guideByMove.has(moveKey(neighbours[index]!.move))) structuralIndexes.add(index);
-    for (const index of structuralIndexes) {
-      const neighbour = neighbours[index]!;
+    // Stream a structurally distributed bounded neighbourhood.  Path-derived
+    // bridge moves are added explicitly below, so none depend on this screen.
+    for (const neighbour of iterateRootedSprNeighbours(display.tree, { maximumCandidates: proxyLimit })) {
       const key = `${context}:${moveKey(neighbour.move)}`;
       const proxy = scoreTreeSubset(neighbour.tree, alignment, sample, config.method, config.transition, config.transversion);
       const scale = occupiedInformative.length > 0 ? occupiedInformative.length / Math.max(1, sample.length) : 1;

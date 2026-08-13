@@ -4,7 +4,7 @@ import { analyzeJemspr } from "../src/pipeline.js";
 import { parseJemsprFasta } from "../src/alignment.js";
 import { maskMovementTransform } from "../src/network-search.js";
 import { compileReticulation, displayNetwork, networkHash, treeNetwork } from "../src/switching-network.js";
-import { enumerateRootedSprNeighbours, leafSet, treeSignature, type RootedNode } from "../src/tree.js";
+import { applyRootedSprMove, enumerateRootedSprNeighbours, iterateRootedSprNeighbours, leafSet, treeSignature, type RootedNode } from "../src/tree.js";
 
 const balancedFour: RootedNode = {
   children: [
@@ -38,6 +38,26 @@ test("a compiled reticulation preserves the background display and realizes its 
 test("network identity includes the latent all-background master", () => {
   const neighbour = enumerateRootedSprNeighbours(balancedFour)[0]!;
   assert.notEqual(networkHash(treeNetwork(balancedFour)), networkHash(treeNetwork(neighbour.tree)));
+});
+
+test("bounded rooted-SPR enumeration streams a diverse set of genuine executable moves", () => {
+  const tenTaxa: RootedNode = {
+    children: [
+      { children: [{ children: [{ leaf: 0 }, { leaf: 1 }] }, { children: [{ leaf: 2 }, { leaf: 3 }] }] },
+      { children: [{ children: [{ leaf: 4 }, { leaf: 5 }] }, { children: [{ leaf: 6 }, { children: [{ leaf: 7 }, { children: [{ leaf: 8 }, { leaf: 9 }] }] }] }] },
+    ],
+  };
+  const exhaustive = enumerateRootedSprNeighbours(tenTaxa);
+  const bounded = [...iterateRootedSprNeighbours(tenTaxa, { maximumCandidates: 37 })];
+  assert.equal(bounded.length, 37);
+  assert.ok(exhaustive.length > bounded.length);
+  assert.equal(new Set(bounded.map((candidate) => candidate.signature)).size, bounded.length);
+  assert.ok(new Set(bounded.map((candidate) => candidate.move.pruned.join(","))).size >= 8, "the bound should not collapse onto one prune source");
+  for (const candidate of bounded) {
+    const applied = applyRootedSprMove(tenTaxa, candidate.move);
+    assert.ok(applied);
+    assert.equal(treeSignature(applied), candidate.signature);
+  }
 });
 
 test("overlap-mask min-plus transform exactly matches dense transitions in both directions", () => {

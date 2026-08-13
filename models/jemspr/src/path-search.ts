@@ -2,7 +2,7 @@ import type { JemsprAlignment, JemsprOptions, JemsprPathBreakpoint, JemsprPathIt
 import { inferNjTree, multiscaleNjSeeds, type MultiscaleSeed } from "./nj.js";
 import { scoreTree, scoreTreeSubset, totalScore } from "./parsimony.js";
 import {
-  enumerateRootedSprNeighbours,
+  iterateRootedSprNeighbours,
   publicMove,
   rootPlacements,
   rootedRfDistance,
@@ -391,6 +391,26 @@ function candidateRank(a: Candidate, b: Candidate): number {
   return a.proxy - b.proxy || a.seedDistance - b.seedDistance || a.signature.localeCompare(b.signature);
 }
 
+function retainScreenedCandidate(candidates: Map<string, Candidate>, candidate: Candidate, limit: number): void {
+  const previous = candidates.get(candidate.signature);
+  if (previous !== undefined) {
+    previous.connections.push(...candidate.connections);
+    return;
+  }
+  if (candidates.size < limit) {
+    candidates.set(candidate.signature, candidate);
+    return;
+  }
+  let worst: Candidate | undefined;
+  for (const current of candidates.values()) {
+    if (worst === undefined || candidateRank(current, worst) > 0) worst = current;
+  }
+  if (worst !== undefined && candidateRank(candidate, worst) < 0) {
+    candidates.delete(worst.signature);
+    candidates.set(candidate.signature, candidate);
+  }
+}
+
 function runStart(alignment: JemsprAlignment, root: RootedNode, seeds: readonly MultiscaleSeed[], start: number, config: SearchConfig, options: JemsprOptions): InternalPathStartResult {
   const initialScores = scoreTree(root, alignment, config.method, config.transition, config.transversion);
   const graph: RootedTreeGraph = { states: [], adjacency: [], bySignature: new Map() };
@@ -406,11 +426,21 @@ function runStart(alignment: JemsprAlignment, root: RootedNode, seeds: readonly 
     const candidatesBySignature = new Map<string, Candidate>();
     let enumerated = 0;
     let existingEdgesAdded = 0;
-    for (const parent of parents) {
+    const enumerationBudget = Math.max(4_096, config.neighbourScreen * 32);
+    for (let parentRank = 0; parentRank < parents.length; parentRank += 1) {
+      const parent = parents[parentRank]!;
       const parentTree = graph.states[parent]!.tree;
-      const parentSeedDistance = Math.min(...seeds.map((seed) => rootedRfDistance(parentTree, seed.tree)));
-      for (const neighbour of enumerateRootedSprNeighbours(parentTree)) {
+      for (const neighbour of iterateRootedSprNeighbours(parentTree, { maximumCandidates: enumerationBudget })) {
         enumerated += 1;
+        if ((enumerated & 255) === 0) {
+          checkAbort(options.signal);
+          options.onProgress?.("jemspr-tree-space", Math.min(0.97, (iteration - 1 + (parentRank + 0.5) / parents.length) / config.iterations), {
+            message: `Root start ${start}, round ${iteration}: streaming genuine rSPR neighbours (${enumerated.toLocaleString()} examined).`,
+            current: enumerated,
+            metricLabel: "candidate neighbours",
+            metricValue: enumerated,
+          });
+        }
         const existingState = graph.bySignature.get(neighbour.signature);
         if (existingState !== undefined) {
           const before = graph.adjacency[parent]!.length;
@@ -421,13 +451,18 @@ function runStart(alignment: JemsprAlignment, root: RootedNode, seeds: readonly 
         const proxy = scoreTreeSubset(neighbour.tree, alignment, screenIndexes, config.method, config.transition, config.transversion);
         const seedDistance = Math.min(...seeds.map((seed) => rootedRfDistance(neighbour.tree, seed.tree)));
         const candidate: Candidate = { parent, tree: neighbour.tree, signature: neighbour.signature, move: neighbour.move, inverse: neighbour.inverse, proxy, seedDistance, connections: [{ parent, move: neighbour.move, inverse: neighbour.inverse }] };
-        const previous = candidatesBySignature.get(neighbour.signature);
-        if (previous === undefined) candidatesBySignature.set(neighbour.signature, candidate);
-        else previous.connections.push(...candidate.connections);
+        retainScreenedCandidate(candidatesBySignature, candidate, config.neighbourScreen);
       }
+      options.onProgress?.("jemspr-tree-space", Math.min(0.97, (iteration - 1 + (parentRank + 1) / parents.length) / config.iterations), {
+        message: `Root start ${start}, round ${iteration}: streamed ${enumerated.toLocaleString()} genuine rSPR neighbours; retaining ${candidatesBySignature.size} for full pricing.`,
+        current: parentRank + 1,
+        total: parents.length,
+        metricLabel: "candidate neighbours",
+        metricValue: enumerated,
+      });
     }
     if (existingEdgesAdded > 0) dp = solveGraph(alignment, graph, config);
-    const screened = [...candidatesBySignature.values()].sort(candidateRank).slice(0, config.neighbourScreen);
+    const screened = [...candidatesBySignature.values()].sort(candidateRank);
     for (const candidate of screened) {
       checkAbort(options.signal);
       candidate.scores = scoreTree(candidate.tree, alignment, config.method, config.transition, config.transversion);

@@ -18,6 +18,7 @@ interface WidgetSnapshot {
 }
 
 type Notice = { readonly tone: "error" | "info" | "success"; readonly text: string };
+type RunFailure = { readonly message: string; readonly stage: string; readonly model: string };
 
 const stageLabels: Readonly<Record<string, string>> = {
   initialization: "Preparing inputs",
@@ -47,6 +48,7 @@ const stageLabels: Readonly<Record<string, string>> = {
   "mosaicspr-tree-family": "Fitting MosaicSPR topology seeds",
   "mosaicspr-search": "Searching the connected multi-SPR topology graph",
   "jemspr-initialization": "Preparing JEMSPR alignment states",
+  "jemspr-worker-startup": "Starting the JEMSPR worker",
   "jemspr-seed-trees": "Inferring internal multiscale tree seeds",
   "jemspr-root-search": "Searching inferred root placements",
   "jemspr-tree-space": "Pricing the adaptive rooted-SPR graph",
@@ -155,6 +157,9 @@ export function App() {
   const [notice, setNotice] = useState<Notice>();
   const [runState, setRunState] = useState<"idle" | "running">("idle");
   const [progress, setProgress] = useState<RunProgress>({ stage: "", fraction: 0 });
+  const progressRef = useRef<RunProgress>({ stage: "", fraction: 0 });
+  const runGeneration = useRef(0);
+  const [runFailure, setRunFailure] = useState<RunFailure>();
   const runStartedAt = useRef(0);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [result, setResult] = useState<unknown>();
@@ -180,15 +185,21 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    executor.current.dispose();
-    executor.current = selectedModel.createExecutor(executorServices.current);
+    runGeneration.current += 1;
+    const previous = executor.current;
+    previous.dispose();
+    const next = selectedModel.createExecutor(executorServices.current);
+    executor.current = next;
+    setRunState("idle");
     setParameters(selectedModel.plugin.defaultParameters());
     setResult(undefined);
-    return () => executor.current.dispose();
+    setRunFailure(undefined);
+    return () => next.dispose();
   }, [selectedModelId]);
 
   useEffect(() => {
     setResult(undefined);
+    setRunFailure(undefined);
   }, [alignment?.id, tree?.id]);
 
   useEffect(() => {
@@ -331,28 +342,44 @@ export function App() {
 
   const runAnalysis = async (): Promise<void> => {
     if (alignment === undefined || (requiresTree && tree === undefined) || !validation.ready) return;
+    const generation = ++runGeneration.current;
+    const model = selectedModel;
+    const activeExecutor = executor.current;
     runStartedAt.current = performance.now();
     setElapsedMs(0);
     setRunState("running");
     setResult(undefined);
-    setProgress({ stage: "initialization", fraction: 0, message: requiresForeground ? "Parsing alignment and tagged tree" : requiresTree ? "Parsing alignment and phylogeny" : "Parsing nucleotide alignment", indeterminate: true });
+    const initialProgress: RunProgress = { stage: "initialization", fraction: 0, message: requiresForeground ? "Parsing alignment and tagged tree" : requiresTree ? "Parsing alignment and phylogeny" : "Parsing nucleotide alignment", indeterminate: true };
+    progressRef.current = initialProgress;
+    setProgress(initialProgress);
+    setRunFailure(undefined);
     setNotice(undefined);
     try {
-      const next = await executor.current.run(alignment.text, tree?.text ?? "", parameters, setProgress);
+      const next = await activeExecutor.run(alignment.text, tree?.text ?? "", parameters, (nextProgress) => {
+        if (runGeneration.current !== generation) return;
+        progressRef.current = nextProgress;
+        setProgress(nextProgress);
+      });
+      if (runGeneration.current !== generation) return;
       setResult(next);
-      setNotice({ tone: "success", text: selectedModel.completionMessage(next) });
+      setRunFailure(undefined);
+      setNotice({ tone: "success", text: model.completionMessage(next) });
     } catch (error) {
-      if (!(error instanceof DOMException && error.name === "AbortError")) {
-        setNotice({ tone: "error", text: error instanceof Error ? error.message : String(error) });
+      if (runGeneration.current === generation && !(error instanceof DOMException && error.name === "AbortError")) {
+        const message = error instanceof Error ? error.message : String(error);
+        setRunFailure({ message, stage: progressRef.current.stage, model: model.plugin.manifest.shortTitle });
+        setNotice({ tone: "error", text: `${model.plugin.manifest.shortTitle} stopped: ${message}` });
       }
     } finally {
-      setRunState("idle");
+      if (runGeneration.current === generation) setRunState("idle");
     }
   };
 
   const cancelAnalysis = (): void => {
+    runGeneration.current += 1;
     executor.current.cancel();
     setRunState("idle");
+    setRunFailure(undefined);
     setNotice({ tone: "info", text: "Analysis cancelled." });
   };
 
@@ -401,9 +428,11 @@ export function App() {
             <h1>Build an analysis-ready phylogenetic workspace</h1>
             <p>{requiresForeground
               ? "Load a codon alignment, inspect or edit it, attach a phylogeny, tag two foreground groups, then run entirely in this browser."
-              : requiresTree
+            : requiresTree
                 ? `Load a codon alignment, inspect or edit it, attach a phylogeny, then run ${manifest.shortTitle} entirely in this browser.`
-                : `Load an aligned nucleotide FASTA, inspect or edit it, then run ${manifest.shortTitle} entirely in this browser; segment trees are inferred only after breakpoint scanning.`}</p>
+                : manifest.id === "jemspr"
+                  ? "Load an aligned nucleotide FASTA, then infer the latent rooted master, local trees, breakpoints, and coherent event network jointly inside this browser."
+                  : `Load an aligned nucleotide FASTA, inspect or edit it, then run ${manifest.shortTitle} entirely in this browser; segment trees are inferred only after breakpoint scanning.`}</p>
           </div>
           <div className="privacy-note"><span>Device-local</span>Your sequence data is not uploaded by the browser runner.</div>
         </section>
@@ -552,6 +581,12 @@ export function App() {
             <button type="button" className="button button--run" disabled={!validation.ready} onClick={() => void runAnalysis()}>
               <span>Run {manifest.shortTitle}</span><small>{manifest.id === "fsart" ? "Pair-covered triplet scan · FastTree-WASM tree-family HMM" : manifest.id === "jemspr" ? "Pure internal rooted-tree and coherent event-network search" : parameters.backend === "webgpu" ? "Experimental WebGPU kernel" : parameters.backend === "wasm" ? "Exact single-worker WASM" : "Exact parallel WASM (recommended)"}</small>
             </button>
+          )}
+          {runFailure !== undefined && runFailure.model === manifest.shortTitle && (
+            <div className="run-failure" role="alert">
+              <div><strong>{runFailure.model} stopped during {(stageLabels[runFailure.stage] ?? runFailure.stage) || "startup"}.</strong><span>{runFailure.message}</span></div>
+              <button type="button" aria-label="Dismiss run error" onClick={() => setRunFailure(undefined)}>×</button>
+            </div>
           )}
         </section>
 

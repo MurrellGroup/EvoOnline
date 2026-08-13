@@ -1,31 +1,32 @@
 {
-  "taxa": 8,
-  "sites": 1200,
-  "master": "(((t1:1,t2:1):1,(t3:1,t4:1):1):1,((t5:1,t6:1):1,(t7:1,t8:1):1):1);",
+  "taxa": 10,
+  "sites": 2400,
+  "master": "((((t1:1,t2:1):1,t3:1):1,(t4:1,t5:1):1):1,(((t6:1,t7:1):1,t8:1):1,(t9:1,t10:1):1):1);",
   "networkReticulations": [
     {
       "bit": 0,
       "move": {
         "pruned": [
           0,
-          1
+          1,
+          2
         ],
         "sourceSibling": [
-          2,
-          3
+          3,
+          4
         ],
         "destination": [
-          3
+          5
         ],
         "destinationIsRoot": false
       },
       "sourceContextMask": 0,
-      "sourceContextSignature": "(((L0,L1),(L2,L3)),((L4,L5),(L6,L7)))",
-      "reticulationNode": 15,
+      "sourceContextSignature": "((((L0,L1),L2),(L3,L4)),(((L5,L6),L7),(L8,L9)))",
+      "reticulationNode": 19,
       "backgroundParentNode": 1,
-      "alternateParentNode": 16,
+      "alternateParentNode": 20,
       "recipientChildNode": 2,
-      "donorChildNode": 7
+      "donorChildNode": 13
     },
     {
       "bit": 1,
@@ -34,52 +35,50 @@
           0,
           1,
           2,
-          3
+          5,
+          6
         ],
         "sourceSibling": [
-          4,
-          5,
-          6,
           7
         ],
         "destination": [
+          3,
           4
         ],
         "destinationIsRoot": false
       },
       "sourceContextMask": 1,
-      "sourceContextSignature": "((((L0,L1),L3),L2),((L4,L5),(L6,L7)))",
-      "reticulationNode": 17,
-      "backgroundParentNode": 1,
-      "alternateParentNode": 18,
-      "recipientChildNode": 5,
-      "donorChildNode": 10
+      "sourceContextSignature": "(((((((L0,L1),L2),L5),L6),L7),(L8,L9)),(L3,L4))",
+      "reticulationNode": 21,
+      "backgroundParentNode": 11,
+      "alternateParentNode": 22,
+      "recipientChildNode": 12,
+      "donorChildNode": 7
     },
     {
       "bit": 2,
       "move": {
         "pruned": [
+          0,
+          1,
           2,
-          3,
-          4,
           5
         ],
         "sourceSibling": [
-          6,
-          7
+          6
         ],
         "destination": [
-          7
+          3
         ],
         "destinationIsRoot": false
       },
-      "sourceContextMask": 2,
-      "sourceContextSignature": "(((((L2,L3),L4),L5),(L6,L7)),(L0,L1))",
-      "reticulationNode": 19,
-      "backgroundParentNode": 8,
-      "alternateParentNode": 20,
-      "recipientChildNode": 9,
-      "donorChildNode": 14
+      "sourceContextMask": 3,
+      "sourceContextSignature": "((((((L0,L1),L2),L5),L6),(L3,L4)),((L8,L9),L7))",
+      "reticulationNode": 23,
+      "backgroundParentNode": 12,
+      "alternateParentNode": 24,
+      "recipientChildNode": 20,
+      "donorChildNode": 8
     },
     {
       "bit": 3,
@@ -89,61 +88,62 @@
           1,
           2,
           3,
-          4
-        ],
-        "sourceSibling": [
           5
         ],
+        "sourceSibling": [
+          4
+        ],
         "destination": [
-          6
+          8,
+          9
         ],
         "destinationIsRoot": false
       },
       "sourceContextMask": 7,
-      "sourceContextSignature": "(((((((L0,L1),L3),L2),L4),L5),L7),L6)",
-      "reticulationNode": 21,
-      "backgroundParentNode": 9,
-      "alternateParentNode": 22,
-      "recipientChildNode": 18,
-      "donorChildNode": 13
+      "sourceContextSignature": "(((((((L0,L1),L2),L5),L3),L4),L6),((L8,L9),L7))",
+      "reticulationNode": 25,
+      "backgroundParentNode": 7,
+      "alternateParentNode": 26,
+      "recipientChildNode": 24,
+      "donorChildNode": 16
     }
   ],
   "eventIntervals": [
     {
       "bit": 0,
-      "start": 121,
-      "end": 528
+      "start": 241,
+      "end": 1056
     },
     {
       "bit": 1,
-      "start": 325,
-      "end": 780
+      "start": 649,
+      "end": 1560
     },
     {
       "bit": 2,
-      "start": 457,
-      "end": 624
+      "start": 913,
+      "end": 1248
     },
     {
       "bit": 0,
-      "start": 697,
-      "end": 876
+      "start": 1393,
+      "end": 1752
     },
     {
       "bit": 3,
-      "start": 697,
-      "end": 1200
+      "start": 1393,
+      "end": 2400
     }
   ],
   "breakpoints": [
-    120,
-    324,
-    456,
-    528,
-    624,
-    696,
-    780,
-    876
+    240,
+    648,
+    912,
+    1056,
+    1248,
+    1392,
+    1560,
+    1752
   ],
   "maximumOverlap": 3,
   "distinctLocalTrees": 9

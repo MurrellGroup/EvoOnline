@@ -58,7 +58,7 @@ export function validateJemsprWorkspace(workspace: PhyloWorkspaceSnapshot): Mode
     try {
       const alignment = parseJemsprFasta(workspace.alignment.text);
       if (alignment.informativePositions.length < 4) issues.push({ severity: "warning", code: "LOW_VARIATION", message: "The alignment has very few variable nucleotide sites; recombination events may be unidentifiable.", artifact: "alignment" });
-      if (alignment.taxa > 250) issues.push({ severity: "warning", code: "LARGE_TAXON_SET", message: "Pure rooted-SPR enumeration grows rapidly above 250 taxa; begin with conservative graph/network budgets.", artifact: "alignment" });
+      if (alignment.taxa > 64) issues.push({ severity: "warning", code: "LARGE_TAXON_SET", message: "Rooted-SPR tree-space search grows rapidly above 64 taxa. JEMSPR will use its bounded streaming neighbourhood screen; begin with conservative graph/network budgets and test stability.", artifact: "alignment" });
     } catch (error) {
       issues.push({ severity: "error", code: "INVALID_ALIGNMENT", message: error instanceof Error ? error.message : String(error), artifact: "alignment" });
     }

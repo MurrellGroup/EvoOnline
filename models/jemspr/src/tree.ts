@@ -9,6 +9,19 @@ export interface RootedSprNeighbour {
   readonly inverse: InternalSprMove;
 }
 
+export interface RootedSprEnumerationOptions {
+  /**
+   * Maximum number of distinct, executable neighbours to materialize.
+   *
+   * Complete rooted-SPR neighbourhoods grow quadratically in their number of
+   * moves and cubically in transient tree-object volume when every candidate
+   * is retained.  A finite budget therefore samples source clades and regraft
+   * destinations evenly, while still constructing and validating genuine
+   * rooted-SPR moves.  Omitting the option preserves exhaustive enumeration.
+   */
+  readonly maximumCandidates?: number;
+}
+
 export interface InternalSprMove {
   readonly pruned: readonly number[];
   readonly sourceSibling: readonly number[];
@@ -118,17 +131,58 @@ export function inspectRootedSprMove(root: RootedNode, move: InternalSprMove): R
     : { status: "applied", tree: candidate };
 }
 
-export function enumerateRootedSprNeighbours(rootInput: RootedNode): readonly RootedSprNeighbour[] {
+function evenlySpacedIndexes(length: number, count: number, phase: number): readonly number[] {
+  if (count >= length) return Array.from({ length }, (_value, index) => index);
+  const result: number[] = [];
+  for (let index = 0; index < count; index += 1) {
+    // Rotate the midpoint lattice by source-clade index.  This avoids pairing
+    // every sampled prune with the same ranks of regraft destination.
+    const rank = Math.floor((index + 0.5) * length / count);
+    result.push((rank + phase) % length);
+  }
+  return [...new Set(result)];
+}
+
+/**
+ * Stream distinct, executable rooted-SPR neighbours.
+ *
+ * The exhaustive public helper below still collects this iterator for tests
+ * and small trees.  Search code consumes the iterator directly so discarded
+ * candidates become garbage immediately instead of keeping an O(n^3)
+ * temporary object graph alive in a browser worker.
+ */
+export function* iterateRootedSprNeighbours(
+  rootInput: RootedNode,
+  options: RootedSprEnumerationOptions = {},
+): Generator<RootedSprNeighbour, void, void> {
   const root = canonicalTree(rootInput);
   const original = treeSignature(root);
-  const neighbours = new Map<string, RootedSprNeighbour>();
-  for (const source of indexTree(root)) {
-    if (source.path.length === 0) continue;
+  const maximum = options.maximumCandidates === undefined
+    ? Number.POSITIVE_INFINITY
+    : Math.max(1, Math.floor(options.maximumCandidates));
+  const seen = new Set<string>();
+  const sources = indexTree(root).filter((source) => source.path.length > 0);
+  const sourceCount = Number.isFinite(maximum) ? Math.min(sources.length, maximum) : sources.length;
+  const sourceIndexes = evenlySpacedIndexes(sources.length, sourceCount, 0);
+  let yielded = 0;
+  for (let sourceRank = 0; sourceRank < sourceIndexes.length; sourceRank += 1) {
+    const source = sources[sourceIndexes[sourceRank]!]!;
     const { remaining, pruned, siblingLeaves } = detach(root, source.path);
-    for (const destination of indexTree(remaining)) {
+    const destinations = indexTree(remaining);
+    const remainingSources = sourceIndexes.length - sourceRank;
+    const quota = Number.isFinite(maximum)
+      ? Math.max(1, Math.ceil((maximum - yielded) / Math.max(1, remainingSources)))
+      : destinations.length;
+    const destinationIndexes = evenlySpacedIndexes(
+      destinations.length,
+      Math.min(destinations.length, quota),
+      sourceIndexes[sourceRank]! % Math.max(1, destinations.length),
+    );
+    for (const destinationIndex of destinationIndexes) {
+      const destination = destinations[destinationIndex]!;
       const tree = regraft(remaining, pruned, destination.path);
       const signature = treeSignature(tree);
-      if (signature === original || neighbours.has(signature)) continue;
+      if (signature === original || seen.has(signature)) continue;
       const move: InternalSprMove = {
         pruned: source.leaves,
         sourceSibling: siblingLeaves,
@@ -141,10 +195,16 @@ export function enumerateRootedSprNeighbours(rootInput: RootedNode): readonly Ro
         destination: siblingLeaves,
         destinationIsRoot: source.path.length === 1,
       };
-      neighbours.set(signature, { tree, signature, move, inverse });
+      seen.add(signature);
+      yield { tree, signature, move, inverse };
+      yielded += 1;
+      if (yielded >= maximum) return;
     }
   }
-  return [...neighbours.values()];
+}
+
+export function enumerateRootedSprNeighbours(rootInput: RootedNode): readonly RootedSprNeighbour[] {
+  return [...iterateRootedSprNeighbours(rootInput)];
 }
 
 export function rootedClades(root: RootedNode): ReadonlySet<string> {
