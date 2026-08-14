@@ -30,8 +30,12 @@ import type { MosaicSprAnalysisResult } from "@phylo-workbench/model-mosaicspr/b
 import { analyzeJemspr } from "@phylo-workbench/model-jemspr/browser-source";
 import { modelRegistry } from "../src/model-registry.js";
 import { createRecombinationCodonTreeSet } from "../src/lib/recombination-handoff.js";
-import { displayMaskPath, parseJemsprSwitchingNetwork } from "../src/lib/jemspr-visual.js";
+import { displayMaskPath, layoutPolishedSprTree, parseJemsprSwitchingNetwork } from "../src/lib/jemspr-visual.js";
 import { displayNetwork } from "@phylo-workbench/model-jemspr/browser-source";
+
+// The application build uses Vite's automatic JSX runtime; tsx's direct Node
+// test transform still emits the classic global for several legacy fixtures.
+(globalThis as typeof globalThis & { React: typeof React }).React = React;
 
 test("generic recombination handoff assigns breakpoint-crossing codons by their middle nucleotide", () => {
   const first = "((a:0.1,b:0.1):0.1,c:0.2);";
@@ -245,11 +249,21 @@ test("JEMSPR renders coherent event lanes, linked implied trees, and the compile
   assert.match(markup, /Animated SPR construction/);
   assert.match(markup, /SPR move storyboard/);
   assert.match(markup, /SPR display-state graph/);
-  assert.match(markup, /continuous subtree motion/i);
+  assert.match(markup, /one clade at a time/i);
+  assert.match(markup, /static linked-ML phylogram/i);
+  assert.match(markup, /linked-ML branch lengths/i);
   assert.match(markup, /Continue with codon site analysis/);
   assert.match(markup, /Matching-taxon links/);
   assert.match(markup, /Network JSON/);
   assert.ok((markup.match(/Export SVG/g) ?? []).length >= 7);
+});
+
+test("JEMSPR polished animation layout uses the optimized branch-length scale", () => {
+  const layout = layoutPolishedSprTree("((a:0.1,b:0.3):0.2,c:0.7);", ["a", "b", "c"], 800, 420, 40);
+  assert.ok(layout.pixelsPerUnit > 0);
+  assert.ok(layout.nodes.get("2")!.x > layout.nodes.get("1")!.x);
+  assert.ok(Math.abs(layout.nodes.get("0,1")!.branchLength - 0.2) < 1e-12);
+  assert.ok(Math.abs(layout.maximumDistance - 0.7) < 1e-12);
 });
 
 test("DifFUBAR result studio renders a native SVG overview and export control", () => {

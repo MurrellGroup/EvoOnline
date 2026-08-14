@@ -219,11 +219,13 @@ function simulateScuffSite(tree: SimulatedTree, alpha: number, eventRate: number
 function drawSiteParameters(config: CodonSimulationConfig, rng: Random): SiteParameterTruth {
   const alpha = Array.from({ length: config.sites }, () => drawMarginal(config.alpha, rng));
   if (config.engine === "mg94") return { alpha, omega: Array.from({ length: config.sites }, () => drawMarginal(config.omega, rng)) };
+  const equilibriumSigma = Array.from({ length: config.sites }, () => drawMarginal(config.equilibriumSigma, rng));
   return {
     alpha,
     eventRate: Array.from({ length: config.sites }, () => drawMarginal(config.eventRate, rng)),
-    equilibriumSigma: Array.from({ length: config.sites }, () => drawMarginal(config.equilibriumSigma, rng)),
+    equilibriumSigma,
     mixingRate: Array.from({ length: config.sites }, () => drawMarginal(config.mixingRate, rng)),
+    scuffMaximumExpectedDnds: equilibriumSigma.map((sigma) => Math.sqrt(sigma * sigma + Math.PI) / Math.sqrt(Math.PI)),
   };
 }
 

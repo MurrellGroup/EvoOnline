@@ -12,6 +12,11 @@ export interface SavedAnalysis {
   readonly tree?: TreeArtifact;
   readonly result: unknown;
   readonly recombinationTrees?: RecombinationCodonTreeSet;
+  readonly simulationSource?: {
+    readonly simulationAnalysisId: string;
+    readonly datasetId: string;
+    readonly datasetIndex: number;
+  };
 }
 
 const DATABASE = "evoonline-analyses";

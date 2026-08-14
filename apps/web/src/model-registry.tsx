@@ -33,6 +33,7 @@ import { JemsprClient } from "./lib/jemspr-client.js";
 import { SimulatorClient } from "./lib/simulator-client.js";
 import type { BameRunResult, BsrelRunResult, CladeShiftRunResult, DifFubarRunResult, FubarRunResult, GlobalGammaRunResult } from "./types.js";
 import type { RecombinationCodonTreeSet } from "@phylo-workbench/model-diffubar/browser-source";
+import type { SavedAnalysis } from "./lib/analysis-store.js";
 
 export interface BrowserAnalysisRunContext {
   readonly recombinationTrees?: RecombinationCodonTreeSet;
@@ -61,6 +62,7 @@ interface ResultProps {
   readonly onLoadRecombinationTrees?: (method: RecombinationCodonMethod, treeSet: RecombinationCodonTreeSet) => void;
   readonly onLoadSimulatedDataset?: (dataset: SimulatedDataset) => void | Promise<void>;
   readonly onBatchSimulatedDatasets?: (method: SimulatorBatchMethod, datasets: readonly SimulatedDataset[], result: SimulatorAnalysisResult) => void | Promise<void>;
+  readonly simulationInferenceAnalyses?: readonly SavedAnalysis[];
 }
 
 export interface BrowserModelRegistration {
@@ -109,8 +111,8 @@ function JemsprResult({ result, onLoadRecombinationTrees }: ResultProps) {
   return <JemsprResultsView result={result as JemsprAnalysisResult} onLoadRecombinationTrees={onLoadRecombinationTrees} />;
 }
 
-function SimulatorResult({ result, onLoadSimulatedDataset, onBatchSimulatedDatasets }: ResultProps) {
-  return <SimulatorResultsView result={result as SimulatorAnalysisResult} {...(onLoadSimulatedDataset === undefined ? {} : { onLoadDataset: onLoadSimulatedDataset })} {...(onBatchSimulatedDatasets === undefined ? {} : { onBatchDatasets: onBatchSimulatedDatasets })} />;
+function SimulatorResult({ result, onLoadSimulatedDataset, onBatchSimulatedDatasets, simulationInferenceAnalyses }: ResultProps) {
+  return <SimulatorResultsView result={result as SimulatorAnalysisResult} {...(onLoadSimulatedDataset === undefined ? {} : { onLoadDataset: onLoadSimulatedDataset })} {...(onBatchSimulatedDatasets === undefined ? {} : { onBatchDatasets: onBatchSimulatedDatasets })} {...(simulationInferenceAnalyses === undefined ? {} : { inferenceAnalyses: simulationInferenceAnalyses })} />;
 }
 
 export const modelRegistry: readonly BrowserModelRegistration[] = [

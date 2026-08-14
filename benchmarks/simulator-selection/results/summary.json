@@ -1,0 +1,443 @@
+{
+  "generatedAt": "2026-08-14T08:19:14.233Z",
+  "node": "v24.14.0",
+  "design": {
+    "tips": 48,
+    "codonSites": 480,
+    "treePreset": "logistic heterochronous",
+    "branchScale": 0.0045,
+    "gtr": "flu-demo nonuniform GTR/F3x4",
+    "alpha": "Gamma(mean=1, shape=2.5)",
+    "omega": "neutral fixed 1 or Gamma(mean=0.8, shape=1)",
+    "fubarGrid": "20x20"
+  },
+  "datasets": {
+    "neutral-mg94": {
+      "treeHeight": 68.73214224908179,
+      "totalTreeLength": 734.9647938732297,
+      "carrierTips": 48,
+      "observedTips": 48,
+      "recombinationEvents": 0,
+      "localTrees": 1,
+      "meanNucleotideDistance": 0.12019491233254531,
+      "meanAminoAcidDistance": 0.23170249704491724,
+      "segregatingNucleotideSites": 873
+    },
+    "heterogeneous-mg94": {
+      "treeHeight": 68.73214224908179,
+      "totalTreeLength": 734.9647938732297,
+      "carrierTips": 48,
+      "observedTips": 48,
+      "recombinationEvents": 0,
+      "localTrees": 1,
+      "meanNucleotideDistance": 0.10058116627265563,
+      "meanAminoAcidDistance": 0.17609522754137116,
+      "segregatingNucleotideSites": 725
+    },
+    "recombinant-mg94": {
+      "treeHeight": 66.75364348689642,
+      "totalTreeLength": 771.4266425195257,
+      "carrierTips": 72,
+      "observedTips": 48,
+      "recombinationEvents": 2,
+      "localTrees": 5,
+      "meanNucleotideDistance": 0.09675494976359338,
+      "meanAminoAcidDistance": 0.17020907210401892,
+      "segregatingNucleotideSites": 753
+    },
+    "scuff-block-contrast": {
+      "treeHeight": 77.20645467372553,
+      "totalTreeLength": 741.7042671256487,
+      "carrierTips": 48,
+      "observedTips": 48,
+      "recombinationEvents": 0,
+      "localTrees": 1,
+      "meanNucleotideDistance": 0.12426984830575256,
+      "meanAminoAcidDistance": 0.23707890070921986,
+      "segregatingNucleotideSites": 860
+    }
+  },
+  "scuffDiagnostics": {
+    "calm": {
+      "sampledMeanDnds": 0.9854288438790607,
+      "maximumExpectedDnds": 1.0251485657159194
+    },
+    "adaptive": {
+      "sampledMeanDnds": 1.2832030890397919,
+      "maximumExpectedDnds": 1.72899878214205
+    }
+  },
+  "summaries": [
+    {
+      "dataset": "neutral-mg94",
+      "method": "FUBAR",
+      "target": "positive",
+      "threshold": "posterior >= 0.95",
+      "metrics": {
+        "positives": 0,
+        "negatives": 480,
+        "detected": 1,
+        "truePositive": 0,
+        "falsePositive": 1,
+        "sensitivity": 0,
+        "specificity": 0.9979166666666667,
+        "precision": 0,
+        "falseDiscoveryRate": 1,
+        "rocAuc": 0,
+        "averagePrecision": 0,
+        "brier": 0.18913380998702803
+      },
+      "strongSensitivity": 0,
+      "rankCorrelation": 0,
+      "runtimeSeconds": 80.12771415899999
+    },
+    {
+      "dataset": "neutral-mg94",
+      "method": "FUBAR",
+      "target": "purifying",
+      "threshold": "posterior >= 0.95",
+      "metrics": {
+        "positives": 0,
+        "negatives": 480,
+        "detected": 2,
+        "truePositive": 0,
+        "falsePositive": 2,
+        "sensitivity": 0,
+        "specificity": 0.9958333333333333,
+        "precision": 0,
+        "falseDiscoveryRate": 1,
+        "rocAuc": 0,
+        "averagePrecision": 0,
+        "brier": 0.17133004851608413
+      },
+      "strongSensitivity": 0,
+      "rankCorrelation": 0,
+      "runtimeSeconds": 80.12771415899999
+    },
+    {
+      "dataset": "neutral-mg94",
+      "method": "approx-FEL",
+      "target": "positive",
+      "threshold": "directional p <= 0.05",
+      "metrics": {
+        "positives": 0,
+        "negatives": 480,
+        "detected": 25,
+        "truePositive": 0,
+        "falsePositive": 25,
+        "sensitivity": 0,
+        "specificity": 0.9479166666666666,
+        "precision": 0,
+        "falseDiscoveryRate": 1,
+        "rocAuc": 0,
+        "averagePrecision": 0,
+        "brier": 0.31275014792526007
+      },
+      "strongSensitivity": 0,
+      "rankCorrelation": 0,
+      "runtimeSeconds": 80.12771415899999
+    },
+    {
+      "dataset": "neutral-mg94",
+      "method": "approx-FEL",
+      "target": "purifying",
+      "threshold": "directional p <= 0.05",
+      "metrics": {
+        "positives": 0,
+        "negatives": 480,
+        "detected": 30,
+        "truePositive": 0,
+        "falsePositive": 30,
+        "sensitivity": 0,
+        "specificity": 0.9375,
+        "precision": 0,
+        "falseDiscoveryRate": 1,
+        "rocAuc": 0,
+        "averagePrecision": 0,
+        "brier": 0.24870173791668884
+      },
+      "strongSensitivity": 0,
+      "rankCorrelation": 0,
+      "runtimeSeconds": 80.12771415899999
+    },
+    {
+      "dataset": "heterogeneous-mg94",
+      "method": "FUBAR",
+      "target": "positive",
+      "threshold": "posterior >= 0.95",
+      "metrics": {
+        "positives": 138,
+        "negatives": 342,
+        "detected": 13,
+        "truePositive": 13,
+        "falsePositive": 0,
+        "sensitivity": 0.09420289855072464,
+        "specificity": 1,
+        "precision": 1,
+        "falseDiscoveryRate": 0,
+        "rocAuc": 0.8011166200525468,
+        "averagePrecision": 0.6703314556114566,
+        "brier": 0.15599530085473656
+      },
+      "strongSensitivity": 0.15294117647058825,
+      "rankCorrelation": 0.6517381024092533,
+      "runtimeSeconds": 76.430285741
+    },
+    {
+      "dataset": "heterogeneous-mg94",
+      "method": "FUBAR",
+      "target": "purifying",
+      "threshold": "posterior >= 0.95",
+      "metrics": {
+        "positives": 342,
+        "negatives": 138,
+        "detected": 29,
+        "truePositive": 28,
+        "falsePositive": 1,
+        "sensitivity": 0.08187134502923976,
+        "specificity": 0.9927536231884058,
+        "precision": 0.9655172413793104,
+        "falseDiscoveryRate": 0.034482758620689655,
+        "rocAuc": 0.8194656326807357,
+        "averagePrecision": 0.9091592520414795,
+        "brier": 0.17412283038764612
+      },
+      "strongSensitivity": 0.09505703422053231,
+      "rankCorrelation": 0.6517381024092533,
+      "runtimeSeconds": 76.430285741
+    },
+    {
+      "dataset": "heterogeneous-mg94",
+      "method": "approx-FEL",
+      "target": "positive",
+      "threshold": "directional p <= 0.05",
+      "metrics": {
+        "positives": 138,
+        "negatives": 342,
+        "detected": 33,
+        "truePositive": 29,
+        "falsePositive": 4,
+        "sensitivity": 0.21014492753623187,
+        "specificity": 0.9883040935672515,
+        "precision": 0.8787878787878788,
+        "falseDiscoveryRate": 0.12121212121212122,
+        "rocAuc": 0.7561657767607425,
+        "averagePrecision": 0.6170164366706135,
+        "brier": 0.20579551143720132
+      },
+      "strongSensitivity": 0.27058823529411763,
+      "rankCorrelation": 0.5089699958863627,
+      "runtimeSeconds": 76.430285741
+    },
+    {
+      "dataset": "heterogeneous-mg94",
+      "method": "approx-FEL",
+      "target": "purifying",
+      "threshold": "directional p <= 0.05",
+      "metrics": {
+        "positives": 342,
+        "negatives": 138,
+        "detected": 58,
+        "truePositive": 55,
+        "falsePositive": 3,
+        "sensitivity": 0.1608187134502924,
+        "specificity": 0.9782608695652174,
+        "precision": 0.9482758620689655,
+        "falseDiscoveryRate": 0.05172413793103448,
+        "rocAuc": 0.6707771845071616,
+        "averagePrecision": 0.852417091551493,
+        "brier": 0.4004367029572799
+      },
+      "strongSensitivity": 0.18631178707224336,
+      "rankCorrelation": 0.5089699958863627,
+      "runtimeSeconds": 76.430285741
+    },
+    {
+      "dataset": "heterogeneous-mg94",
+      "method": "FAME",
+      "target": "positive",
+      "threshold": "posterior >= 0.9",
+      "metrics": {
+        "positives": 138,
+        "negatives": 342,
+        "detected": 18,
+        "truePositive": 17,
+        "falsePositive": 1,
+        "sensitivity": 0.12318840579710146,
+        "specificity": 0.9970760233918129,
+        "precision": 0.9444444444444444,
+        "falseDiscoveryRate": 0.05555555555555555,
+        "rocAuc": 0.8336405627595559,
+        "averagePrecision": 0.7024088427211287,
+        "brier": 0.14956402431920776
+      },
+      "strongSensitivity": 0.2,
+      "runtimeSeconds": 202.435509306
+    },
+    {
+      "dataset": "heterogeneous-mg94",
+      "method": "FLAVOR",
+      "target": "positive",
+      "threshold": "posterior >= 0.9",
+      "metrics": {
+        "positives": 138,
+        "negatives": 342,
+        "detected": 11,
+        "truePositive": 11,
+        "falsePositive": 0,
+        "sensitivity": 0.07971014492753623,
+        "specificity": 1,
+        "precision": 1,
+        "falseDiscoveryRate": 0,
+        "rocAuc": 0.8291698449021103,
+        "averagePrecision": 0.6885027277462078,
+        "brier": 0.149249760358734
+      },
+      "strongSensitivity": 0.12941176470588237,
+      "runtimeSeconds": 84.18923595099996
+    },
+    {
+      "dataset": "recombinant-true-regional",
+      "method": "FUBAR",
+      "target": "positive",
+      "threshold": "posterior >= 0.95",
+      "metrics": {
+        "positives": 141,
+        "negatives": 339,
+        "detected": 9,
+        "truePositive": 9,
+        "falsePositive": 0,
+        "sensitivity": 0.06382978723404255,
+        "specificity": 1,
+        "precision": 1,
+        "falseDiscoveryRate": 0,
+        "rocAuc": 0.7701416347622335,
+        "averagePrecision": 0.6483263705170964,
+        "brier": 0.16894125337060661
+      },
+      "strongSensitivity": 0.125,
+      "rankCorrelation": 0.6338986756659313,
+      "runtimeSeconds": 113.73293443100003
+    },
+    {
+      "dataset": "recombinant-true-regional",
+      "method": "FUBAR",
+      "target": "purifying",
+      "threshold": "posterior >= 0.95",
+      "metrics": {
+        "positives": 339,
+        "negatives": 141,
+        "detected": 39,
+        "truePositive": 38,
+        "falsePositive": 1,
+        "sensitivity": 0.11209439528023599,
+        "specificity": 0.9929078014184397,
+        "precision": 0.9743589743589743,
+        "falseDiscoveryRate": 0.02564102564102564,
+        "rocAuc": 0.7935312454235445,
+        "averagePrecision": 0.8909517032551337,
+        "brier": 0.18360660009140153
+      },
+      "strongSensitivity": 0.12359550561797752,
+      "rankCorrelation": 0.6338986756659313,
+      "runtimeSeconds": 113.73293443100003
+    },
+    {
+      "dataset": "recombinant-master-only",
+      "method": "FUBAR",
+      "target": "positive",
+      "threshold": "posterior >= 0.95",
+      "metrics": {
+        "positives": 141,
+        "negatives": 339,
+        "detected": 10,
+        "truePositive": 9,
+        "falsePositive": 1,
+        "sensitivity": 0.06382978723404255,
+        "specificity": 0.9970501474926253,
+        "precision": 0.9,
+        "falseDiscoveryRate": 0.1,
+        "rocAuc": 0.766585075001569,
+        "averagePrecision": 0.6391710511898544,
+        "brier": 0.17171036970646306
+      },
+      "strongSensitivity": 0.125,
+      "rankCorrelation": 0.629797941220355,
+      "runtimeSeconds": 75.036332894
+    },
+    {
+      "dataset": "recombinant-master-only",
+      "method": "FUBAR",
+      "target": "purifying",
+      "threshold": "posterior >= 0.95",
+      "metrics": {
+        "positives": 339,
+        "negatives": 141,
+        "detected": 41,
+        "truePositive": 40,
+        "falsePositive": 1,
+        "sensitivity": 0.11799410029498525,
+        "specificity": 0.9929078014184397,
+        "precision": 0.975609756097561,
+        "falseDiscoveryRate": 0.024390243902439025,
+        "rocAuc": 0.7897863972049625,
+        "averagePrecision": 0.8896059407044589,
+        "brier": 0.18638542143579573
+      },
+      "strongSensitivity": 0.13108614232209737,
+      "rankCorrelation": 0.629797941220355,
+      "runtimeSeconds": 75.036332894
+    },
+    {
+      "dataset": "scuff-calm-vs-adaptive",
+      "method": "FLAVOR",
+      "target": "adaptive SCUFF block",
+      "threshold": "posterior >= 0.9",
+      "metrics": {
+        "positives": 240,
+        "negatives": 240,
+        "detected": 0,
+        "truePositive": 0,
+        "falsePositive": 0,
+        "sensitivity": 0,
+        "specificity": 1,
+        "precision": 1,
+        "falseDiscoveryRate": 0,
+        "rocAuc": 0.5368489583333333,
+        "averagePrecision": 0.5559380790508225,
+        "brier": 0.2645056843290407
+      },
+      "runtimeSeconds": 97.46560091600008
+    }
+  ],
+  "runtimes": [
+    {
+      "label": "Neutral · FUBAR+FEL",
+      "seconds": 80.12771415899999
+    },
+    {
+      "label": "Heterogeneous · FUBAR+FEL",
+      "seconds": 76.430285741
+    },
+    {
+      "label": "Heterogeneous · FAME",
+      "seconds": 202.435509306
+    },
+    {
+      "label": "Heterogeneous · FLAVOR",
+      "seconds": 84.18923595099996
+    },
+    {
+      "label": "Recombinant · true regional",
+      "seconds": 113.73293443100003
+    },
+    {
+      "label": "Recombinant · master only",
+      "seconds": 75.036332894
+    },
+    {
+      "label": "SCUFF contrast · FLAVOR",
+      "seconds": 97.46560091600008
+    }
+  ]
+}

@@ -126,6 +126,8 @@ export interface SiteParameterTruth {
   readonly eventRate?: readonly number[];
   readonly equilibriumSigma?: readonly number[];
   readonly mixingRate?: readonly number[];
+  /** Ω(σ)=sqrt(σ²+π)/sqrt(π): the independent-fitness-redraw expected dN/dS reference. */
+  readonly scuffMaximumExpectedDnds?: readonly number[];
 }
 
 export interface ScuffDiagnostic {

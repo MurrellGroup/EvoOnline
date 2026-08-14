@@ -1,0 +1,113 @@
+{
+  "seed": 2710,
+  "simulateAlignment": true,
+  "tree": {
+    "preset": "logistic",
+    "observedTips": 48,
+    "replicates": 1,
+    "ploidy": 1,
+    "horizon": 20,
+    "branchScale": 0.0045,
+    "initialTips": 3,
+    "population": {
+      "space": "log",
+      "points": [
+        {
+          "time": 0,
+          "value": 3840
+        },
+        {
+          "time": 5,
+          "value": 2880
+        },
+        {
+          "time": 10,
+          "value": 576
+        },
+        {
+          "time": 15,
+          "value": 96
+        },
+        {
+          "time": 20,
+          "value": 57.599999999999994
+        }
+      ]
+    },
+    "sampling": {
+      "space": "log",
+      "points": [
+        {
+          "time": 0,
+          "value": 2.88
+        },
+        {
+          "time": 6.666666666666667,
+          "value": 4.32
+        },
+        {
+          "time": 13.333333333333334,
+          "value": 1.8
+        },
+        {
+          "time": 20,
+          "value": 0.6
+        }
+      ]
+    },
+    "hazardBins": 4096
+  },
+  "codon": {
+    "engine": "mg94",
+    "sites": 480,
+    "geneticCodeId": 1,
+    "gtr": {
+      "preset": "flu-demo",
+      "exchangeabilities": [
+        1,
+        2.186519,
+        0.489476,
+        0.855297,
+        2.077248,
+        0.564529
+      ],
+      "f3x4": [
+        0.293117,
+        0.184379,
+        0.295274,
+        0.190878,
+        0.342317,
+        0.199907,
+        0.154328,
+        0.267101,
+        0.231987,
+        0.217801,
+        0.241637,
+        0.272234
+      ]
+    },
+    "alpha": {
+      "kind": "gamma",
+      "mean": 1,
+      "shape": 2.5
+    },
+    "omega": {
+      "kind": "gamma",
+      "mean": 0.8,
+      "shape": 1
+    }
+  },
+  "recombination": {
+    "enabled": false,
+    "eventRate": 0.004,
+    "mode": "single-tract",
+    "meanBreakpoints": 2,
+    "meanTractCodons": 75,
+    "hotspotMode": "none",
+    "hotspotCount": 3,
+    "hotspotWidth": 12,
+    "hotspotIntensity": 8,
+    "manualHotspots": [],
+    "carrierOversample": 2.5
+  }
+}

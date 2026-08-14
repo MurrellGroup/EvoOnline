@@ -182,6 +182,7 @@ export function App() {
   const [analyses, setAnalyses] = useState<readonly SavedAnalysis[]>([]);
   const [activeAnalysisId, setActiveAnalysisId] = useState<string>();
   const [recombinationTrees, setRecombinationTrees] = useState<RecombinationCodonTreeSet>();
+  const [simulationSource, setSimulationSource] = useState<SavedAnalysis["simulationSource"]>();
   const activeAnalysis = analyses.find((analysis) => analysis.id === activeAnalysisId);
 
   useEffect(() => {
@@ -249,6 +250,7 @@ export function App() {
       const artifact = await createAlignmentArtifact(file.name, await readTextFile(file));
       setAlignment(artifact);
       setRecombinationTrees(undefined);
+      setSimulationSource(undefined);
       setNotice({ tone: "success", text: `${artifact.taxa} sequences loaded.` });
     } catch (error) {
       setNotice({ tone: "error", text: error instanceof Error ? error.message : String(error) });
@@ -303,6 +305,7 @@ export function App() {
       const artifact = await createAlignmentArtifact(alignment.name, snapshot.alignment);
       setAlignment(artifact);
       setRecombinationTrees(undefined);
+      setSimulationSource(undefined);
       if (tree === undefined && snapshot.tree) setTree(await createTreeArtifact("inferred-tree.nwk", snapshot.tree, "editor"));
       setAlignmentOpen(false);
       setNotice({ tone: "success", text: "Alignment edits applied to the workspace." });
@@ -399,6 +402,7 @@ export function App() {
         ...(tree === undefined ? {} : { tree }),
         result: next,
         ...(!supportsRecombinationTrees || recombinationTrees === undefined ? {} : { recombinationTrees }),
+        ...(simulationSource === undefined || model.plugin.manifest.id === "simulator" ? {} : { simulationSource }),
       };
       setAnalyses((current) => [saved, ...current.filter((analysis) => analysis.id !== saved.id)]);
       setActiveAnalysisId(saved.id);
@@ -431,6 +435,7 @@ export function App() {
     setAlignment(saved.alignment);
     setTree(saved.tree);
     setRecombinationTrees(saved.recombinationTrees);
+    setSimulationSource(saved.simulationSource);
     if (saved.modelId === selectedModelId) setParameters(saved.parameters);
     else {
       restoredParameters.current = saved.parameters;
@@ -481,6 +486,11 @@ export function App() {
       setAlignment(nextAlignment);
       setTree(nextTree);
       setRecombinationTrees(simulatorTreeSet(dataset));
+      if (activeAnalysis?.modelId === "simulator") {
+        const simulation = activeAnalysis.result as SimulatorAnalysisResult;
+        const datasetIndex = simulation.datasets.findIndex((candidate) => candidate.id === dataset.id);
+        if (datasetIndex >= 0) setSimulationSource({ simulationAnalysisId: activeAnalysis.id, datasetId: dataset.id, datasetIndex });
+      }
       setSelectedModelId("fubar");
       setNotice({ tone: "success", text: `${dataset.id} loaded into FUBAR${dataset.localTrees.length > 1 ? ` with ${dataset.localTrees.length} known regional trees` : ""}.` });
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -489,6 +499,8 @@ export function App() {
 
   const batchSimulatedDatasets = async (method: SimulatorBatchMethod, datasets: readonly SimulatedDataset[], simulation: SimulatorAnalysisResult): Promise<void> => {
     if (datasets.length === 0) return;
+    const simulationAnalysisId = activeAnalysis?.modelId === "simulator" ? activeAnalysis.id : undefined;
+    if (simulationAnalysisId === undefined) { setNotice({ tone: "error", text: "Reopen the saved simulator result before starting a linked inference batch." }); return; }
     const generation = ++runGeneration.current;
     const target = getRegisteredModel(method);
     const completed: SavedAnalysis[] = [];
@@ -517,13 +529,15 @@ export function App() {
         batchExecutor.dispose();
         auxiliaryExecutor.current = undefined;
         const id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `analysis-${Date.now()}-${index}`;
-        const saved: SavedAnalysis = { id, modelId: method, title: `${target.plugin.manifest.shortTitle} · simulated dataset ${index + 1}`, createdAt: Date.now() + index, parameters: targetParameters, alignment: nextAlignment, tree: nextTree, result: output, ...(regionalTrees === undefined ? {} : { recombinationTrees: regionalTrees }) };
+        const datasetIndex = simulation.datasets.findIndex((candidate) => candidate.id === dataset.id);
+        const saved: SavedAnalysis = { id, modelId: method, title: `${target.plugin.manifest.shortTitle} · simulated dataset ${Math.max(0, datasetIndex) + 1}`, createdAt: Date.now() + index, parameters: targetParameters, alignment: nextAlignment, tree: nextTree, result: output, ...(regionalTrees === undefined ? {} : { recombinationTrees: regionalTrees }), simulationSource: { simulationAnalysisId, datasetId: dataset.id, datasetIndex: Math.max(0, datasetIndex) } };
         completed.push(saved);
         await saveAnalysis(saved);
       }
       if (generation !== runGeneration.current) return;
       setAnalyses((current) => [...completed].reverse().concat(current));
       setActiveAnalysisId(completed.at(-1)?.id);
+      setSimulationSource(completed.at(-1)?.simulationSource);
       setNotice({ tone: "success", text: `${target.plugin.manifest.shortTitle} batch completed for ${completed.length} simulated datasets. The results are saved independently.` });
       void simulation;
     } catch (error) {
@@ -742,7 +756,7 @@ export function App() {
           )}
         </section>
 
-        {activeAnalysis !== undefined && (() => { const resultModel = getRegisteredModel(activeAnalysis.modelId); const ResultView = resultModel.ResultView; return <div ref={resultsRef} className="results-anchor"><div className="saved-result-banner"><span>Viewing saved result</span><strong>{activeAnalysis.title}</strong><small>{new Date(activeAnalysis.createdAt).toLocaleString()}</small></div><ResultView result={activeAnalysis.result} parameters={activeAnalysis.parameters} alignment={activeAnalysis.alignment?.text ?? ""} onLoadRecombinationTrees={(method, treeSet) => void loadRecombinationTrees(method, treeSet)} onLoadSimulatedDataset={(dataset) => loadSimulatedDataset(dataset)} onBatchSimulatedDatasets={(method, datasets, result) => batchSimulatedDatasets(method, datasets, result)} /></div>; })()}
+        {activeAnalysis !== undefined && (() => { const resultModel = getRegisteredModel(activeAnalysis.modelId); const ResultView = resultModel.ResultView; const simulationInferenceAnalyses = activeAnalysis.modelId === "simulator" ? analyses.filter((analysis) => analysis.simulationSource?.simulationAnalysisId === activeAnalysis.id) : undefined; return <div ref={resultsRef} className="results-anchor"><div className="saved-result-banner"><span>Viewing saved result</span><strong>{activeAnalysis.title}</strong><small>{new Date(activeAnalysis.createdAt).toLocaleString()}</small></div><ResultView result={activeAnalysis.result} parameters={activeAnalysis.parameters} alignment={activeAnalysis.alignment?.text ?? ""} onLoadRecombinationTrees={(method, treeSet) => void loadRecombinationTrees(method, treeSet)} onLoadSimulatedDataset={(dataset) => loadSimulatedDataset(dataset)} onBatchSimulatedDatasets={(method, datasets, result) => batchSimulatedDatasets(method, datasets, result)} {...(simulationInferenceAnalyses === undefined ? {} : { simulationInferenceAnalyses })} /></div>; })()}
       </main>
 
       {bridges !== undefined && alignment !== undefined && (

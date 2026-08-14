@@ -1155,6 +1155,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .sim-batch-datasets label { display: flex; align-items: center; gap: 3px; color: #52655f; font-size: 7px; }
 .sim-batch-controls .button--run { margin: 0; min-width: 230px; }
 .sim-batch-controls > small { grid-column: 1 / -1; color: #74827e; font-size: 7px; line-height: 1.4; }
+.sim-comparison-studio { padding: 9px; }
+.sim-comparison-controls { display: grid; grid-template-columns: repeat(5, minmax(135px, 1fr)) auto; gap: 7px; align-items: end; }
+.sim-comparison-controls label, .sim-comparison-thresholds label { display: flex; flex-direction: column; gap: 3px; min-width: 0; color: #687873; font-size: 7px; font-weight: 800; }
+.sim-comparison-controls select, .sim-comparison-controls input, .sim-comparison-thresholds select, .sim-comparison-thresholds input { width: 100%; min-height: 31px; padding: 5px 8px; color: #263936; background: #fff; border: 1px solid #c9d4ce; border-radius: 5px; font-size: 9px; }
+.sim-comparison-controls .sim-comparison-title { grid-column: span 3; }
+.sim-comparison-thresholds { display: grid; grid-template-columns: repeat(2, minmax(240px, 1fr)); gap: 8px; padding: 8px 0 0; }
+.sim-comparison-thresholds label { display: grid; grid-template-columns: minmax(150px, 1fr) 58px minmax(100px, .65fr); align-items: center; }
+.sim-comparison-thresholds label > span { align-self: center; }
+.sim-comparison-studio .figure-scroll { margin-top: 8px; border: 1px solid #e1e6e3; border-radius: 7px; }
 
 @media (max-width: 1050px) {
   .sim-compact-grid { grid-template-columns: repeat(3, 1fr); }
@@ -1163,6 +1172,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
   .sim-selected-summary { grid-template-columns: repeat(3, 1fr); }
   .sim-batch-controls { grid-template-columns: 1fr; }
   .sim-batch-controls .button--run { min-width: 0; }
+  .sim-comparison-controls { grid-template-columns: 1fr 1fr; }
+  .sim-comparison-controls .sim-comparison-title { grid-column: 1 / -1; }
+  .sim-comparison-thresholds { grid-template-columns: 1fr; }
 }
 @media (max-width: 700px) {
   .sim-compact-grid { grid-template-columns: 1fr 1fr; }

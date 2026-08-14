@@ -76,6 +76,27 @@ test("non-uniform MG94 simulator is deterministic and produces measurable divers
   assert.ok(new Set(first.sequences).size > 1);
 });
 
+test("SCUFF simulation retains the per-site independent-redraw expected dN/dS truth", () => {
+  const tree = simulateCoalescentTree({ ...constantTree, observedTips: 6, initialTips: 6, branchScale: 0.01 }, new Random(4), 6);
+  const config = {
+    engine: "scuff" as const,
+    sites: 7,
+    geneticCodeId: 1 as const,
+    gtr: FLU_DEMO_GTR,
+    alpha: { kind: "fixed" as const, mean: 1 },
+    eventRate: { kind: "fixed" as const, mean: 4 },
+    equilibriumSigma: { kind: "gamma" as const, mean: 3.5, shape: 5 },
+    mixingRate: { kind: "fixed" as const, mean: 1 },
+    burninTime: 0.2,
+    diagnosticTime: 0.5,
+  };
+  const alignment = simulateCodonAlignment([{ startCodon: 1, endCodon: 7, tree, activeEventIds: [] }], config, new Random(88));
+  const sigma = alignment.siteParameters.equilibriumSigma!;
+  const expected = alignment.siteParameters.scuffMaximumExpectedDnds!;
+  assert.equal(expected.length, config.sites);
+  expected.forEach((value, index) => assert.ok(Math.abs(value - Math.sqrt(sigma[index]! ** 2 + Math.PI) / Math.sqrt(Math.PI)) < 1e-12));
+});
+
 test("full pipeline retains hidden carrier lineages and emits reproducible truth", async () => {
   const result = await runSimulator({
     seed: 42,
