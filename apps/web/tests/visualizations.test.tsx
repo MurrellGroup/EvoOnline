@@ -29,6 +29,21 @@ import type { FsartAnalysisResult } from "@phylo-workbench/model-fsart/browser-s
 import type { MosaicSprAnalysisResult } from "@phylo-workbench/model-mosaicspr/browser-source";
 import { analyzeJemspr } from "@phylo-workbench/model-jemspr/browser-source";
 import { modelRegistry } from "../src/model-registry.js";
+import { createRecombinationCodonTreeSet } from "../src/lib/recombination-handoff.js";
+import { displayMaskPath, parseJemsprSwitchingNetwork } from "../src/lib/jemspr-visual.js";
+import { displayNetwork } from "@phylo-workbench/model-jemspr/browser-source";
+
+test("generic recombination handoff assigns breakpoint-crossing codons by their middle nucleotide", () => {
+  const first = "((a:0.1,b:0.1):0.1,c:0.2);";
+  const second = "((a:0.2,c:0.1):0.1,b:0.2);";
+  const treeSet = createRecombinationCodonTreeSet("future-recombination-detector", "segment-ml", [
+    { start: 1, end: 4, tree: first },
+    { start: 5, end: 9, tree: second },
+  ], 9);
+  assert.deepEqual(treeSet.segments.map((segment) => [segment.startCodon, segment.endCodon, segment.tree]), [[1, 1, first], [2, 3, second]]);
+  assert.equal(treeSet.sourceMethod, "future-recombination-detector");
+  assert.equal(treeSet.branchScalePolicy, "fixed-relative");
+});
 
 test("FSART and MosaicSPR are separately registered methods with non-overlapping SPR controls", () => {
   const fsart = modelRegistry.find((entry) => entry.plugin.manifest.id === "fsart");
@@ -138,6 +153,7 @@ test("FSART renders consensus proposals, triplet topology evidence, topology HMM
   assert.match(markup, /Refined Viterbi tree reconstruction/);
   assert.match(markup, /Exploratory participating-subtree candidates/);
   assert.match(markup, /FastTree 2.1.11 bioWASM/);
+  assert.match(markup, /Continue with codon site analysis/);
   assert.ok((markup.match(/Export SVG/g) ?? []).length >= 5);
 });
 
@@ -187,6 +203,7 @@ test("MosaicSPR is a separate result studio with implied regional trees, taxon l
   assert.match(markup, /Breakpoint-indexed SPR edit tape/);
   assert.match(markup, /Master-to-local derivations/);
   assert.match(markup, /Event CSV/);
+  assert.match(markup, /Continue with codon site analysis/);
   assert.ok((markup.match(/Export SVG/g) ?? []).length >= 2);
 });
 
@@ -204,6 +221,16 @@ test("JEMSPR renders coherent event lanes, linked implied trees, and the compile
     likelihoodRateCategories: 1, fitLikelihoodGammaShape: false, likelihoodIterations: 5, likelihoodRefitIterations: 3,
   });
   const markup = renderToStaticMarkup(<JemsprResultsView result={result} />);
+  const parsedNetwork = parseJemsprSwitchingNetwork(result.networkJson).network;
+  for (const run of result.network.runs) {
+    const path = displayMaskPath(parsedNetwork, run.mask);
+    assert.equal(path[0], 0);
+    assert.equal(path.at(-1), run.mask);
+    for (let index = 1; index < path.length; index += 1) {
+      assert.equal((path[index]! ^ path[index - 1]!).toString(2).replaceAll("0", "").length, 1);
+      assert.notEqual(displayNetwork(parsedNetwork, path[index - 1]!)?.signature, displayNetwork(parsedNetwork, path[index]!)?.signature);
+    }
+  }
   assert.match(markup, /JEMSPR/);
   assert.match(markup, /never supplied by FastTree, FSART, MosaicSPR/);
   assert.match(markup, /Coherent linked branch-length likelihood/);
@@ -215,9 +242,14 @@ test("JEMSPR renders coherent event lanes, linked implied trees, and the compile
   assert.match(markup, /Coherent genomic event history/);
   assert.match(markup, /Implied regional phylogenies/);
   assert.match(markup, /Compiled switching DAG/);
+  assert.match(markup, /Animated SPR construction/);
+  assert.match(markup, /SPR move storyboard/);
+  assert.match(markup, /SPR display-state graph/);
+  assert.match(markup, /continuous subtree motion/i);
+  assert.match(markup, /Continue with codon site analysis/);
   assert.match(markup, /Matching-taxon links/);
   assert.match(markup, /Network JSON/);
-  assert.ok((markup.match(/Export SVG/g) ?? []).length >= 4);
+  assert.ok((markup.match(/Export SVG/g) ?? []).length >= 7);
 });
 
 test("DifFUBAR result studio renders a native SVG overview and export control", () => {

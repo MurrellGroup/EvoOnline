@@ -1,4 +1,5 @@
 export * from "./types.js";
+export * from "./segmented.js";
 export { parseFasta, writeFasta } from "./io/fasta.js";
 export { normalizeDifFubarTreeText, parseNewick, parseTaggedNewick } from "./io/newick.js";
 export { createDifFUBARGrid } from "./model/grid.js";
@@ -30,7 +31,7 @@ export {
 } from "./backends/wasm.js";
 export { WebGPUBackend } from "./backends/webgpu.js";
 export { ParallelWasmBackend } from "./backends/wasm-parallel.js";
-export { fitGlobalModel } from "./fit/global.js";
+export { fitGlobalModel, fitPartitionedGlobalModel, type PartitionedFitSegment } from "./fit/global.js";
 export { analyzeDifFUBAR, resultsToCsv } from "./pipeline.js";
 export { collapsePosteriorMarginals } from "./posterior/marginals.js";
 export {

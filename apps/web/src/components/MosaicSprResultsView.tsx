@@ -1,6 +1,9 @@
 import type { MosaicSprAnalysisResult } from "@phylo-workbench/model-mosaicspr/browser-source";
 import { MosaicSprReconstructionFigure } from "./MosaicSprReconstructionFigure.js";
 import { MosaicSprTreeComparisonFigure } from "./MosaicSprTreeComparisonFigure.js";
+import { RecombinationCodonHandoff, type RecombinationCodonMethod } from "./RecombinationCodonHandoff.js";
+import { createMosaicSprCodonTreeSet } from "../lib/recombination-handoff.js";
+import type { RecombinationCodonTreeSet } from "@phylo-workbench/model-diffubar/browser-source";
 
 function downloadText(text: string, filename: string, type = "text/plain;charset=utf-8"): void {
   const url = URL.createObjectURL(new Blob([text], { type }));
@@ -11,14 +14,19 @@ function downloadText(text: string, filename: string, type = "text/plain;charset
   URL.revokeObjectURL(url);
 }
 
-export function MosaicSprResultsView({ result }: { readonly result: MosaicSprAnalysisResult }) {
+export function MosaicSprResultsView({ result, onLoadRecombinationTrees }: { readonly result: MosaicSprAnalysisResult; readonly onLoadRecombinationTrees?: ((method: RecombinationCodonMethod, treeSet: RecombinationCodonTreeSet) => void) | undefined }) {
   const reconstruction = result.reconstruction;
   const master = reconstruction.states.find((state) => state.id === reconstruction.masterStateId);
   const editCount = reconstruction.events.reduce((total, event) => total + event.sprDistance, 0);
+  let codonTreeSet: RecombinationCodonTreeSet | undefined;
+  let codonTreeError: string | undefined;
+  try { codonTreeSet = createMosaicSprCodonTreeSet(result, result.sites); }
+  catch (error) { codonTreeError = error instanceof Error ? error.message : String(error); }
   return <section className="results" aria-labelledby="mosaicspr-results-heading">
     <div className="section-heading section-heading--results"><div><p className="eyebrow">Analysis complete · explicit recombination history</p><h2 id="mosaicspr-results-heading">MosaicSPR</h2><p>Unknown-master mosaic reconstruction with executable subtree-prune-regraft events</p></div><div className="result-downloads"><button type="button" className="button button--primary" onClick={() => downloadText(result.eventCsv, "mosaicspr-events.csv", "text/csv;charset=utf-8")}>Event CSV</button><button type="button" className="button button--secondary" onClick={() => downloadText(JSON.stringify(result, null, 2), "mosaicspr-result.json", "application/json;charset=utf-8")}>Result JSON</button><button type="button" className="button button--secondary" disabled={master === undefined} onClick={() => master !== undefined && downloadText(master.tree, "mosaicspr-master.nwk")}>Master Newick</button></div></div>
     <p className="method-note"><strong>What MosaicSPR asks:</strong> can the alignment be represented by a jointly inferred master topology plus a compact sequence of explicit SPR edits whose implied tree changes along the genome? Neither the master nor the local trees are fixed. A breakpoint may carry multiple composed edits, and more than one derived event can be active in the same region.</p>
     <p className="method-note method-note--warning"><strong>Search scope:</strong> the path is exact inside the explicitly explored connected SPR graph, but the outer graph expansion is budgeted. Optional FSART triplet peaks and overlapping local FastTree windows seed the search only; they do not constrain the final breakpoints, master, edit count, or implied regional topologies.</p>
+    <RecombinationCodonHandoff treeSet={codonTreeSet} error={codonTreeError} onLoad={onLoadRecombinationTrees} />
     <div className="result-stats">
       <div><span>Jointly inferred master</span><strong>{reconstruction.masterStateId ?? "—"}</strong><small>{reconstruction.masterChangedFromSeed ? `revised from ${reconstruction.initialSeedStateId}` : "winning seed topology retained"}</small></div>
       <div><span>Genomic regions</span><strong>{reconstruction.runs.length}</strong><small>{new Set(reconstruction.runs.map((run) => run.stateId)).size} implied local trees</small></div>

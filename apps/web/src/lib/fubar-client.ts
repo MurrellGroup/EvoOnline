@@ -1,6 +1,7 @@
 import type { ParameterValues } from "@phylo-workbench/model-sdk";
 import type { FubarRunResult, FubarWorkerResponse, WorkerRunRequest } from "../types.js";
 import type { RunProgress } from "./diffubar-client.js";
+import type { BrowserAnalysisRunContext } from "../model-registry.js";
 
 export class FubarClient {
   private worker: Worker | undefined;
@@ -15,6 +16,7 @@ export class FubarClient {
     tree: string,
     parameters: ParameterValues,
     onProgress: (progress: RunProgress) => void,
+    context?: BrowserAnalysisRunContext,
   ): Promise<FubarRunResult> {
     this.cancel();
     const worker = this.createWorker();
@@ -39,7 +41,7 @@ export class FubarClient {
         this.finish();
         reject(new Error(event.message || "FUBAR worker failed."));
       };
-      const request: WorkerRunRequest = { type: "run", id, alignment, tree, parameters };
+      const request: WorkerRunRequest = { type: "run", id, alignment, tree, parameters, ...(context?.recombinationTrees === undefined ? {} : { recombinationTrees: context.recombinationTrees }) };
       worker.postMessage(request);
     });
   }

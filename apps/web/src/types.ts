@@ -1,4 +1,4 @@
-import type { GeneticCodeId, PosteriorMarginals, ProgressDetail, SiteResult } from "@phylo-workbench/model-diffubar/browser-source";
+import type { GeneticCodeId, PosteriorMarginals, ProgressDetail, RecombinationCodonTreeSet, SiteResult } from "@phylo-workbench/model-diffubar/browser-source";
 import type { ApproximateFelProducts, FubarPosteriorProducts, FubarSiteResult } from "@phylo-workbench/model-fubar/browser-source";
 import type { BsrelBranchResult } from "@phylo-workbench/model-bsrel/browser-source";
 import type {
@@ -43,6 +43,7 @@ export interface WorkerRunRequest {
   readonly alignment: string;
   readonly tree: string;
   readonly parameters: Readonly<Record<string, string | number | boolean>>;
+  readonly recombinationTrees?: RecombinationCodonTreeSet;
 }
 
 export interface FubarRunResult {
@@ -66,6 +67,10 @@ export interface FubarRunResult {
     readonly inferenceIterations: number;
     readonly inferenceBurnin: number;
     readonly inferenceLogLikelihood: number | null;
+    readonly regionalTrees: number;
+    readonly branchScalePolicy: "single-tree" | "fixed-relative";
+    readonly branchLengthSource: "input-tree" | "jemspr-linked-ml" | "segment-ml" | "method-final-trees";
+    readonly codonAssignment: "single-tree" | "middle-nucleotide";
   };
   readonly tree: string;
   readonly csv: string;
@@ -126,6 +131,10 @@ export interface FameRunResult {
     readonly weightIntegration: "likelihood-quadrature" | "julia-draft-log-average";
     readonly weightPoints: number;
     readonly gridPreset: "fast" | "julia-draft";
+    readonly regionalTrees: number;
+    readonly branchScalePolicy: "single-tree" | "fixed-relative";
+    readonly branchLengthSource: "input-tree" | "jemspr-linked-ml" | "segment-ml" | "method-final-trees";
+    readonly codonAssignment: "single-tree" | "middle-nucleotide";
   };
   readonly tree: string;
   readonly csv: string;
@@ -163,6 +172,10 @@ export interface FlavorRunResult {
     readonly interpolationTableCap: 35;
     readonly cappedGridMultiplicityRetained: true;
     readonly gridPreset: "fast" | "julia-draft";
+    readonly regionalTrees: number;
+    readonly branchScalePolicy: "single-tree" | "fixed-relative";
+    readonly branchLengthSource: "input-tree" | "jemspr-linked-ml" | "segment-ml" | "method-final-trees";
+    readonly codonAssignment: "single-tree" | "middle-nucleotide";
   };
   readonly tree: string;
   readonly csv: string;

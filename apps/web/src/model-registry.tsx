@@ -7,6 +7,7 @@ import { cladeShiftPlugin } from "@phylo-workbench/model-cladeshift/browser-sour
 import { fsartPlugin, type FsartAnalysisResult } from "@phylo-workbench/model-fsart/browser-source";
 import { mosaicSprPlugin, type MosaicSprAnalysisResult } from "@phylo-workbench/model-mosaicspr/browser-source";
 import { jemsprPlugin, type JemsprAnalysisResult } from "@phylo-workbench/model-jemspr/browser-source";
+import { simulatorPlugin, type SimulatedDataset, type SimulatorAnalysisResult } from "@phylo-workbench/model-simulator/browser-source";
 import type { ModelPlugin, ParameterValues } from "@phylo-workbench/model-sdk";
 import type { WidgetBridge } from "@phylo-workbench/viewer-bridge";
 import { ResultsView } from "./components/ResultsView.js";
@@ -18,6 +19,9 @@ import { CladeShiftResultsView } from "./components/CladeShiftResultsView.js";
 import { FsartResultsView } from "./components/FsartResultsView.js";
 import { MosaicSprResultsView } from "./components/MosaicSprResultsView.js";
 import { JemsprResultsView } from "./components/JemsprResultsView.js";
+import { SimulatorSetup, type SimulatorSetupProps } from "./components/simulator/SimulatorSetup.js";
+import { SimulatorResultsView, type SimulatorBatchMethod } from "./components/simulator/SimulatorResultsView.js";
+import type { RecombinationCodonMethod } from "./components/RecombinationCodonHandoff.js";
 import { DifFubarClient, type RunProgress } from "./lib/diffubar-client.js";
 import { FubarClient } from "./lib/fubar-client.js";
 import { BsrelClient } from "./lib/bsrel-client.js";
@@ -26,7 +30,13 @@ import { CladeShiftClient } from "./lib/cladeshift-client.js";
 import { FsartClient } from "./lib/fsart-client.js";
 import { MosaicSprClient } from "./lib/mosaicspr-client.js";
 import { JemsprClient } from "./lib/jemspr-client.js";
+import { SimulatorClient } from "./lib/simulator-client.js";
 import type { BameRunResult, BsrelRunResult, CladeShiftRunResult, DifFubarRunResult, FubarRunResult, GlobalGammaRunResult } from "./types.js";
+import type { RecombinationCodonTreeSet } from "@phylo-workbench/model-diffubar/browser-source";
+
+export interface BrowserAnalysisRunContext {
+  readonly recombinationTrees?: RecombinationCodonTreeSet;
+}
 
 export interface BrowserModelExecutor {
   run(
@@ -34,6 +44,7 @@ export interface BrowserModelExecutor {
     tree: string,
     parameters: ParameterValues,
     onProgress: (progress: RunProgress) => void,
+    context?: BrowserAnalysisRunContext,
   ): Promise<unknown>;
   cancel(): void;
   dispose(): void;
@@ -47,6 +58,9 @@ interface ResultProps {
   readonly result: unknown;
   readonly parameters: ParameterValues;
   readonly alignment: string;
+  readonly onLoadRecombinationTrees?: (method: RecombinationCodonMethod, treeSet: RecombinationCodonTreeSet) => void;
+  readonly onLoadSimulatedDataset?: (dataset: SimulatedDataset) => void | Promise<void>;
+  readonly onBatchSimulatedDatasets?: (method: SimulatorBatchMethod, datasets: readonly SimulatedDataset[], result: SimulatorAnalysisResult) => void | Promise<void>;
 }
 
 export interface BrowserModelRegistration {
@@ -55,6 +69,7 @@ export interface BrowserModelRegistration {
   readonly runtimeLabel: string;
   readonly createExecutor: (services: BrowserExecutorServices) => BrowserModelExecutor;
   readonly ResultView: ComponentType<ResultProps>;
+  readonly SetupView?: ComponentType<SimulatorSetupProps>;
   readonly completionMessage: (result: unknown) => string;
 }
 
@@ -82,16 +97,20 @@ function CladeShiftResult({ result, parameters, alignment }: ResultProps) {
   return <CladeShiftResultsView result={result as CladeShiftRunResult} threshold={Number(parameters.posteriorThreshold ?? 0.9)} alignment={alignment} />;
 }
 
-function FsartResult({ result, parameters }: ResultProps) {
-  return <FsartResultsView result={result as FsartAnalysisResult} />;
+function FsartResult({ result, onLoadRecombinationTrees }: ResultProps) {
+  return <FsartResultsView result={result as FsartAnalysisResult} onLoadRecombinationTrees={onLoadRecombinationTrees} />;
 }
 
-function MosaicSprResult({ result }: ResultProps) {
-  return <MosaicSprResultsView result={result as MosaicSprAnalysisResult} />;
+function MosaicSprResult({ result, onLoadRecombinationTrees }: ResultProps) {
+  return <MosaicSprResultsView result={result as MosaicSprAnalysisResult} onLoadRecombinationTrees={onLoadRecombinationTrees} />;
 }
 
-function JemsprResult({ result }: ResultProps) {
-  return <JemsprResultsView result={result as JemsprAnalysisResult} />;
+function JemsprResult({ result, onLoadRecombinationTrees }: ResultProps) {
+  return <JemsprResultsView result={result as JemsprAnalysisResult} onLoadRecombinationTrees={onLoadRecombinationTrees} />;
+}
+
+function SimulatorResult({ result, onLoadSimulatedDataset, onBatchSimulatedDatasets }: ResultProps) {
+  return <SimulatorResultsView result={result as SimulatorAnalysisResult} {...(onLoadSimulatedDataset === undefined ? {} : { onLoadDataset: onLoadSimulatedDataset })} {...(onBatchSimulatedDatasets === undefined ? {} : { onBatchDatasets: onBatchSimulatedDatasets })} />;
 }
 
 export const modelRegistry: readonly BrowserModelRegistration[] = [
@@ -204,6 +223,18 @@ export const modelRegistry: readonly BrowserModelRegistration[] = [
       const output = result as JemsprAnalysisResult;
       const linked = output.likelihood.status === "complete" ? ` Linked ML fitted ${output.likelihood.atomicBranches.length} shared network edges.` : "";
       return `JEMSPR completed: ${output.network.templates.length} coherent reticulation template${output.network.templates.length === 1 ? "" : "s"}, ${output.network.occurrences.length} event occurrence${output.network.occurrences.length === 1 ? "" : "s"}, and ${output.network.runs.length} genomic region${output.network.runs.length === 1 ? "" : "s"}.${linked}`;
+    },
+  },
+  {
+    plugin: simulatorPlugin,
+    glyph: "Σim",
+    runtimeLabel: "Local simulation worker",
+    createExecutor: () => new SimulatorClient(),
+    SetupView: SimulatorSetup,
+    ResultView: SimulatorResult,
+    completionMessage: (result) => {
+      const output = result as SimulatorAnalysisResult;
+      return `${output.datasets.length} tree${output.datasets.length === 1 ? "" : "s"}${output.config.simulateAlignment ? " and codon alignment" : ""}${output.datasets.length === 1 ? "" : "s"} simulated locally.`;
     },
   },
 ];

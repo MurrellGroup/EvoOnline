@@ -6,10 +6,15 @@ import {
   type TreeArtifact,
 } from "@phylo-workbench/domain";
 import type { ModelParameter, ParameterValues } from "@phylo-workbench/model-sdk";
+import type { RecombinationCodonTreeSet } from "@phylo-workbench/model-diffubar/browser-source";
+import type { SimulatedDataset, SimulatorAnalysisResult } from "@phylo-workbench/model-simulator/browser-source";
 import { WidgetBridge } from "@phylo-workbench/viewer-bridge";
 import { WidgetModal } from "./components/WidgetModal.js";
 import type { RunProgress } from "./lib/diffubar-client.js";
 import { getRegisteredModel, modelRegistry, type BrowserExecutorServices, type BrowserModelExecutor } from "./model-registry.js";
+import { deleteSavedAnalysis, listSavedAnalyses, saveAnalysis, type SavedAnalysis } from "./lib/analysis-store.js";
+import type { RecombinationCodonMethod } from "./components/RecombinationCodonHandoff.js";
+import type { SimulatorBatchMethod } from "./components/simulator/SimulatorResultsView.js";
 
 interface WidgetSnapshot {
   readonly alignment?: string;
@@ -70,6 +75,10 @@ const stageLabels: Readonly<Record<string, string>> = {
   "glamma-messages": "Passing all-to-all Glamma messages",
   "glamma-capped-sites": "Evaluating all-branches capped sites",
   "glamma-tabulation": "Integrating branch and site evidence",
+  "tree-simulation": "Sampling coalescent genealogies",
+  "recombination-simulation": "Placing ancestral recombination events",
+  "sequence-simulation": "Evolving codon alignments",
+  "scuff-diagnostics": "Propagating SCUFF diagnostics",
   tabulation: "Tabulating site posteriors",
   complete: "Complete",
 };
@@ -151,6 +160,8 @@ export function App() {
   bridgesRef.current = bridges;
   const executorServices = useRef<BrowserExecutorServices>({ getAlignmentBridge: () => bridgesRef.current?.alignment });
   const executor = useRef<BrowserModelExecutor>(selectedModel.createExecutor(executorServices.current));
+  const auxiliaryExecutor = useRef<BrowserModelExecutor | undefined>(undefined);
+  const restoredParameters = useRef<ParameterValues | undefined>(undefined);
   const [alignment, setAlignment] = useState<AlignmentArtifact>();
   const [tree, setTree] = useState<TreeArtifact>();
   const [parameters, setParameters] = useState<ParameterValues>(() => selectedModel.plugin.defaultParameters());
@@ -168,7 +179,16 @@ export function App() {
   const [runFailure, setRunFailure] = useState<RunFailure>();
   const runStartedAt = useRef(0);
   const [elapsedMs, setElapsedMs] = useState(0);
-  const [result, setResult] = useState<unknown>();
+  const [analyses, setAnalyses] = useState<readonly SavedAnalysis[]>([]);
+  const [activeAnalysisId, setActiveAnalysisId] = useState<string>();
+  const [recombinationTrees, setRecombinationTrees] = useState<RecombinationCodonTreeSet>();
+  const activeAnalysis = analyses.find((analysis) => analysis.id === activeAnalysisId);
+
+  useEffect(() => {
+    let active = true;
+    void listSavedAnalyses().then((saved) => { if (active) setAnalyses(saved); }).catch(() => undefined);
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     if (runState !== "running") return;
@@ -197,31 +217,28 @@ export function App() {
     const next = selectedModel.createExecutor(executorServices.current);
     executor.current = next;
     setRunState("idle");
-    setParameters(selectedModel.plugin.defaultParameters());
-    setResult(undefined);
+    setParameters(restoredParameters.current ?? selectedModel.plugin.defaultParameters());
+    restoredParameters.current = undefined;
     setRunFailure(undefined);
     return () => next.dispose();
   }, [selectedModelId]);
 
   useEffect(() => {
-    setResult(undefined);
-    setRunFailure(undefined);
-  }, [alignment?.id, tree?.id]);
-
-  useEffect(() => {
-    if (result === undefined) return;
+    if (activeAnalysis === undefined) return;
     const frame = requestAnimationFrame(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     return () => cancelAnimationFrame(frame);
-  }, [result]);
+  }, [activeAnalysisId]);
 
   const validation = useMemo(() => selectedModel.plugin.validate({
     ...(alignment === undefined ? {} : { alignment }),
     ...(tree === undefined ? {} : { tree }),
   }), [alignment, selectedModel, tree]);
   const manifest = selectedModel.plugin.manifest;
+  const supportsRecombinationTrees = selectedModelId === "fubar" || selectedModelId === "fame" || selectedModelId === "flavor";
   const visibleParameters = manifest.parameters.filter((parameter) => showAdvanced || !parameter.advanced);
   const requiresForeground = manifest.inputSlots.some((slot) => slot.id === "foreground" && slot.required);
   const acceptsTree = manifest.inputSlots.some((slot) => slot.id === "tree");
+  const requiresAlignment = manifest.inputSlots.some((slot) => slot.id === "alignment" && slot.required);
   const requiresTree = manifest.inputSlots.some((slot) => slot.id === "tree" && slot.required);
   const tagReady = !requiresForeground || tree?.tags.length === 2;
   const webGpuAvailable = typeof navigator !== "undefined" && "gpu" in navigator;
@@ -231,6 +248,7 @@ export function App() {
       setNotice({ tone: "info", text: "Reading alignment…" });
       const artifact = await createAlignmentArtifact(file.name, await readTextFile(file));
       setAlignment(artifact);
+      setRecombinationTrees(undefined);
       setNotice({ tone: "success", text: `${artifact.taxa} sequences loaded.` });
     } catch (error) {
       setNotice({ tone: "error", text: error instanceof Error ? error.message : String(error) });
@@ -243,6 +261,7 @@ export function App() {
       const preparedText = selectedModel.plugin.prepareTreeInput?.(sourceText) ?? sourceText;
       const artifact = await createTreeArtifact(file.name, preparedText, "upload");
       setTree(artifact);
+      setRecombinationTrees(undefined);
       setNotice({ tone: "success", text: "Phylogeny loaded." });
     } catch (error) {
       setNotice({ tone: "error", text: error instanceof Error ? error.message : String(error) });
@@ -283,6 +302,7 @@ export function App() {
       if (!snapshot.alignment) throw new Error("The alignment editor returned no sequences.");
       const artifact = await createAlignmentArtifact(alignment.name, snapshot.alignment);
       setAlignment(artifact);
+      setRecombinationTrees(undefined);
       if (tree === undefined && snapshot.tree) setTree(await createTreeArtifact("inferred-tree.nwk", snapshot.tree, "editor"));
       setAlignmentOpen(false);
       setNotice({ tone: "success", text: "Alignment edits applied to the workspace." });
@@ -305,6 +325,7 @@ export function App() {
       }, 10 * 60_000);
       if (!snapshot.tree) throw new Error("FastTree returned no tree.");
       setTree(await createTreeArtifact("fasttree.nwk", snapshot.tree, "fasttree"));
+      setRecombinationTrees(undefined);
       setNotice({ tone: "success", text: "FastTree phylogeny added to the workspace." });
     } catch (error) {
       setNotice({ tone: "error", text: error instanceof Error ? error.message : String(error) });
@@ -328,6 +349,7 @@ export function App() {
       if (!snapshot.tree) throw new Error("The tree tagger returned no tree.");
       const artifact = await createTreeArtifact(tree.name, snapshot.tree, "editor");
       setTree(artifact);
+      setRecombinationTrees(undefined);
       setTreeOpen(false);
       setNotice(requiresForeground
         ? {
@@ -347,27 +369,40 @@ export function App() {
   };
 
   const runAnalysis = async (): Promise<void> => {
-    if (alignment === undefined || (requiresTree && tree === undefined) || !validation.ready) return;
+    if ((requiresAlignment && alignment === undefined) || (requiresTree && tree === undefined) || !validation.ready) return;
     const generation = ++runGeneration.current;
     const model = selectedModel;
     const activeExecutor = executor.current;
     runStartedAt.current = performance.now();
     setElapsedMs(0);
     setRunState("running");
-    setResult(undefined);
-    const initialProgress: RunProgress = { stage: "initialization", fraction: 0, message: requiresForeground ? "Parsing alignment and tagged tree" : requiresTree ? "Parsing alignment and phylogeny" : "Parsing nucleotide alignment", indeterminate: true };
+    const initialProgress: RunProgress = { stage: "initialization", fraction: 0, message: manifest.id === "simulator" ? "Starting deterministic simulation worker" : requiresForeground ? "Parsing alignment and tagged tree" : requiresTree ? "Parsing alignment and phylogeny" : "Parsing nucleotide alignment", indeterminate: true };
     progressRef.current = initialProgress;
     setProgress(initialProgress);
     setRunFailure(undefined);
     setNotice(undefined);
     try {
-      const next = await activeExecutor.run(alignment.text, tree?.text ?? "", parameters, (nextProgress) => {
+      const next = await activeExecutor.run(alignment?.text ?? "", tree?.text ?? "", parameters, (nextProgress) => {
         if (runGeneration.current !== generation) return;
         progressRef.current = nextProgress;
         setProgress(nextProgress);
-      });
+      }, !supportsRecombinationTrees || recombinationTrees === undefined ? undefined : { recombinationTrees });
       if (runGeneration.current !== generation) return;
-      setResult(next);
+      const id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `analysis-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const saved: SavedAnalysis = {
+        id,
+        modelId: model.plugin.manifest.id,
+        title: alignment === undefined ? `${model.plugin.manifest.shortTitle} · ${new Date().toLocaleTimeString()}` : `${model.plugin.manifest.shortTitle} · ${alignment.name}`,
+        createdAt: Date.now(),
+        parameters: { ...parameters },
+        ...(alignment === undefined ? {} : { alignment }),
+        ...(tree === undefined ? {} : { tree }),
+        result: next,
+        ...(!supportsRecombinationTrees || recombinationTrees === undefined ? {} : { recombinationTrees }),
+      };
+      setAnalyses((current) => [saved, ...current.filter((analysis) => analysis.id !== saved.id)]);
+      setActiveAnalysisId(saved.id);
+      void saveAnalysis(saved).catch((error: unknown) => setNotice({ tone: "info", text: `Analysis completed, but browser persistence failed: ${error instanceof Error ? error.message : String(error)}` }));
       setRunFailure(undefined);
       setNotice({ tone: "success", text: model.completionMessage(next) });
     } catch (error) {
@@ -384,9 +419,120 @@ export function App() {
   const cancelAnalysis = (): void => {
     runGeneration.current += 1;
     executor.current.cancel();
+    auxiliaryExecutor.current?.cancel();
+    auxiliaryExecutor.current = undefined;
     setRunState("idle");
     setRunFailure(undefined);
     setNotice({ tone: "info", text: "Analysis cancelled." });
+  };
+
+  const openSavedAnalysis = (saved: SavedAnalysis): void => {
+    setActiveAnalysisId(saved.id);
+    setAlignment(saved.alignment);
+    setTree(saved.tree);
+    setRecombinationTrees(saved.recombinationTrees);
+    if (saved.modelId === selectedModelId) setParameters(saved.parameters);
+    else {
+      restoredParameters.current = saved.parameters;
+      setSelectedModelId(saved.modelId);
+    }
+    setNotice({ tone: "info", text: `Restored ${saved.title}. Inputs and results remain device-local.` });
+  };
+
+  const removeSavedAnalysis = (saved: SavedAnalysis): void => {
+    if (!window.confirm(`Delete the saved result “${saved.title}”? This cannot be undone.`)) return;
+    setAnalyses((current) => current.filter((analysis) => analysis.id !== saved.id));
+    if (activeAnalysisId === saved.id) setActiveAnalysisId(undefined);
+    void deleteSavedAnalysis(saved.id).catch((error: unknown) => setNotice({ tone: "error", text: error instanceof Error ? error.message : String(error) }));
+  };
+
+  const loadRecombinationTrees = async (method: RecombinationCodonMethod, treeSet: RecombinationCodonTreeSet): Promise<void> => {
+    const source = activeAnalysis;
+    if (source?.alignment === undefined) return;
+    try {
+      const representative = treeSet.segments[0];
+      if (representative === undefined) throw new Error("The recombination partition has no regional tree.");
+      const treeArtifact = await createTreeArtifact(`${treeSet.sourceMethod}-regional-master.nwk`, representative.tree, "editor");
+      setAlignment(source.alignment);
+      setTree(treeArtifact);
+      setRecombinationTrees(treeSet);
+      setSelectedModelId(method);
+      setNotice({ tone: "success", text: `${treeSet.segments.length} ${treeSet.sourceMethod} regional trees loaded into ${method.toUpperCase()}. Relative branch-length scales are locked; the global codon model will be estimated jointly.` });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (error) {
+      setNotice({ tone: "error", text: error instanceof Error ? error.message : String(error) });
+    }
+  };
+
+  const simulatorTreeSet = (dataset: SimulatedDataset): RecombinationCodonTreeSet | undefined => dataset.localTrees.length <= 1 ? undefined : {
+    schemaVersion: 1,
+    sourceMethod: "simulation-truth",
+    branchLengthSource: "method-final-trees",
+    branchScalePolicy: "fixed-relative",
+    codonAssignment: "middle-nucleotide",
+    segments: dataset.localTrees.map((region) => ({ startCodon: region.startCodon, endCodon: region.endCodon, tree: region.tree.newick, label: `Simulated true region ${region.startCodon}–${region.endCodon}` })),
+  };
+
+  const loadSimulatedDataset = async (dataset: SimulatedDataset): Promise<void> => {
+    if (dataset.fasta === undefined) { setNotice({ tone: "error", text: "This replicate contains a tree only; simulate alignments before loading it into a codon method." }); return; }
+    try {
+      const nextAlignment = await createAlignmentArtifact(`${dataset.id}.fasta`, dataset.fasta);
+      const nextTree = await createTreeArtifact(`${dataset.id}.nwk`, dataset.tree.newick, "editor");
+      setAlignment(nextAlignment);
+      setTree(nextTree);
+      setRecombinationTrees(simulatorTreeSet(dataset));
+      setSelectedModelId("fubar");
+      setNotice({ tone: "success", text: `${dataset.id} loaded into FUBAR${dataset.localTrees.length > 1 ? ` with ${dataset.localTrees.length} known regional trees` : ""}.` });
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (error) { setNotice({ tone: "error", text: error instanceof Error ? error.message : String(error) }); }
+  };
+
+  const batchSimulatedDatasets = async (method: SimulatorBatchMethod, datasets: readonly SimulatedDataset[], simulation: SimulatorAnalysisResult): Promise<void> => {
+    if (datasets.length === 0) return;
+    const generation = ++runGeneration.current;
+    const target = getRegisteredModel(method);
+    const completed: SavedAnalysis[] = [];
+    setRunState("running");
+    runStartedAt.current = performance.now();
+    setElapsedMs(0);
+    setNotice({ tone: "info", text: `Running ${target.plugin.manifest.shortTitle} on ${datasets.length} simulated dataset${datasets.length === 1 ? "" : "s"}…` });
+    try {
+      for (let index = 0; index < datasets.length; index += 1) {
+        if (generation !== runGeneration.current) throw new DOMException("Batch cancelled.", "AbortError");
+        const dataset = datasets[index]!;
+        if (dataset.fasta === undefined) throw new Error(`${dataset.id} has no simulated alignment.`);
+        const batchExecutor = target.createExecutor(executorServices.current);
+        auxiliaryExecutor.current = batchExecutor;
+        const nextAlignment = await createAlignmentArtifact(`${dataset.id}.fasta`, dataset.fasta);
+        const nextTree = await createTreeArtifact(`${dataset.id}.nwk`, dataset.tree.newick, "editor");
+        const regionalTrees = simulatorTreeSet(dataset);
+        const targetParameters = target.plugin.defaultParameters();
+        const output = await batchExecutor.run(nextAlignment.text, nextTree.text, targetParameters, (entry) => {
+          if (generation !== runGeneration.current) return;
+          const aggregate = (index + Math.max(0, Math.min(1, entry.fraction))) / datasets.length;
+          const nextProgress = { ...entry, fraction: aggregate, message: `Dataset ${index + 1}/${datasets.length} · ${entry.message ?? stageLabels[entry.stage] ?? entry.stage}` };
+          progressRef.current = nextProgress;
+          setProgress(nextProgress);
+        }, regionalTrees === undefined ? undefined : { recombinationTrees: regionalTrees });
+        batchExecutor.dispose();
+        auxiliaryExecutor.current = undefined;
+        const id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `analysis-${Date.now()}-${index}`;
+        const saved: SavedAnalysis = { id, modelId: method, title: `${target.plugin.manifest.shortTitle} · simulated dataset ${index + 1}`, createdAt: Date.now() + index, parameters: targetParameters, alignment: nextAlignment, tree: nextTree, result: output, ...(regionalTrees === undefined ? {} : { recombinationTrees: regionalTrees }) };
+        completed.push(saved);
+        await saveAnalysis(saved);
+      }
+      if (generation !== runGeneration.current) return;
+      setAnalyses((current) => [...completed].reverse().concat(current));
+      setActiveAnalysisId(completed.at(-1)?.id);
+      setNotice({ tone: "success", text: `${target.plugin.manifest.shortTitle} batch completed for ${completed.length} simulated datasets. The results are saved independently.` });
+      void simulation;
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) setNotice({ tone: "error", text: `${target.plugin.manifest.shortTitle} batch stopped: ${error instanceof Error ? error.message : String(error)}` });
+    } finally {
+      auxiliaryExecutor.current?.dispose();
+      auxiliaryExecutor.current = undefined;
+      if (generation === runGeneration.current) setRunState("idle");
+    }
   };
 
   return (
@@ -425,14 +571,21 @@ export function App() {
           <span>+</span>
           <p><strong>Model-ready architecture</strong>Additional methods register inputs, parameters, runtimes, and result renderers through the same contract.</p>
         </div>
+        <div className="analysis-history">
+          <div className="sidebar-heading"><span>Saved analyses</span><strong>{analyses.length}</strong></div>
+          {analyses.length === 0 && <p>No completed analyses yet. Results are retained here across method switches and page reloads.</p>}
+          {analyses.map((saved) => <div key={saved.id} className={`analysis-history__item ${saved.id === activeAnalysisId ? "is-active" : ""}`}><button type="button" disabled={runState === "running"} onClick={() => openSavedAnalysis(saved)}><strong>{saved.title}</strong><small>{new Date(saved.createdAt).toLocaleString()} · {saved.modelId === "simulator" ? "generated datasets" : saved.recombinationTrees === undefined ? "single tree" : `${saved.recombinationTrees.segments.length} regional trees`}</small></button><button type="button" className="analysis-history__delete" aria-label={`Delete ${saved.title}`} onClick={() => removeSavedAnalysis(saved)}>×</button></div>)}
+        </div>
       </aside>
 
       <main className="workspace">
         <section className="workspace-hero">
           <div>
             <p className="eyebrow">{manifest.category} analysis / {manifest.shortTitle}</p>
-            <h1>Build an analysis-ready phylogenetic workspace</h1>
-            <p>{requiresForeground
+            <h1>{manifest.id === "simulator" ? "Design, simulate, inspect, and export evolutionary datasets" : "Build an analysis-ready phylogenetic workspace"}</h1>
+            <p>{manifest.id === "simulator"
+              ? "Shape a sampled coalescent genealogy, choose a codon process, optionally layer in ancestral recombination and hidden carrier lineages, then generate a reproducible batch entirely in your browser."
+            : requiresForeground
               ? "Load a codon alignment, inspect or edit it, attach a phylogeny, tag two foreground groups, then run entirely in this browser."
             : requiresTree
                 ? `Load a codon alignment, inspect or edit it, attach a phylogeny, then run ${manifest.shortTitle} entirely in this browser.`
@@ -449,7 +602,7 @@ export function App() {
           </div>
         )}
 
-        <div className="workflow-grid">
+        {(requiresAlignment || acceptsTree || requiresForeground) && <div className="workflow-grid">
           <section className={`workflow-card ${alignment !== undefined ? "is-complete" : ""}`}>
             <div className="step-number">01</div>
             <div className="workflow-card__heading">
@@ -532,32 +685,25 @@ export function App() {
               </button>
             </section>
           )}
-        </div>
+        </div>}
 
         <section className="run-panel">
           <div className="run-panel__header">
-            <div><p className="eyebrow">{requiresForeground ? "04" : acceptsTree ? "03" : "02"} / Configure and run</p><h2>{manifest.title}</h2><p>{manifest.description}</p></div>
-            <div className="runtime-choice"><span>Execution</span><strong>{String(parameters.backend ?? selectedModel.runtimeLabel)}</strong><small>{manifest.id === "fsart" ? "Parallel informative-triplet workers · local FastTree WASM" : manifest.id === "jemspr" ? "Internal topology/network search · FastTree supplies only a fixed GTR matrix · custom linked ML" : webGpuAvailable ? "Parallel WASM recommended · WebGPU available" : "Parallel WASM available"}</small></div>
+            <div><p className="eyebrow">{manifest.id === "simulator" ? "Configure and generate" : `${requiresForeground ? "04" : acceptsTree ? "03" : "02"} / Configure and run`}</p><h2>{manifest.title}</h2><p>{manifest.description}</p></div>
+            <div className="runtime-choice"><span>Execution</span><strong>{String(parameters.backend ?? selectedModel.runtimeLabel)}</strong><small>{manifest.id === "simulator" ? "Dedicated worker · exact stochastic process · device-local outputs" : manifest.id === "fsart" ? "Parallel informative-triplet workers · local FastTree WASM" : manifest.id === "jemspr" ? "Internal topology/network search · FastTree supplies only a fixed GTR matrix · custom linked ML" : webGpuAvailable ? "Parallel WASM recommended · WebGPU available" : "Parallel WASM available"}</small></div>
           </div>
-          <div className="parameter-grid">
+          {supportsRecombinationTrees && recombinationTrees !== undefined && <div className="recombination-context"><strong>{recombinationTrees.sourceMethod.toUpperCase()} regional-tree mode</strong><span>{recombinationTrees.segments.length} codon regions · {recombinationTrees.branchLengthSource} · fixed relative branch scales · middle-nucleotide codon assignment</span><button type="button" className="button button--quiet" onClick={() => setRecombinationTrees(undefined)}>Use only the displayed tree</button></div>}
+          {selectedModel.SetupView === undefined ? <><div className="parameter-grid">
             {visibleParameters.map((parameter) => (
-              <ParameterControl
-                key={parameter.id}
-                parameter={parameter}
-                value={parameters[parameter.id] ?? parameter.default}
-                onChange={(value) => updateParameter(parameter.id, value)}
-              />
+              <ParameterControl key={parameter.id} parameter={parameter} value={parameters[parameter.id] ?? parameter.default} onChange={(value) => updateParameter(parameter.id, value)} />
             ))}
-          </div>
-          <button type="button" className="advanced-toggle" onClick={() => setShowAdvanced((value) => !value)}>
-            {showAdvanced ? "Hide advanced parameters" : "Show advanced parameters"}
-          </button>
+          </div><button type="button" className="advanced-toggle" onClick={() => setShowAdvanced((value) => !value)}>{showAdvanced ? "Hide advanced parameters" : "Show advanced parameters"}</button></> : <selectedModel.SetupView parameters={parameters} onChange={setParameters} disabled={runState === "running"} />}
 
           <div className="validation-strip">
-            <div className={alignment !== undefined ? "is-valid" : ""}><span>{alignment !== undefined ? "✓" : "1"}</span>Alignment</div>
+            {requiresAlignment && <div className={alignment !== undefined ? "is-valid" : ""}><span>{alignment !== undefined ? "✓" : "1"}</span>Alignment</div>}
             {acceptsTree && <div className={tree !== undefined ? "is-valid" : ""}><span>{tree !== undefined ? "✓" : "2"}</span>Tree</div>}
             {requiresForeground && <div className={tagReady ? "is-valid" : ""}><span>{tagReady ? "✓" : "3"}</span>Two groups</div>}
-            <div className={validation.ready ? "is-valid" : ""}><span>{validation.ready ? "✓" : requiresForeground ? "4" : acceptsTree ? "3" : "2"}</span>Validated</div>
+            <div className={validation.ready ? "is-valid" : ""}><span>{validation.ready ? "✓" : requiresForeground ? "4" : acceptsTree ? "3" : requiresAlignment ? "2" : "1"}</span>{manifest.id === "simulator" ? "Configuration ready" : "Validated"}</div>
           </div>
 
           {!validation.ready && validation.issues.length > 0 && (
@@ -584,8 +730,8 @@ export function App() {
               <button type="button" className="button button--quiet" onClick={cancelAnalysis}>Cancel</button>
             </div>
           ) : (
-            <button type="button" className="button button--run" disabled={!validation.ready} onClick={() => void runAnalysis()}>
-              <span>Run {manifest.shortTitle}</span><small>{manifest.id === "fsart" ? "Pair-covered triplet scan · FastTree-WASM tree-family HMM" : manifest.id === "jemspr" ? "Internal event-network search · coherent shared-length ML · optional likelihood path refinement" : parameters.backend === "webgpu" ? "Experimental WebGPU kernel" : parameters.backend === "wasm" ? "Exact single-worker WASM" : "Exact parallel WASM (recommended)"}</small>
+            <button type="button" className="button button--run" disabled={!validation.ready || (requiresAlignment && alignment === undefined) || (requiresTree && tree === undefined)} onClick={() => void runAnalysis()}>
+              <span>{manifest.id === "simulator" ? "Simulate datasets" : `Run ${manifest.shortTitle}`}</span><small>{manifest.id === "simulator" ? "Reproducible worker · tree truth · optional alignment and recombination truth" : manifest.id === "fsart" ? "Pair-covered triplet scan · FastTree-WASM tree-family HMM" : manifest.id === "jemspr" ? "Internal event-network search · coherent shared-length ML · optional likelihood path refinement" : parameters.backend === "webgpu" ? "Experimental WebGPU kernel" : parameters.backend === "wasm" ? "Exact single-worker WASM" : "Exact parallel WASM (recommended)"}</small>
             </button>
           )}
           {runFailure !== undefined && runFailure.model === manifest.shortTitle && (
@@ -596,7 +742,7 @@ export function App() {
           )}
         </section>
 
-        {result !== undefined && <div ref={resultsRef} className="results-anchor"><selectedModel.ResultView result={result} parameters={parameters} alignment={alignment?.text ?? ""} /></div>}
+        {activeAnalysis !== undefined && (() => { const resultModel = getRegisteredModel(activeAnalysis.modelId); const ResultView = resultModel.ResultView; return <div ref={resultsRef} className="results-anchor"><div className="saved-result-banner"><span>Viewing saved result</span><strong>{activeAnalysis.title}</strong><small>{new Date(activeAnalysis.createdAt).toLocaleString()}</small></div><ResultView result={activeAnalysis.result} parameters={activeAnalysis.parameters} alignment={activeAnalysis.alignment?.text ?? ""} onLoadRecombinationTrees={(method, treeSet) => void loadRecombinationTrees(method, treeSet)} onLoadSimulatedDataset={(dataset) => loadSimulatedDataset(dataset)} onBatchSimulatedDatasets={(method, datasets, result) => batchSimulatedDatasets(method, datasets, result)} /></div>; })()}
       </main>
 
       {bridges !== undefined && alignment !== undefined && (

@@ -6,6 +6,7 @@ import type {
   GeneticCodeId,
   ParsedTree,
   ProgressDetail,
+  RecombinationCodonTreeSet,
 } from "@phylo-workbench/model-diffubar";
 
 export interface FubarGrid extends DifFUBARGrid {
@@ -95,6 +96,8 @@ export interface FubarAnalysisOptions {
   readonly posteriorThreshold?: number;
   readonly fitMode?: "empirical-fast" | "reference-compatible";
   readonly fittedModel?: FittedModel;
+  /** Fixed-relative regional ML trees used as one partitioned likelihood. */
+  readonly recombinationTrees?: RecombinationCodonTreeSet;
   /** Reuse the raw FUBAR likelihood grid for a separate approximate FEL LRT. */
   readonly approximateFel?: boolean;
   readonly signal?: AbortSignal;
@@ -125,6 +128,10 @@ export interface FubarAnalysisResult {
     readonly inferenceIterations: number;
     readonly inferenceBurnin: number;
     readonly inferenceLogLikelihood: number | null;
+    readonly regionalTrees: number;
+    readonly branchScalePolicy: "single-tree" | "fixed-relative";
+    readonly branchLengthSource: "input-tree" | "jemspr-linked-ml" | "segment-ml" | "method-final-trees";
+    readonly codonAssignment: "single-tree" | "middle-nucleotide";
   };
 }
 

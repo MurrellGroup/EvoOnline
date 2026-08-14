@@ -51,12 +51,14 @@ export function FubarResultsView({ result, threshold, alignment }: { readonly re
         <div><p className="eyebrow">Analysis complete</p><h2 id="fubar-results-heading">FUBAR posterior</h2><p>Site-wise evidence for pervasive positive and purifying selection.</p></div>
         <button type="button" className="button button--primary" onClick={() => downloadCsv(result.csv)}>Download CSV</button>
       </div>
+      {(result.diagnostics.regionalTrees ?? 1) > 1 && <p className="method-note"><strong>Recombination-aware likelihood:</strong> {result.diagnostics.regionalTrees} regional {result.diagnostics.branchLengthSource} trees were evaluated at their assigned codons. F3×4, GTR, and global codon rates were fitted jointly; one common synonymous-rate multiplier was applied to every tree, and their relative branch-length scales were not re-estimated.</p>}
       <div className="result-stats">
         <div><span>Codon sites</span><strong>{result.diagnostics.codonSites.toLocaleString()}</strong></div>
         <div><span>Genetic code</span><strong>NCBI {result.diagnostics.geneticCodeId}</strong><small>{result.diagnostics.geneticCodeName}</small></div>
         <div><span>Positive at {posteriorThreshold.toFixed(3)}</span><strong className="positive-text">{positive.size.toLocaleString()}</strong></div>
         <div><span>Purifying at {posteriorThreshold.toFixed(3)}</span><strong className="purifying-text">{purifying.size.toLocaleString()}</strong></div>
         <div><span>Posterior inference</span><strong>{result.diagnostics.inferenceMethod === "gibbs" ? "Gibbs" : "Dirichlet-EM"}</strong></div>
+        <div><span>Regional trees</span><strong>{result.diagnostics.regionalTrees ?? 1}</strong><small>{result.diagnostics.branchScalePolicy ?? "single-tree"}</small></div>
         <div><span>Total time</span><strong>{((result.timings.totalMs ?? 0) / 1000).toFixed(2)} s</strong></div>
       </div>
       <div className="selection-visibility" role="group" aria-label="FUBAR selection directions shown in figures and table">

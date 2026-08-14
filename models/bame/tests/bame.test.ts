@@ -78,6 +78,28 @@ test("FAME, FLAVOR, and Glamma execute with a dynamic vertebrate-mitochondrial s
   }
 });
 
+test("FAME and FLAVOR share one model while evaluating regional recombination trees", async () => {
+  const fasta = ">a\nATGAAA\n>b\nATGAAG\n";
+  const alignment = parseFasta(fasta);
+  const f3x4 = countF3x4(alignment);
+  const fittedModel = { geneticCodeId: 1 as const, gtrRates: Float64Array.of(1, 1, 1, 1, 1, 1), f3x4, codonEquilibrium: codonEquilibriumFromF3x4(f3x4), globalAlpha: 1, globalBeta: 1, logLikelihood: 0, fitKind: "provided" as const };
+  const recombinationTrees = {
+    schemaVersion: 1 as const, sourceMethod: "fsart" as const, branchLengthSource: "segment-ml" as const, branchScalePolicy: "fixed-relative" as const, codonAssignment: "middle-nucleotide" as const,
+    segments: [
+      { startCodon: 1, endCodon: 1, tree: "(a:0.01,b:0.02);" },
+      { startCodon: 2, endCodon: 2, tree: "(a:0.04,b:0.08);" },
+    ],
+  };
+  const fame = await analyzeFame(fasta, "(a:0.01,b:0.02);", { fittedModel, recombinationTrees, backend: "wasm", gridPreset: "fast", quadraturePoints: 2, iterations: 2 });
+  const flavor = await analyzeFlavor(fasta, "(a:0.01,b:0.02);", { fittedModel, recombinationTrees, backend: "wasm", gridPreset: "fast", gammaSlices: 4, transitionEngine: "julia-interpolated", iterations: 2 });
+  for (const result of [fame, flavor]) {
+    assert.equal(result.sites.length, 2);
+    assert.equal(result.diagnostics.regionalTrees, 2);
+    assert.equal(result.diagnostics.branchScalePolicy, "fixed-relative");
+    assert.equal(result.diagnostics.codonAssignment, "middle-nucleotide");
+  }
+});
+
 test("FAME and FLAVOR default grids exactly retain the MixtureModels branch dimensions", () => {
   const fame = createFameGrid();
   assert.deepEqual([fame.alphaValues.length, fame.omega1Values.length, fame.omega2Values.length], [15, 15, 15]);

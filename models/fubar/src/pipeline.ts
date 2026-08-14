@@ -6,13 +6,18 @@ import {
   buildModelBank,
   compileTree,
   encodeCodonTips,
+  applySharedTreeScale,
   fitGlobalModel,
+  fitPartitionedGlobalModel,
   getGeneticCode,
+  insertSegmentConditionals,
   normalizeConditionalLikelihoodsInPlace,
   parseFasta,
   parseNewick,
+  prepareRecombinationCodonTrees,
   type FittedModel,
   type ParsedTree,
+  type PreparedCodonTreeSegment,
   type TreeNode,
 } from "@phylo-workbench/model-diffubar";
 import { createFubarGrid } from "./model/grid.js";
@@ -126,11 +131,22 @@ export async function analyzeFubar(
 ): Promise<FubarAnalysisResult> {
   const started = performance.now();
   const alignment = typeof fasta === "string" ? parseFasta(fasta) : fasta;
-  const tree = typeof newick === "string" ? parseNewick(newick) : cloneSingleClassTree(newick);
+  const inputTree = typeof newick === "string" ? parseNewick(newick) : cloneSingleClassTree(newick);
+  const segments: readonly PreparedCodonTreeSegment[] = options.recombinationTrees === undefined
+    ? [{
+      startCodon: 1,
+      endCodon: alignment.codonSites,
+      siteOffset: 0,
+      alignment,
+      tree: inputTree,
+      input: { startCodon: 1, endCodon: alignment.codonSites, tree: typeof newick === "string" ? newick : "", label: "Full alignment" },
+    }]
+    : prepareRecombinationCodonTrees(alignment, options.recombinationTrees);
+  const tree = segments[0]!.tree;
   const geneticCode = getGeneticCode(options.geneticCode ?? 1);
   options.signal?.throwIfAborted();
   options.onStage?.("initialization", 1, {
-    message: `${alignment.names.length.toLocaleString()} taxa · ${alignment.codonSites.toLocaleString()} codon sites · one branch class`,
+    message: `${alignment.names.length.toLocaleString()} taxa · ${alignment.codonSites.toLocaleString()} codon sites · ${segments.length.toLocaleString()} fixed-scale tree${segments.length === 1 ? "" : "s"}`,
   });
 
   const grid = createFubarGrid(options.gridPoints ?? 20);
@@ -146,7 +162,6 @@ export async function analyzeFubar(
     alignment.codonSites,
     options.onStage,
   );
-  const initialCompiled = compileTree(tree);
   const fitStarted = performance.now();
   let fittedModel: FittedModel;
   if (options.fittedModel !== undefined) {
@@ -154,16 +169,26 @@ export async function analyzeFubar(
     fittedModel = options.fittedModel;
     options.onStage?.("global-fit", 1, { message: "Using the supplied fitted model" });
   } else {
-    fittedModel = await fitGlobalModel(
-      alignment,
-      tree,
-      initialCompiled,
-      fitBackend,
-      options.fitMode ?? "empirical-fast",
-      (fraction, detail) => options.onStage?.("global-fit", fraction, detail),
-      options.signal,
-      geneticCode,
-    );
+    fittedModel = segments.length === 1
+      ? await fitGlobalModel(
+        alignment,
+        tree,
+        compileTree(tree),
+        fitBackend,
+        options.fitMode ?? "empirical-fast",
+        (fraction, detail) => options.onStage?.("global-fit", fraction, detail),
+        options.signal,
+        geneticCode,
+      )
+      : await fitPartitionedGlobalModel(
+        alignment,
+        segments.map((segment) => ({ alignment: segment.alignment, tree: segment.tree, compiled: compileTree(segment.tree) })),
+        fitBackend,
+        options.fitMode ?? "empirical-fast",
+        (fraction, detail) => options.onStage?.("global-fit", fraction, detail),
+        options.signal,
+        geneticCode,
+      );
   }
   const fitMs = performance.now() - fitStarted;
 
@@ -173,10 +198,8 @@ export async function analyzeFubar(
   });
   // Matches alphabetagrid/FUBAR_grid: fit alpha globally, then absorb it into
   // every branch length before evaluating the fixed alpha-beta surface.
-  for (const node of tree.nodes) node.branchLength *= fittedModel.globalAlpha;
-  const compiled = compileTree(tree);
+  applySharedTreeScale(segments, fittedModel.globalAlpha);
   const models = buildModelBank(grid, tree, fittedModel.gtrRates, fittedModel.f3x4, geneticCode);
-  const tipStates = encodeCodonTips(alignment, tree, geneticCode);
   options.onStage?.("grid-preparation", 1, {
     message: `${grid.categoryCount.toLocaleString()} α–β categories · ${models.modelCount.toLocaleString()} unique MG94 models`,
     current: grid.categoryCount,
@@ -184,16 +207,31 @@ export async function analyzeFubar(
   });
 
   const gridStarted = performance.now();
-  const likelihood = await backend.evaluate({
-    tree: compiled,
-    tipStates,
-    siteCount: alignment.codonSites,
-    grid,
-    models,
-    equilibrium: fittedModel.codonEquilibrium,
-    onProgress: (fraction, detail) => options.onStage?.("conditional-likelihoods", fraction, detail),
-    ...(options.signal === undefined ? {} : { signal: options.signal }),
-  });
+  const rawLikelihoods = new Float64Array(grid.categoryCount * alignment.codonSites);
+  let likelihoodBackend: "webgpu" | "wasm" | "wasm-parallel" = backend.kind;
+  let likelihoodPrecision: "f32" | "f64" = backend instanceof WebGPUBackend ? "f32" : "f64";
+  let maximumRegisterNumber = 0;
+  for (let region = 0; region < segments.length; region += 1) {
+    const segment = segments[region]!;
+    const compiled = compileTree(segment.tree);
+    maximumRegisterNumber = Math.max(maximumRegisterNumber, compiled.registerNumber);
+    const local = await backend.evaluate({
+      tree: compiled,
+      tipStates: encodeCodonTips(segment.alignment, segment.tree, geneticCode),
+      siteCount: segment.alignment.codonSites,
+      grid,
+      models,
+      equilibrium: fittedModel.codonEquilibrium,
+      onProgress: (fraction, detail) => options.onStage?.("conditional-likelihoods", (region + fraction) / segments.length, {
+        ...detail,
+        message: `Regional tree ${region + 1}/${segments.length} · ${detail?.message ?? "conditional likelihoods"}`,
+      }),
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    });
+    insertSegmentConditionals(rawLikelihoods, local.logLikelihoods, grid.categoryCount, alignment.codonSites, segment);
+    likelihoodBackend = local.backend;
+    likelihoodPrecision = local.precision;
+  }
   const gridMs = performance.now() - gridStarted;
   const approximateFelStarted = performance.now();
   if (options.approximateFel === true) options.onStage?.("approximate-fel", 0, {
@@ -202,14 +240,14 @@ export async function analyzeFubar(
     total: alignment.codonSites,
   });
   const approximateFel = options.approximateFel === true
-    ? analyzeApproximateFel(likelihood.logLikelihoods, grid, alignment.codonSites, {
+    ? analyzeApproximateFel(rawLikelihoods, grid, alignment.codonSites, {
       ...(options.signal === undefined ? {} : { signal: options.signal }),
       onProgress: (fraction, detail) => options.onStage?.("approximate-fel", fraction, detail),
     })
     : undefined;
   const approximateFelMs = performance.now() - approximateFelStarted;
   const conditionals = normalizeConditionalLikelihoodsInPlace(
-    likelihood.logLikelihoods,
+    rawLikelihoods,
     grid.categoryCount,
     alignment.codonSites,
   );
@@ -268,7 +306,7 @@ export async function analyzeFubar(
     total: alignment.codonSites,
   });
   options.onStage?.("complete", 1, {
-    message: `FUBAR finished with ${likelihood.backend} · ${inferenceMethod === "gibbs" ? "Gibbs" : "Dirichlet EM"}${approximateFel === undefined ? "" : " · approximate FEL"}`,
+    message: `FUBAR finished with ${likelihoodBackend} · ${segments.length} fixed-scale tree${segments.length === 1 ? "" : "s"} · ${inferenceMethod === "gibbs" ? "Gibbs" : "Dirichlet EM"}${approximateFel === undefined ? "" : " · approximate FEL"}`,
   });
 
   return {
@@ -280,7 +318,7 @@ export async function analyzeFubar(
     posterior: postprocessed.posterior,
     ...(approximateFel === undefined ? {} : { approximateFel }),
     theta,
-    backend: likelihood.backend,
+    backend: likelihoodBackend,
     timings: {
       runtimeMs,
       fitMs,
@@ -297,12 +335,16 @@ export async function analyzeFubar(
       taxa: tree.tips.length,
       codonSites: alignment.codonSites,
       categories: grid.categoryCount,
-      treeRegisterNumber: compiled.registerNumber,
-      precision: likelihood.precision,
+      treeRegisterNumber: maximumRegisterNumber,
+      precision: likelihoodPrecision,
       inferenceMethod,
       inferenceIterations,
       inferenceBurnin,
       inferenceLogLikelihood,
+      regionalTrees: segments.length,
+      branchScalePolicy: options.recombinationTrees === undefined ? "single-tree" : "fixed-relative",
+      branchLengthSource: options.recombinationTrees?.branchLengthSource ?? "input-tree",
+      codonAssignment: options.recombinationTrees?.codonAssignment ?? "single-tree",
     },
   };
 }

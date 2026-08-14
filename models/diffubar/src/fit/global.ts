@@ -27,6 +27,12 @@ export interface EvaluationBackend {
   evaluate(request: LikelihoodRequest): Promise<LikelihoodResult>;
 }
 
+export interface PartitionedFitSegment {
+  readonly alignment: FastaAlignment;
+  readonly tree: ParsedTree;
+  readonly compiled: CompiledTree;
+}
+
 type ProgressCallback = (fraction: number, detail?: ProgressDetail) => void;
 
 const NUCLEOTIDE_INDEX = new Map([["A", 0], ["C", 1], ["G", 2], ["T", 3], ["U", 3]]);
@@ -535,6 +541,209 @@ export async function fitGlobalModel(
     metricLabel: "log L",
     metricValue: fit.logLikelihood,
   });
+  return {
+    geneticCodeId: geneticCode.id,
+    gtrRates,
+    f3x4,
+    codonEquilibrium,
+    globalAlpha: fit.alpha,
+    globalBeta: fit.beta,
+    logLikelihood: fit.logLikelihood,
+    fitKind: mode,
+  };
+}
+
+async function evaluatePartitionedNucleotideCandidates(
+  candidates: readonly Float64Array[],
+  segments: readonly PartitionedFitSegment[],
+  backend: EvaluationBackend,
+  equilibrium: Float64Array,
+  signal?: AbortSignal,
+  onSegment?: (completed: number, total: number) => void,
+): Promise<Float64Array> {
+  const sums = new Float64Array(candidates.length);
+  const models = buildNucleotideBank(candidates, equilibrium, segments[0]!.tree.classCount);
+  const grid = dummyGrid(candidates.length, segments[0]!.tree.classCount);
+  for (let region = 0; region < segments.length; region += 1) {
+    const segment = segments[region]!;
+    signal?.throwIfAborted();
+    const tips = encodeNucleotideTips(segment.alignment, segment.tree);
+    const likelihood = await backend.evaluate({ tree: segment.compiled, tipStates: tips, siteCount: segment.alignment.nucleotideSites, grid, models, equilibrium, ...(signal === undefined ? {} : { signal }) });
+    for (let candidate = 0; candidate < candidates.length; candidate += 1) {
+      const offset = candidate * segment.alignment.nucleotideSites;
+      let local = 0;
+      for (let site = 0; site < segment.alignment.nucleotideSites; site += 1) local += likelihood.logLikelihoods[offset + site]!;
+      sums[candidate] = sums[candidate]! + local;
+    }
+    onSegment?.(region + 1, segments.length);
+  }
+  return sums;
+}
+
+async function optimizePartitionedGtr(
+  segments: readonly PartitionedFitSegment[],
+  backend: EvaluationBackend,
+  equilibrium: Float64Array,
+  onProgress?: ProgressCallback,
+  signal?: AbortSignal,
+): Promise<Float64Array> {
+  const dimension = 6;
+  let simplex = [new Float64Array(dimension)];
+  for (let axis = 0; axis < dimension; axis += 1) {
+    const point = new Float64Array(dimension);
+    point[axis] = 0.25;
+    simplex.push(point);
+  }
+  let values = Array.from(await evaluatePartitionedNucleotideCandidates(simplex, segments, backend, equilibrium, signal));
+  const clamp = (value: number): number => Math.max(-5, Math.min(5, value));
+  let completedIterations = 0;
+  for (let iteration = 0; iteration < 90; iteration += 1) {
+    signal?.throwIfAborted();
+    const order = simplex.map((_point, index) => index).sort((a, b) => values[b]! - values[a]!);
+    simplex = order.map((index) => simplex[index]!);
+    values = order.map((index) => values[index]!);
+    let diameter = 0;
+    for (let point = 1; point < simplex.length; point += 1) for (let axis = 0; axis < dimension; axis += 1) diameter = Math.max(diameter, Math.abs(simplex[point]![axis]! - simplex[0]![axis]!));
+    if (diameter < 2e-3) break;
+    onProgress?.(iteration / 90, { message: `Joint nucleotide optimizer step across ${segments.length} fixed-scale trees`, current: iteration, total: 90, metricLabel: "log L", metricValue: values[0]!, indeterminate: true });
+    const centroid = new Float64Array(dimension);
+    for (let point = 0; point < dimension; point += 1) for (let axis = 0; axis < dimension; axis += 1) centroid[axis] = centroid[axis]! + simplex[point]![axis]! / dimension;
+    const worst = simplex[dimension]!;
+    const reflected = Float64Array.from(centroid, (value, axis) => clamp(value + (value - worst[axis]!)));
+    const reflectedValue = (await evaluatePartitionedNucleotideCandidates([reflected], segments, backend, equilibrium, signal))[0]!;
+    if (reflectedValue > values[0]!) {
+      const expanded = Float64Array.from(centroid, (value, axis) => clamp(value + 2 * (reflected[axis]! - value)));
+      const expandedValue = (await evaluatePartitionedNucleotideCandidates([expanded], segments, backend, equilibrium, signal))[0]!;
+      simplex[dimension] = expandedValue > reflectedValue ? expanded : reflected;
+      values[dimension] = Math.max(expandedValue, reflectedValue);
+    } else if (reflectedValue > values[dimension - 1]!) {
+      simplex[dimension] = reflected;
+      values[dimension] = reflectedValue;
+    } else {
+      const contracted = Float64Array.from(centroid, (value, axis) => clamp(value + 0.5 * (worst[axis]! - value)));
+      const contractedValue = (await evaluatePartitionedNucleotideCandidates([contracted], segments, backend, equilibrium, signal))[0]!;
+      if (contractedValue > values[dimension]!) {
+        simplex[dimension] = contracted;
+        values[dimension] = contractedValue;
+      } else {
+        const best = simplex[0]!;
+        const shrunk = simplex.slice(1).map((point) => Float64Array.from(best, (value, axis) => clamp(value + 0.5 * (point[axis]! - value))));
+        const shrunkValues = await evaluatePartitionedNucleotideCandidates(shrunk, segments, backend, equilibrium, signal);
+        for (let point = 1; point < simplex.length; point += 1) {
+          simplex[point] = shrunk[point - 1]!;
+          values[point] = shrunkValues[point - 1]!;
+        }
+      }
+    }
+    completedIterations = iteration + 1;
+  }
+  const best = values.indexOf(Math.max(...values));
+  onProgress?.(1, { message: `Joint nucleotide fit converged across ${segments.length} trees`, current: completedIterations, total: completedIterations, metricLabel: "log L", metricValue: values[best]! });
+  return Float64Array.from(simplex[best]!, Math.exp);
+}
+
+async function evaluatePartitionedCodonCandidates(
+  pairs: readonly (readonly [number, number])[],
+  segments: readonly PartitionedFitSegment[],
+  backend: EvaluationBackend,
+  gtrRates: Float64Array,
+  f3x4: Float64Array,
+  equilibrium: Float64Array,
+  geneticCode: GeneticCodeInput,
+  signal?: AbortSignal,
+  onSegment?: (completed: number, total: number) => void,
+): Promise<Float64Array> {
+  const sums = new Float64Array(pairs.length);
+  const grid = codonCandidateGrid(pairs, segments[0]!.tree);
+  const models = buildModelBank(grid, segments[0]!.tree, gtrRates, f3x4, geneticCode);
+  for (let region = 0; region < segments.length; region += 1) {
+    const segment = segments[region]!;
+    signal?.throwIfAborted();
+    const tips = encodeCodonTips(segment.alignment, segment.tree, geneticCode);
+    const likelihood = await backend.evaluate({ tree: segment.compiled, tipStates: tips, siteCount: segment.alignment.codonSites, grid, models, equilibrium, ...(signal === undefined ? {} : { signal }) });
+    for (let candidate = 0; candidate < pairs.length; candidate += 1) {
+      const offset = candidate * segment.alignment.codonSites;
+      let local = 0;
+      for (let site = 0; site < segment.alignment.codonSites; site += 1) local += likelihood.logLikelihoods[offset + site]!;
+      sums[candidate] = sums[candidate]! + local;
+    }
+    onSegment?.(region + 1, segments.length);
+  }
+  return sums;
+}
+
+async function optimizePartitionedAlphaBeta(
+  mode: "empirical-fast" | "reference-compatible",
+  segments: readonly PartitionedFitSegment[],
+  backend: EvaluationBackend,
+  gtrRates: Float64Array,
+  f3x4: Float64Array,
+  equilibrium: Float64Array,
+  geneticCode: GeneticCodeInput,
+  onProgress?: ProgressCallback,
+  signal?: AbortSignal,
+): Promise<{ alpha: number; beta: number; logLikelihood: number }> {
+  const evaluate = (pairs: readonly (readonly [number, number])[], onSegment?: (completed: number, total: number) => void) => evaluatePartitionedCodonCandidates(pairs, segments, backend, gtrRates, f3x4, equilibrium, geneticCode, signal, onSegment);
+  if (mode === "empirical-fast") {
+    let alpha = 1;
+    let beta = 1;
+    let score = -Infinity;
+    const logSteps = [0.8, 0.4, 0.2, 0.1, 0.05, 0.025];
+    for (let pass = 0; pass < logSteps.length; pass += 1) {
+      const multipliers = [Math.exp(-logSteps[pass]!), 1, Math.exp(logSteps[pass]!)];
+      const pairs: Array<[number, number]> = [];
+      for (const alphaMultiplier of multipliers) for (const betaMultiplier of multipliers) pairs.push([Math.max(1e-4, Math.min(5, alpha * alphaMultiplier)), Math.max(1e-4, Math.min(5, beta * betaMultiplier))]);
+      const scores = await evaluate(pairs, (completed, total) => onProgress?.((pass + completed / total) / logSteps.length, {
+        message: `Joint codon refinement ${pass + 1}/${logSteps.length} · regional tree ${completed}/${total}`,
+        current: completed,
+        total,
+        indeterminate: true,
+      }));
+      const best = scores.indexOf(Math.max(...scores));
+      alpha = pairs[best]![0];
+      beta = pairs[best]![1];
+      score = scores[best]!;
+      onProgress?.((pass + 1) / logSteps.length, { message: `Joint codon refinement ${pass + 1} of ${logSteps.length} across ${segments.length} trees · α=${alpha.toPrecision(4)}, β=${beta.toPrecision(4)}`, current: pass + 1, total: logSteps.length, metricLabel: "log L", metricValue: score });
+    }
+    return { alpha, beta, logLikelihood: score };
+  }
+  let alpha = 1;
+  let beta = 1;
+  const alphaFit = await goldenMaximum(async (candidate) => (await evaluate([[candidate, beta]]))[0]!, 1e-6, 5, 1e-4, `Optimizing global α across ${segments.length} trees`, (fraction, detail) => onProgress?.(fraction * 0.34, detail));
+  alpha = alphaFit.x;
+  const betaFit = await goldenMaximum(async (candidate) => (await evaluate([[alpha, candidate]]))[0]!, 1e-6, 5, 1e-4, `Optimizing global β across ${segments.length} trees`, (fraction, detail) => onProgress?.(0.34 + fraction * 0.33, detail));
+  beta = betaFit.x;
+  const polished = await goldenMaximum(async (candidate) => (await evaluate([[candidate, beta]]))[0]!, Math.max(1e-6, alpha - 0.05), Math.min(5, alpha + 0.05), 1e-7, "Polishing joint global α", (fraction, detail) => onProgress?.(0.67 + fraction * 0.33, detail));
+  return { alpha: polished.x, beta, logLikelihood: polished.value };
+}
+
+/**
+ * Fit one codon model against a forest of fixed relative-scale regional trees.
+ * No segment-specific length multiplier is represented by this API.
+ */
+export async function fitPartitionedGlobalModel(
+  alignment: FastaAlignment,
+  segments: readonly PartitionedFitSegment[],
+  backend: EvaluationBackend,
+  mode: "empirical-fast" | "reference-compatible" = "empirical-fast",
+  onProgress?: ProgressCallback,
+  signal?: AbortSignal,
+  geneticCodeInput: GeneticCodeInput = 1,
+): Promise<FittedModel> {
+  if (segments.length === 0) throw new RangeError("A partitioned global fit requires at least one regional tree.");
+  if (segments.some((segment) => segment.tree.classCount !== 1)) throw new RangeError("Partitioned codon fits require untagged one-class regional trees.");
+  signal?.throwIfAborted();
+  const geneticCode = getGeneticCode(geneticCodeInput);
+  onProgress?.(0, { message: `Estimating one F3×4/GTR/codon model across ${segments.length} fixed-scale trees`, indeterminate: true });
+  const f3x4 = countF3x4(alignment);
+  const codonEquilibrium = codonEquilibriumFromF3x4(f3x4, geneticCode);
+  const nucleotideEquilibrium = countNucleotideFrequencies(alignment);
+  const gtrRates = mode === "reference-compatible"
+    ? await optimizePartitionedGtr(segments, backend, nucleotideEquilibrium, (fraction, detail) => onProgress?.(0.02 + fraction * 0.5, detail), signal)
+    : empiricalGtr(alignment, nucleotideEquilibrium);
+  if (mode === "empirical-fast") onProgress?.(0.12, { message: `Pooled empirical GTR initialization complete across ${segments.length} regions` });
+  const fit = await optimizePartitionedAlphaBeta(mode, segments, backend, gtrRates, f3x4, codonEquilibrium, geneticCode, (fraction, detail) => onProgress?.(mode === "reference-compatible" ? 0.52 + fraction * 0.48 : 0.12 + fraction * 0.88, detail), signal);
+  onProgress?.(1, { message: `Joint global codon fit complete · ${segments.length} trees · α=${fit.alpha.toPrecision(5)}, β=${fit.beta.toPrecision(5)}`, metricLabel: "log L", metricValue: fit.logLikelihood });
   return {
     geneticCodeId: geneticCode.id,
     gtrRates,

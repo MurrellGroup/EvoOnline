@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type InputHTMLAttributes } from "react";
+import React, { useEffect, useRef, useState, type InputHTMLAttributes } from "react";
 
 interface CommittedNumberInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "type" | "value" | "defaultValue" | "onChange"> {
   readonly value: number;

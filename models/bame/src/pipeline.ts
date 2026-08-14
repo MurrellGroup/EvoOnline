@@ -2,16 +2,21 @@ import {
   DifFUBARError,
   ParallelWasmBackend,
   WasmBackend,
+  applySharedTreeScale,
   compileTree,
   encodeCodonTips,
   fitGlobalModel,
+  fitPartitionedGlobalModel,
   getGeneticCode,
+  insertSegmentConditionals,
   normalizeConditionalLikelihoodsInPlace,
   parseFasta,
   parseNewick,
+  prepareRecombinationCodonTrees,
   type FittedModel,
   type GeneticCode,
   type ParsedTree,
+  type PreparedCodonTreeSegment,
   type ProgressDetail,
   type TreeNode,
 } from "@phylo-workbench/model-diffubar";
@@ -98,7 +103,7 @@ function normalizeColumnsInPlace(conditionals: Float64Array, categoryCount: numb
 
 async function fitModel(
   alignment: ReturnType<typeof parseFasta>,
-  tree: ParsedTree,
+  segments: readonly PreparedCodonTreeSegment[],
   backend: BameBackend,
   options: BameAnalysisOptions,
   geneticCode: GeneticCode,
@@ -109,16 +114,26 @@ async function fitModel(
     options.onStage?.("global-fit", 1, { message: "Using the supplied fitted model" });
     return { model: options.fittedModel, milliseconds: performance.now() - started };
   }
-  const model = await fitGlobalModel(
-    alignment,
-    tree,
-    compileTree(tree),
-    backend,
-    options.fitMode ?? "empirical-fast",
-    (fraction, detail) => options.onStage?.("global-fit", fraction, detail),
-    options.signal,
-    geneticCode,
-  );
+  const model = segments.length === 1
+    ? await fitGlobalModel(
+      alignment,
+      segments[0]!.tree,
+      compileTree(segments[0]!.tree),
+      backend,
+      options.fitMode ?? "empirical-fast",
+      (fraction, detail) => options.onStage?.("global-fit", fraction, detail),
+      options.signal,
+      geneticCode,
+    )
+    : await fitPartitionedGlobalModel(
+      alignment,
+      segments.map((segment) => ({ alignment: segment.alignment, tree: segment.tree, compiled: compileTree(segment.tree) })),
+      backend,
+      options.fitMode ?? "empirical-fast",
+      (fraction, detail) => options.onStage?.("global-fit", fraction, detail),
+      options.signal,
+      geneticCode,
+    );
   return { model, milliseconds: performance.now() - started };
 }
 
@@ -180,10 +195,29 @@ async function inferMixture(
   };
 }
 
-function parsedInputs(fasta: BameInput, newick: BameTreeInput) {
+function parsedInputs(fasta: BameInput, newick: BameTreeInput, options: BameAnalysisOptions) {
   const alignment = typeof fasta === "string" ? parseFasta(fasta) : fasta;
-  const tree = typeof newick === "string" ? parseNewick(newick) : cloneSingleClassTree(newick);
-  return { alignment, tree };
+  const inputTree = typeof newick === "string" ? parseNewick(newick) : cloneSingleClassTree(newick);
+  const segments: readonly PreparedCodonTreeSegment[] = options.recombinationTrees === undefined
+    ? [{
+      startCodon: 1,
+      endCodon: alignment.codonSites,
+      siteOffset: 0,
+      alignment,
+      tree: inputTree,
+      input: { startCodon: 1, endCodon: alignment.codonSites, tree: typeof newick === "string" ? newick : "", label: "Full alignment" },
+    }]
+    : prepareRecombinationCodonTrees(alignment, options.recombinationTrees);
+  return { alignment, tree: segments[0]!.tree, segments };
+}
+
+function recombinationDiagnostics(options: BameAnalysisOptions, segmentCount: number) {
+  return {
+    regionalTrees: segmentCount,
+    branchScalePolicy: options.recombinationTrees === undefined ? "single-tree" as const : "fixed-relative" as const,
+    branchLengthSource: options.recombinationTrees?.branchLengthSource ?? "input-tree" as const,
+    codonAssignment: options.recombinationTrees?.codonAssignment ?? "single-tree" as const,
+  };
 }
 
 function stage(options: BameAnalysisOptions, name: string, fraction: number, detail?: ProgressDetail): void {
@@ -196,10 +230,10 @@ export async function analyzeFame(
   options: FameAnalysisOptions = {},
 ): Promise<FameAnalysisResult> {
   const started = performance.now();
-  const { alignment, tree } = parsedInputs(fasta, newick);
+  const { alignment, tree, segments } = parsedInputs(fasta, newick, options);
   const geneticCode = getGeneticCode(options.geneticCode ?? 1);
   options.signal?.throwIfAborted();
-  stage(options, "initialization", 1, { message: `${alignment.names.length.toLocaleString()} taxa · ${alignment.codonSites.toLocaleString()} codon sites · untagged tree` });
+  stage(options, "initialization", 1, { message: `${alignment.names.length.toLocaleString()} taxa · ${alignment.codonSites.toLocaleString()} codon sites · ${segments.length.toLocaleString()} fixed-scale tree${segments.length === 1 ? "" : "s"}` });
   const gridPreset = options.gridPreset ?? "fast";
   const grid = createFameGrid(gridPreset);
   const integration = options.weightIntegration ?? "likelihood-quadrature";
@@ -217,9 +251,8 @@ export async function analyzeFame(
   await inferenceBackend.prepare({ categoryCount: grid.categoryCount, siteCount: alignment.codonSites });
   const runtimeMs = performance.now() - runtimeStarted;
   stage(options, "runtime-initialization", 1, { message: "Parallel f64 branch-mixture runtime ready" });
-  const fitted = await fitModel(alignment, tree, backend, options, geneticCode);
-  for (const node of tree.nodes) node.branchLength *= fitted.model.globalAlpha;
-  const compiled = compileTree(tree);
+  const fitted = await fitModel(alignment, segments, backend, options, geneticCode);
+  applySharedTreeScale(segments, fitted.model.globalAlpha);
   const preparationStarted = performance.now();
   stage(options, "branch-mixture-preparation", 0, {
     message: `Compiling ${grid.categoryCount.toLocaleString()} α–ω₁–ω₂ categories × ${weightPoints} weight nodes`,
@@ -228,7 +261,6 @@ export async function analyzeFame(
     indeterminate: true,
   });
   const built = buildFameBranchMixtures(grid, tree, fitted.model.gtrRates, fitted.model.f3x4, integration, weightPoints, geneticCode);
-  const tipStates = encodeCodonTips(alignment, tree, geneticCode);
   const preparationMs = performance.now() - preparationStarted;
   stage(options, "branch-mixture-preparation", 1, {
     message: `${built.operators.operatorCount.toLocaleString()} branch-mixture operators · ${built.models.modelCount.toLocaleString()} unique atomic ω models`,
@@ -236,19 +268,32 @@ export async function analyzeFame(
     total: operatorCount,
   });
   const likelihoodStarted = performance.now();
-  const likelihood = await backend.evaluateBranchMixture({
-    tree: compiled,
-    tipStates,
-    siteCount: alignment.codonSites,
-    grid,
-    models: built.models,
-    operators: built.operators,
-    equilibrium: fitted.model.codonEquilibrium,
-    onProgress: (fraction: number, detail?: ProgressDetail) => stage(options, "branch-mixture-likelihoods", fraction, detail),
-    ...(options.signal === undefined ? {} : { signal: options.signal }),
-  });
+  const rawLikelihoods = new Float64Array(grid.categoryCount * alignment.codonSites);
+  let likelihoodBackend: "wasm" | "wasm-parallel" = backend.kind === "wasm-parallel" ? "wasm-parallel" : "wasm";
+  let maximumRegisterNumber = 0;
+  for (let region = 0; region < segments.length; region += 1) {
+    const segment = segments[region]!;
+    const compiled = compileTree(segment.tree);
+    maximumRegisterNumber = Math.max(maximumRegisterNumber, compiled.registerNumber);
+    const local = await backend.evaluateBranchMixture({
+      tree: compiled,
+      tipStates: encodeCodonTips(segment.alignment, segment.tree, geneticCode),
+      siteCount: segment.alignment.codonSites,
+      grid,
+      models: built.models,
+      operators: built.operators,
+      equilibrium: fitted.model.codonEquilibrium,
+      onProgress: (fraction: number, detail?: ProgressDetail) => stage(options, "branch-mixture-likelihoods", (region + fraction) / segments.length, {
+        ...detail,
+        message: `Regional tree ${region + 1}/${segments.length} · ${detail?.message ?? "branch-mixture likelihoods"}`,
+      }),
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    });
+    insertSegmentConditionals(rawLikelihoods, local.logLikelihoods, grid.categoryCount, alignment.codonSites, segment);
+    likelihoodBackend = local.backend === "wasm-parallel" ? "wasm-parallel" : "wasm";
+  }
   const likelihoodMs = performance.now() - likelihoodStarted;
-  const conditionals = normalizeConditionalLikelihoodsInPlace(likelihood.logLikelihoods, grid.categoryCount, alignment.codonSites);
+  const conditionals = normalizeConditionalLikelihoodsInPlace(rawLikelihoods, grid.categoryCount, alignment.codonSites);
   normalizeColumnsInPlace(conditionals, grid.categoryCount, alignment.codonSites);
   const inferenceStarted = performance.now();
   const inference = await inferMixture(conditionals, grid.categories, grid.categoryCount, alignment.codonSites, grid.parameterCount, inferenceBackend, options);
@@ -262,7 +307,7 @@ export async function analyzeFame(
   const detectedSites = postprocessed.sites.filter((site) => site.detected).map((site) => site.site);
   const posteriorMs = performance.now() - posteriorStarted;
   stage(options, "tabulation", 1, { message: `${detectedSites.length.toLocaleString()} sites exceed P(ω₂>1) > ${threshold}`, current: alignment.codonSites, total: alignment.codonSites });
-  stage(options, "complete", 1, { message: `FAME finished with ${likelihood.backend} · ${integration === "likelihood-quadrature" ? "likelihood quadrature" : "Julia-draft log average"}` });
+  stage(options, "complete", 1, { message: `FAME finished with ${likelihoodBackend} · ${segments.length} fixed-scale tree${segments.length === 1 ? "" : "s"} · ${integration === "likelihood-quadrature" ? "likelihood quadrature" : "Julia-draft log average"}` });
   return {
     method: "fame",
     sites: postprocessed.sites,
@@ -272,7 +317,7 @@ export async function analyzeFame(
     posterior: postprocessed.posterior,
     theta: inference.theta,
     positivePrior: postprocessed.prior,
-    backend: likelihood.backend === "wasm-parallel" ? "wasm-parallel" : "wasm",
+    backend: likelihoodBackend,
     timings: { runtimeMs, fitMs: fitted.milliseconds, preparationMs, likelihoodMs, inferenceMs, posteriorMs, totalMs: performance.now() - started },
     diagnostics: {
       geneticCodeId: geneticCode.id,
@@ -283,7 +328,7 @@ export async function analyzeFame(
       categories: grid.categoryCount,
       branchMixtureOperators: built.operators.operatorCount,
       atomicOmegaModels: built.models.modelCount,
-      treeRegisterNumber: compiled.registerNumber,
+      treeRegisterNumber: maximumRegisterNumber,
       precision: "f64",
       inferenceMethod: options.inferenceMethod ?? "dirichlet-em",
       inferenceIterations: inference.iterations,
@@ -294,6 +339,7 @@ export async function analyzeFame(
       weightIntegration: integration,
       weightPoints,
       gridPreset,
+      ...recombinationDiagnostics(options, segments.length),
     },
   };
 }
@@ -304,10 +350,10 @@ export async function analyzeFlavor(
   options: FlavorAnalysisOptions = {},
 ): Promise<FlavorAnalysisResult> {
   const started = performance.now();
-  const { alignment, tree } = parsedInputs(fasta, newick);
+  const { alignment, tree, segments } = parsedInputs(fasta, newick, options);
   const geneticCode = getGeneticCode(options.geneticCode ?? 1);
   options.signal?.throwIfAborted();
-  stage(options, "initialization", 1, { message: `${alignment.names.length.toLocaleString()} taxa · ${alignment.codonSites.toLocaleString()} codon sites · untagged tree` });
+  stage(options, "initialization", 1, { message: `${alignment.names.length.toLocaleString()} taxa · ${alignment.codonSites.toLocaleString()} codon sites · ${segments.length.toLocaleString()} fixed-scale tree${segments.length === 1 ? "" : "s"}` });
   const gammaSliceCount = options.gammaSlices ?? 12;
   const transitionEngine: FlavorTransitionEngine = options.transitionEngine ?? "julia-interpolated";
   const gridPreset = options.gridPreset ?? "fast";
@@ -322,9 +368,8 @@ export async function analyzeFlavor(
   await inferenceBackend.prepare({ categoryCount: grid.categoryCount, siteCount: alignment.codonSites });
   const runtimeMs = performance.now() - runtimeStarted;
   stage(options, "runtime-initialization", 1, { message: "Parallel f64 branch-mixture runtime ready" });
-  const fitted = await fitModel(alignment, tree, backend, options, geneticCode);
-  for (const node of tree.nodes) node.branchLength *= fitted.model.globalAlpha;
-  const compiled = compileTree(tree);
+  const fitted = await fitModel(alignment, segments, backend, options, geneticCode);
+  applySharedTreeScale(segments, fitted.model.globalAlpha);
   const preparationStarted = performance.now();
   stage(options, "branch-mixture-preparation", 0, {
     message: `Discretizing capped and uncapped Gamma(ω) mixtures with ${gammaSliceCount} quantiles`,
@@ -333,7 +378,6 @@ export async function analyzeFlavor(
     indeterminate: true,
   });
   const built = buildFlavorBranchMixtures(grid, tree, fitted.model.gtrRates, fitted.model.f3x4, gammaSliceCount, geneticCode);
-  const tipStates = encodeCodonTips(alignment, tree, geneticCode);
   const preparationMs = performance.now() - preparationStarted;
   stage(options, "branch-mixture-preparation", 1, {
     message: `${grid.categoryCount.toLocaleString()} Gamma-mixture categories · ${built.models.modelCount.toLocaleString()} unique atomic ω models`,
@@ -341,26 +385,39 @@ export async function analyzeFlavor(
     total: grid.categoryCount,
   });
   const likelihoodStarted = performance.now();
-  const likelihoodRequest = {
-    tree: compiled,
-    tipStates,
-    siteCount: alignment.codonSites,
-    grid,
-    models: built.models,
-    operators: built.operators,
-    equilibrium: fitted.model.codonEquilibrium,
-    onProgress: (fraction: number, detail?: ProgressDetail) => stage(options, "branch-mixture-likelihoods", fraction, detail),
-    ...(options.signal === undefined ? {} : { signal: options.signal }),
-  } as const;
-  const likelihood = transitionEngine === "julia-interpolated"
-    ? await backend.evaluateFlavorInterpolated({
-      ...likelihoodRequest,
-      alphaCount: grid.alphaValues.length,
-      interpolation: { timeStep: 0.001, tablePoints: 50, tableCap: 35 },
-    })
-    : await backend.evaluateBranchMixture(likelihoodRequest);
+  const rawLikelihoods = new Float64Array(grid.categoryCount * alignment.codonSites);
+  let likelihoodBackend: "wasm" | "wasm-parallel" = backend.kind === "wasm-parallel" ? "wasm-parallel" : "wasm";
+  let maximumRegisterNumber = 0;
+  for (let region = 0; region < segments.length; region += 1) {
+    const segment = segments[region]!;
+    const compiled = compileTree(segment.tree);
+    maximumRegisterNumber = Math.max(maximumRegisterNumber, compiled.registerNumber);
+    const likelihoodRequest = {
+      tree: compiled,
+      tipStates: encodeCodonTips(segment.alignment, segment.tree, geneticCode),
+      siteCount: segment.alignment.codonSites,
+      grid,
+      models: built.models,
+      operators: built.operators,
+      equilibrium: fitted.model.codonEquilibrium,
+      onProgress: (fraction: number, detail?: ProgressDetail) => stage(options, "branch-mixture-likelihoods", (region + fraction) / segments.length, {
+        ...detail,
+        message: `Regional tree ${region + 1}/${segments.length} · ${detail?.message ?? "branch-mixture likelihoods"}`,
+      }),
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    } as const;
+    const local = transitionEngine === "julia-interpolated"
+      ? await backend.evaluateFlavorInterpolated({
+        ...likelihoodRequest,
+        alphaCount: grid.alphaValues.length,
+        interpolation: { timeStep: 0.001, tablePoints: 50, tableCap: 35 },
+      })
+      : await backend.evaluateBranchMixture(likelihoodRequest);
+    insertSegmentConditionals(rawLikelihoods, local.logLikelihoods, grid.categoryCount, alignment.codonSites, segment);
+    likelihoodBackend = local.backend === "wasm-parallel" ? "wasm-parallel" : "wasm";
+  }
   const likelihoodMs = performance.now() - likelihoodStarted;
-  const conditionals = normalizeConditionalLikelihoodsInPlace(likelihood.logLikelihoods, grid.categoryCount, alignment.codonSites);
+  const conditionals = normalizeConditionalLikelihoodsInPlace(rawLikelihoods, grid.categoryCount, alignment.codonSites);
   normalizeColumnsInPlace(conditionals, grid.categoryCount, alignment.codonSites);
   const inferenceStarted = performance.now();
   const inference = await inferMixture(conditionals, grid.categories, grid.categoryCount, alignment.codonSites, grid.parameterCount, inferenceBackend, options);
@@ -374,7 +431,7 @@ export async function analyzeFlavor(
   const detectedSites = postprocessed.sites.filter((site) => site.detected).map((site) => site.site);
   const posteriorMs = performance.now() - posteriorStarted;
   stage(options, "tabulation", 1, { message: `${detectedSites.length.toLocaleString()} sites exceed the episodic-positive posterior threshold`, current: alignment.codonSites, total: alignment.codonSites });
-  stage(options, "complete", 1, { message: `FLAVOR finished with ${likelihood.backend} · ${transitionEngine === "julia-interpolated" ? "Julia-style transition interpolation" : "direct uniformization"}` });
+  stage(options, "complete", 1, { message: `FLAVOR finished with ${likelihoodBackend} · ${segments.length} fixed-scale tree${segments.length === 1 ? "" : "s"} · ${transitionEngine === "julia-interpolated" ? "Julia-style transition interpolation" : "direct uniformization"}` });
   return {
     method: "flavor",
     sites: postprocessed.sites,
@@ -384,7 +441,7 @@ export async function analyzeFlavor(
     posterior: postprocessed.posterior,
     theta: inference.theta,
     positivePrior: postprocessed.prior,
-    backend: likelihood.backend === "wasm-parallel" ? "wasm-parallel" : "wasm",
+    backend: likelihoodBackend,
     timings: { runtimeMs, fitMs: fitted.milliseconds, preparationMs, likelihoodMs, inferenceMs, posteriorMs, totalMs: performance.now() - started },
     diagnostics: {
       geneticCodeId: geneticCode.id,
@@ -395,7 +452,7 @@ export async function analyzeFlavor(
       categories: grid.categoryCount,
       branchMixtureOperators: built.operators.operatorCount,
       atomicOmegaModels: built.models.modelCount,
-      treeRegisterNumber: compiled.registerNumber,
+      treeRegisterNumber: maximumRegisterNumber,
       precision: "f64",
       inferenceMethod: options.inferenceMethod ?? "dirichlet-em",
       inferenceIterations: inference.iterations,
@@ -412,6 +469,7 @@ export async function analyzeFlavor(
       interpolationTableCap: 35,
       cappedGridMultiplicityRetained: true,
       gridPreset,
+      ...recombinationDiagnostics(options, segments.length),
     },
   };
 }

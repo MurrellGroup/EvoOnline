@@ -29,6 +29,7 @@ scope.onmessage = (event: MessageEvent<WorkerRunRequest>): void => {
         posteriorThreshold: threshold,
         fitMode: parameters.fitMode === "reference-compatible" ? "reference-compatible" : "empirical-fast",
         approximateFel: parameters.approximateFel === true || parameters.approximateFel === "true",
+        ...(request.recombinationTrees === undefined ? {} : { recombinationTrees: request.recombinationTrees }),
         onStage: (stage, fraction, detail) => {
           const message: FubarWorkerResponse = {
             type: "progress",

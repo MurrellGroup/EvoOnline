@@ -36,6 +36,7 @@ scope.onmessage = (event: MessageEvent<BameWorkerRunRequest>): void => {
         posteriorThreshold: threshold,
         gridPreset: parameters.gridPreset === "julia-draft" ? "julia-draft" as const : "fast" as const,
         fitMode: parameters.fitMode === "reference-compatible" ? "reference-compatible" as const : "empirical-fast" as const,
+        ...(request.recombinationTrees === undefined ? {} : { recombinationTrees: request.recombinationTrees }),
         onStage: (stage: string, fraction: number, detail?: ProgressDetail) => {
           const message: BameWorkerResponse = { type: "progress", id: request.id, stage, fraction, ...(detail === undefined ? {} : { detail }) };
           scope.postMessage(message);

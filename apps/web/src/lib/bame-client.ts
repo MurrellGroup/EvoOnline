@@ -1,6 +1,7 @@
 import type { ParameterValues } from "@phylo-workbench/model-sdk";
 import type { BameRunResult, BameWorkerResponse, BameWorkerRunRequest, GlobalGammaRunResult } from "../types.js";
 import type { RunProgress } from "./diffubar-client.js";
+import type { BrowserAnalysisRunContext } from "../model-registry.js";
 
 export class BameClient {
   private worker: Worker | undefined;
@@ -12,7 +13,7 @@ export class BameClient {
     return new Worker(new URL("../workers/bame.worker.ts", import.meta.url), { type: "module" });
   }
 
-  run(alignment: string, tree: string, parameters: ParameterValues, onProgress: (progress: RunProgress) => void): Promise<BameRunResult | GlobalGammaRunResult> {
+  run(alignment: string, tree: string, parameters: ParameterValues, onProgress: (progress: RunProgress) => void, context?: BrowserAnalysisRunContext): Promise<BameRunResult | GlobalGammaRunResult> {
     this.cancel();
     const worker = this.createWorker();
     this.worker = worker;
@@ -27,7 +28,7 @@ export class BameClient {
         else { this.finish(); reject(new Error(message.error)); }
       };
       worker.onerror = (event) => { this.finish(); reject(new Error(event.message || `${this.method.toUpperCase()} worker failed.`)); };
-      const request: BameWorkerRunRequest = { type: "run", id, method: this.method, alignment, tree, parameters };
+      const request: BameWorkerRunRequest = { type: "run", id, method: this.method, alignment, tree, parameters, ...(context?.recombinationTrees === undefined ? {} : { recombinationTrees: context.recombinationTrees }) };
       worker.postMessage(request);
     });
   }

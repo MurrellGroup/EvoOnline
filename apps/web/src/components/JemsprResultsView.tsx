@@ -3,6 +3,10 @@ import { JemsprGenomeFigure } from "./JemsprGenomeFigure.js";
 import { JemsprLikelihoodTreeSequenceFigure } from "./JemsprLikelihoodTreeSequenceFigure.js";
 import { JemsprNetworkDagFigure } from "./JemsprNetworkDagFigure.js";
 import { JemsprTreeSequenceFigure } from "./JemsprTreeSequenceFigure.js";
+import { JemsprDisplayGraphFigure, JemsprSprAnimationFigure, JemsprSprStoryboardFigure } from "./JemsprSprFigures.js";
+import { RecombinationCodonHandoff, type RecombinationCodonMethod } from "./RecombinationCodonHandoff.js";
+import { createJemsprCodonTreeSet } from "../lib/recombination-handoff.js";
+import type { RecombinationCodonTreeSet } from "@phylo-workbench/model-diffubar/browser-source";
 
 function downloadText(text: string, filename: string, type = "text/plain;charset=utf-8"): void {
   const url = URL.createObjectURL(new Blob([text], { type }));
@@ -13,15 +17,20 @@ function downloadText(text: string, filename: string, type = "text/plain;charset
   URL.revokeObjectURL(url);
 }
 
-export function JemsprResultsView({ result }: { readonly result: JemsprAnalysisResult }) {
+export function JemsprResultsView({ result, onLoadRecombinationTrees }: { readonly result: JemsprAnalysisResult; readonly onLoadRecombinationTrees?: ((method: RecombinationCodonMethod, treeSet: RecombinationCodonTreeSet) => void) | undefined }) {
   const elapsed = (result.timings.totalMs ?? 0) / 1000;
   const linked = result.likelihood.status === "complete" ? result.likelihood : undefined;
   const skippedReason = result.likelihood.status === "skipped" ? result.likelihood.reason : undefined;
   const masterTree = linked?.masterTree ?? result.network.masterTree;
+  let codonTreeSet: RecombinationCodonTreeSet | undefined;
+  let codonTreeError: string | undefined;
+  try { codonTreeSet = createJemsprCodonTreeSet(result, result.sites); }
+  catch (error) { codonTreeError = error instanceof Error ? error.message : String(error); }
   return <section className="results" aria-labelledby="jemspr-results-heading">
     <div className="section-heading section-heading--results"><div><p className="eyebrow">Analysis complete · coherent overlapping event network</p><h2 id="jemspr-results-heading">JEMSPR</h2><p>Joint latent-master, local-tree path, switching network, and coherent linked-length ML</p></div><div className="result-downloads"><button type="button" className="button button--primary" onClick={() => downloadText(result.eventsCsv, "jemspr-events.csv", "text/csv;charset=utf-8")}>Events CSV</button><button type="button" className="button button--secondary" onClick={() => downloadText(result.localTreesTsv, "jemspr-local-trees.tsv")}>Local trees TSV</button><button type="button" className="button button--secondary" onClick={() => downloadText(result.breakpointsTsv, "jemspr-breakpoints.tsv")}>Breakpoints TSV</button><button type="button" className="button button--secondary" onClick={() => downloadText(result.networkJson, "jemspr-network.json", "application/json;charset=utf-8")}>Network JSON</button><button type="button" className="button button--secondary" onClick={() => downloadText(masterTree, "jemspr-master-linked-ml.nwk")}>ML master Newick</button><button type="button" className="button button--secondary" onClick={() => downloadText(JSON.stringify(result, null, 2), "jemspr-result.json", "application/json;charset=utf-8")}>Full result</button></div></div>
     <p className="method-note"><strong>What JEMSPR asks:</strong> which rooted latent master and persistent rSPR event templates form one coherent switching DAG whose overlapping active intervals explain the alignment? The master need not occur at any site, and event identity is retained across both endpoints.</p>
     <p className="method-note method-note--warning"><strong>Independence and search scope:</strong> topology, roots, SPR events, and breakpoint proposals are inferred internally—never supplied by FastTree, FSART, MosaicSPR, or an uploaded tree. When linked ML is enabled, FastTree is called once solely to estimate the fixed global GTR frequencies/exchangeabilities; every branch length, transition matrix, pruning pass, gradient, Gamma category, and genomic likelihood recursion is EvoOnline code.</p>
+    <RecombinationCodonHandoff treeSet={codonTreeSet} error={codonTreeError} onLoad={onLoadRecombinationTrees} />
     {result.diagnostics.warnings.map((warning) => <p key={warning} className="method-note method-note--warning">{warning}</p>)}
     <div className="result-stats">
       <div><span>Latent master</span><strong>{result.network.masterStateId}</strong><small>{result.diagnostics.rootPlacements} inferred root starts</small></div>
@@ -39,6 +48,9 @@ export function JemsprResultsView({ result }: { readonly result: JemsprAnalysisR
     {linked !== undefined && <details className="result-panel" open><summary><span>Likelihood-refined breakpoints and branch-length trees</span><small>Linked ML phylograms · shared substitutions/site scale · SVG</small></summary><div className="result-panel__body"><JemsprLikelihoodTreeSequenceFigure result={result.network} likelihood={linked} /></div></details>}
     <details className="result-panel" open><summary><span>Implied regional phylogenies</span><small>Select two for a tanglegram or all for linked trees · SVG</small></summary><div className="result-panel__body"><JemsprTreeSequenceFigure result={result.network} /></div></details>
     <details className="result-panel" open><summary><span>Compiled switching DAG</span><small>{`${result.network.templates.length} ordered reticulations · ${result.network.temporal.status} · SVG`}</small></summary><div className="result-panel__body"><JemsprNetworkDagFigure networkJson={result.networkJson} /><p className={`method-note${result.network.temporal.status === "rank-feasible" ? "" : " method-note--warning"}`}><strong>Temporal feasibility:</strong> {result.network.temporal.message}</p></div></details>
+    <details className="result-panel" open><summary><span>Animated SPR construction</span><small>Master → regional display · continuous subtree motion · speed control</small></summary><div className="result-panel__body"><JemsprSprAnimationFigure result={result} /></div></details>
+    <details className="result-panel" open><summary><span>SPR move storyboard</span><small>Exact before/after source contexts · SVG</small></summary><div className="result-panel__body"><JemsprSprStoryboardFigure result={result} /></div></details>
+    <details className="result-panel" open><summary><span>SPR display-state graph</span><small>Exact masks connected by single event toggles · SVG</small></summary><div className="result-panel__body"><JemsprDisplayGraphFigure result={result} /></div></details>
 
     <details className="result-panel" open><summary><span>Event occurrences and templates</span><small>Persistent identities, endpoint ranges, and rSPR clades</small></summary><div className="result-panel__body"><p className="method-note">Endpoint ranges contain consecutive coordinates within {result.network.uncertaintyTolerance.toFixed(2)} optimization units of the selected directional opening/closure min-marginal; they are deterministic optimization ranges, not confidence intervals.</p><div className="result-table-wrap"><table className="result-table"><thead><tr><th>Occurrence</th><th>Template</th><th>Interval</th><th>Censoring</th><th>Overlap</th><th>Endpoint gaps</th><th>Endpoint ranges</th><th>Pruned clade</th><th>Regraft destination</th></tr></thead><tbody>{result.network.occurrences.map((occurrence) => { const template = result.network.templates.find((candidate) => candidate.id === occurrence.templateId)!; return <tr key={occurrence.id}><td>{occurrence.id}</td><td>{occurrence.templateId}</td><td>{occurrence.start}–{occurrence.end}</td><td>{occurrence.leftCensored ? "left " : ""}{occurrence.rightCensored ? "right" : ""}{!occurrence.leftCensored && !occurrence.rightCensored ? "none" : ""}</td><td>{occurrence.maximumConcurrentEvents}</td><td>{occurrence.openingGap.toFixed(3)} / {occurrence.closingGap.toFixed(3)}</td><td>{`${occurrence.openingIntervalLow}–${occurrence.openingIntervalHigh} / ${occurrence.closingIntervalLow}–${occurrence.closingIntervalHigh}`}</td><td>{template.move.prunedTaxa.join(", ")}</td><td>{template.move.destinationIsRoot ? "above root" : template.move.destinationTaxa.join(", ")}</td></tr>; })}</tbody></table></div>{result.network.occurrences.length === 0 && <p className="figure-note">The selected penalized network retains no active event occurrences.</p>}</div></details>
 

@@ -165,6 +165,37 @@ test("FUBAR reports runtime compilation separately and keeps fused likelihood wo
   assert.ok(updates.some((update) => update.stage === "dirichlet-em" && update.detail?.current !== undefined));
 });
 
+test("FUBAR evaluates fixed-relative recombination trees as one joint site analysis", async () => {
+  const fasta = ">a\nATGAAA\n>b\nATGAAG\n>c\nATAAAA\n";
+  const alignment = parseFasta(fasta);
+  const f3x4 = countF3x4(alignment);
+  const fittedModel = {
+    geneticCodeId: 1 as const,
+    gtrRates: Float64Array.of(1, 1, 1, 1, 1, 1),
+    f3x4,
+    codonEquilibrium: codonEquilibriumFromF3x4(f3x4),
+    globalAlpha: 1,
+    globalBeta: 1,
+    logLikelihood: 0,
+    fitKind: "provided" as const,
+  };
+  const result = await analyzeFubar(fasta, "((a:0.1,b:0.1):0.1,c:0.2);", {
+    backend: "wasm", gridPoints: 2, iterations: 3, fittedModel,
+    recombinationTrees: {
+      schemaVersion: 1, sourceMethod: "fsart", branchLengthSource: "segment-ml", branchScalePolicy: "fixed-relative", codonAssignment: "middle-nucleotide",
+      segments: [
+        { startCodon: 1, endCodon: 1, tree: "((a:0.1,b:0.1):0.1,c:0.2);" },
+        { startCodon: 2, endCodon: 2, tree: "((a:0.2,c:0.1):0.1,b:0.15);" },
+      ],
+    },
+  });
+  assert.equal(result.sites.length, 2);
+  assert.equal(result.diagnostics.regionalTrees, 2);
+  assert.equal(result.diagnostics.branchScalePolicy, "fixed-relative");
+  assert.equal(result.diagnostics.branchLengthSource, "segment-ml");
+  assert.equal(result.diagnostics.codonAssignment, "middle-nucleotide");
+});
+
 test("site postprocessing distinguishes positive and purifying selection and retains surfaces", () => {
   const grid = createFubarGrid(2);
   const siteCount = 2;

@@ -8,6 +8,7 @@ import type {
   ModelBank,
   ParsedTree,
   ProgressDetail,
+  RecombinationCodonTreeSet,
 } from "@phylo-workbench/model-diffubar";
 
 export const MIXTURE_MODELS_COMMIT = "4c65c984b2e7ad121f5e28298de69bdc0dd427b7";
@@ -107,6 +108,8 @@ export interface BameAnalysisOptions {
   readonly posteriorThreshold?: number;
   readonly fitMode?: "empirical-fast" | "reference-compatible";
   readonly fittedModel?: FittedModel;
+  /** Fixed-relative regional ML trees used as one partitioned likelihood. */
+  readonly recombinationTrees?: RecombinationCodonTreeSet;
   readonly signal?: AbortSignal;
   readonly onStage?: (stage: string, fraction: number, detail?: ProgressDetail) => void;
 }
@@ -143,6 +146,10 @@ export interface BameDiagnostics {
   readonly inferenceLogLikelihood: number | null;
   readonly modelDraftCommit: typeof MIXTURE_MODELS_COMMIT;
   readonly numericalEngine: "fused-sparse-or-dense-uniformization" | "julia-matrix-sequence-linear-interpolation";
+  readonly regionalTrees: number;
+  readonly branchScalePolicy: "single-tree" | "fixed-relative";
+  readonly branchLengthSource: "input-tree" | "jemspr-linked-ml" | "segment-ml" | "method-final-trees";
+  readonly codonAssignment: "single-tree" | "middle-nucleotide";
 }
 
 export interface FameAnalysisResult {
