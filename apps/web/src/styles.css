@@ -562,6 +562,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .spr-animation-track button.is-active { color: #fff; background: var(--teal); border-color: var(--teal); }
 .spr-animation-track span { font-size: 9px; font-weight: 800; }
 .spr-animation-track small { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 7px; }
+.jemspr-spr-loop-controls { grid-template-columns: minmax(180px, 1fr) auto auto auto minmax(230px, 1.4fr); padding-block: 8px; }
+.jemspr-spr-loop-hint { color: #657570; font-size: 8px; line-height: 1.35; }
+.jemspr-spr-strip-scroll { width: 100%; overflow-x: auto; overflow-y: hidden; background: #fff; scrollbar-gutter: stable; overscroll-behavior-x: contain; }
+.jemspr-spr-strip-scroll svg { min-width: 760px; }
 .figure-card__heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 11px 13px; background: #f7f9f7; border-bottom: 1px solid #e1e6e2; }
 .figure-card__heading > div { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .figure-card__heading strong { color: #263936; font-size: 10px; }
@@ -945,6 +949,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
   .figure-control--threshold { grid-column: 1 / -1; }
   .figure-label-grid { grid-template-columns: 1fr 1fr; }
   .tree-figure-controls { grid-template-columns: 1fr 1fr; }
+  .jemspr-spr-loop-controls { grid-template-columns: 1fr 1fr; }
+  .jemspr-spr-loop-hint { grid-column: 1 / -1; }
   .fsart-inference-mode { grid-template-columns: 1fr; }
   .fsart-exploration-controls { grid-template-columns: 1fr 1fr; }
   .fsart-switch-slider { grid-column: 1 / -1; }
@@ -1006,6 +1012,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
   .profile-chain-alignment__body { grid-template-columns: 62px minmax(0, 1fr); }
   .profile-chain-alignment__labels span { right: 5px; }
   .tree-figure-controls { grid-template-columns: 1fr; }
+  .jemspr-spr-loop-controls { grid-template-columns: 1fr; }
   .result-downloads { align-items: stretch; flex-direction: column; }
   .figure-card__heading { align-items: flex-start; }
   .selection-visibility .toggle { width: 100%; }

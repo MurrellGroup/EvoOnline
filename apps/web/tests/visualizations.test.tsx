@@ -246,12 +246,14 @@ test("JEMSPR renders coherent event lanes, linked implied trees, and the compile
   assert.match(markup, /Coherent genomic event history/);
   assert.match(markup, /Implied regional phylogenies/);
   assert.match(markup, /Compiled switching DAG/);
-  assert.match(markup, /Animated SPR construction/);
+  assert.match(markup, /Animated genomic SPR strip/);
+  assert.match(markup, /Likelihood-refined alignment layout/);
+  assert.match(markup, /Reset to master/);
+  assert.match(markup, /Native horizontal scrolling/);
   assert.match(markup, /SPR move storyboard/);
   assert.match(markup, /SPR display-state graph/);
-  assert.match(markup, /one clade at a time/i);
-  assert.match(markup, /static linked-ML phylogram/i);
-  assert.match(markup, /linked-ML branch lengths/i);
+  assert.match(markup, /only the cut clade moves/i);
+  assert.match(markup, /shared linked-ML scale/i);
   assert.match(markup, /Continue with codon site analysis/);
   assert.match(markup, /Matching-taxon links/);
   assert.match(markup, /Network JSON/);

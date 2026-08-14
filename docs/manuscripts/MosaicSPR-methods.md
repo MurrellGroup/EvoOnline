@@ -1,9 +1,7 @@
 # MosaicSPR: fast reconstruction of mosaic phylogenies as explicit subtree-prune-and-regraft histories
 
 **Methods manuscript draft**
-
 **Authors and affiliations:** to be supplied
-
 **Software implementation:** EvoOnline, MosaicSPR v0.1.0
 
 ## Abstract
