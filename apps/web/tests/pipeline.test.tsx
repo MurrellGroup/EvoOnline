@@ -5,8 +5,12 @@ import {
   encodePipelineShare,
   matchPipelineTrees,
   parsePipelineDefinition,
+  pipelineNodeStage,
+  pipelineNodesCompatible,
+  sortPipelineNodes,
   stringifyPipelineDefinition,
   type PipelineDefinition,
+  type PipelineNode,
 } from "../src/lib/pipeline.js";
 
 interface NamedFile {
@@ -61,4 +65,39 @@ test("pipeline parser rejects a model component without a model id", () => {
     name: "Invalid",
     nodes: [{ id: "node", kind: "model", parameters: {} }],
   })), /no method identifier/u);
+});
+
+test("selection methods are terminal peers and never feed one another", () => {
+  const fubar: PipelineNode = { id: "fubar", kind: "model", modelId: "fubar", parameters: {} };
+  const diffubar: PipelineNode = { id: "diffubar", kind: "model", modelId: "diffubar", parameters: {} };
+  assert.equal(pipelineNodeStage(fubar), "selection");
+  assert.equal(pipelineNodeStage(diffubar), "selection");
+  assert.equal(pipelineNodesCompatible(fubar, diffubar), false);
+  assert.equal(pipelineNodesCompatible(diffubar, fubar), false);
+});
+
+test("typed source compatibility rejects scientifically invalid routes", () => {
+  const fasttree: PipelineNode = { id: "fasttree", kind: "fasttree", parameters: {} };
+  const userTrees: PipelineNode = { id: "user-trees", kind: "user-trees", parameters: {} };
+  const fsart: PipelineNode = { id: "fsart", kind: "model", modelId: "fsart", parameters: {} };
+  const fubar: PipelineNode = { id: "fubar", kind: "model", modelId: "fubar", parameters: {} };
+  const diffubar: PipelineNode = { id: "diffubar", kind: "model", modelId: "diffubar", parameters: {} };
+  const bsrel: PipelineNode = { id: "bsrel", kind: "model", modelId: "bsrel", parameters: {} };
+
+  assert.equal(pipelineNodesCompatible(fasttree, fubar), true);
+  assert.equal(pipelineNodesCompatible(fasttree, diffubar), false);
+  assert.equal(pipelineNodesCompatible(userTrees, diffubar), true);
+  assert.equal(pipelineNodesCompatible(fsart, fubar), true);
+  assert.equal(pipelineNodesCompatible(fsart, bsrel), false);
+  assert.equal(pipelineNodesCompatible(fasttree, fsart), false);
+});
+
+test("pipeline stages sort sources and terminal methods without chaining peers", () => {
+  const nodes: readonly PipelineNode[] = [
+    { id: "fubar", kind: "model", modelId: "fubar", parameters: {} },
+    { id: "fsart", kind: "model", modelId: "fsart", parameters: {} },
+    { id: "diffubar", kind: "model", modelId: "diffubar", parameters: {} },
+    { id: "user-trees", kind: "user-trees", parameters: {} },
+  ];
+  assert.deepEqual(sortPipelineNodes(nodes).map((node) => node.id), ["fsart", "user-trees", "fubar", "diffubar"]);
 });

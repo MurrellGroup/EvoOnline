@@ -6,6 +6,8 @@ export const PIPELINE_ADD_EVENT = "evoonline:add-pipeline-node";
 export const PIPELINE_STORAGE_KEY = "evoonline-pipelines-v1";
 
 export type PipelineNodeKind = "fasttree" | "user-trees" | "model";
+export type PipelineStage = "source" | "selection";
+export type PipelineSourceOutputKind = "inferred-tree" | "user-tree" | "regional-trees";
 
 export interface PipelineNode {
   readonly id: string;
@@ -31,6 +33,55 @@ export interface TreeMatch<FileType extends PipelineFileLike = PipelineFileLike>
   readonly tree?: FileType;
   readonly candidates: readonly FileType[];
   readonly status: "matched" | "missing" | "ambiguous";
+}
+
+const RECOMBINATION_SOURCE_MODELS = new Set(["fsart", "mosaic-spr", "jemspr"]);
+const SELECTION_SOURCE_KINDS: Readonly<Record<string, readonly PipelineSourceOutputKind[]>> = {
+  diffubar: ["user-tree"],
+  fubar: ["inferred-tree", "user-tree", "regional-trees"],
+  bsrel: ["inferred-tree", "user-tree"],
+  fame: ["inferred-tree", "user-tree", "regional-trees"],
+  flavor: ["inferred-tree", "user-tree", "regional-trees"],
+  glamma: ["inferred-tree", "user-tree"],
+  "clade-shift": ["inferred-tree", "user-tree"],
+};
+
+export function pipelineNodeStage(node: PipelineNode): PipelineStage | undefined {
+  if (node.kind === "fasttree" || node.kind === "user-trees") return "source";
+  if (node.modelId !== undefined && RECOMBINATION_SOURCE_MODELS.has(node.modelId)) return "source";
+  if (node.modelId !== undefined && node.modelId in SELECTION_SOURCE_KINDS) return "selection";
+  return undefined;
+}
+
+export function pipelineSourceOutputKind(node: PipelineNode): PipelineSourceOutputKind | undefined {
+  if (node.kind === "fasttree") return "inferred-tree";
+  if (node.kind === "user-trees") return "user-tree";
+  return node.modelId !== undefined && RECOMBINATION_SOURCE_MODELS.has(node.modelId) ? "regional-trees" : undefined;
+}
+
+export function pipelineAcceptedSourceKinds(node: PipelineNode): readonly PipelineSourceOutputKind[] {
+  if (node.kind !== "model" || node.modelId === undefined) return [];
+  return SELECTION_SOURCE_KINDS[node.modelId] ?? [];
+}
+
+export function pipelineNodesCompatible(source: PipelineNode, target: PipelineNode): boolean {
+  const output = pipelineSourceOutputKind(source);
+  return output !== undefined && pipelineAcceptedSourceKinds(target).includes(output);
+}
+
+export function compatiblePipelineSources(target: PipelineNode, nodes: readonly PipelineNode[]): readonly PipelineNode[] {
+  return nodes.filter((source) => pipelineNodesCompatible(source, target));
+}
+
+export function sortPipelineNodes(nodes: readonly PipelineNode[]): readonly PipelineNode[] {
+  return nodes
+    .map((node, index) => ({ node, index, stage: pipelineNodeStage(node) }))
+    .sort((left, right) => {
+      const leftRank = left.stage === "source" ? 0 : left.stage === "selection" ? 1 : 2;
+      const rightRank = right.stage === "source" ? 0 : right.stage === "selection" ? 1 : 2;
+      return leftRank - rightRank || left.index - right.index;
+    })
+    .map(({ node }) => node);
 }
 
 const ALIGNMENT_EXTENSIONS = new Set(["fa", "fas", "fasta", "fna", "ffn", "aln"]);
