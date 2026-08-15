@@ -14,6 +14,8 @@ import { parseMmcifChains, parsePdbChains } from "../src/features/structure-mapp
 import type { StructureChainView, StructureColorMode } from "../src/features/structure-mapping/types.js";
 import type { BameRunResult, FubarRunResult } from "../src/types.js";
 
+(globalThis as typeof globalThis & { React: typeof React }).React = React;
+
 const FASTA = `>one
 ATGAAAACT
 >two

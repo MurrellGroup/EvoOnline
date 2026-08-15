@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { RecombinationCodonTreeSet } from "@phylo-workbench/model-diffubar/browser-source";
 import { RecombinationTreeMiniature, recombinationModeInfo } from "../src/components/RecombinationTreeSummary.js";
@@ -8,6 +9,10 @@ import {
   parseRecombinationTreeBundle,
   serializeRecombinationTreeBundle,
 } from "../src/lib/recombination-bundle.js";
+
+// Vite uses the automatic JSX runtime in the application build, while the
+// direct Node/tsx test transform expects the classic React global.
+(globalThis as typeof globalThis & { React: typeof React }).React = React;
 
 const independentTrees: RecombinationCodonTreeSet = {
   schemaVersion: 1,

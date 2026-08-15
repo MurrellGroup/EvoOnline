@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+
+(globalThis as typeof globalThis & { React: typeof React }).React = React;
 import { DEFAULT_SIMULATOR_CONFIG, encodeSimulatorConfig, runSimulator } from "@phylo-workbench/model-simulator/browser-source";
 import { SimulatorSetup } from "../src/components/simulator/SimulatorSetup.js";
 import { SimulatorResultsView } from "../src/components/simulator/SimulatorResultsView.js";

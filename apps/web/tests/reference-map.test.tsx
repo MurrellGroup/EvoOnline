@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+
+(globalThis as typeof globalThis & { React: typeof React }).React = React;
 import { ReferenceMapFigure, type ReferenceMapFigureSettings } from "../src/features/reference-map/ReferenceMapFigure.js";
 import { alignProfileToReference } from "../src/features/reference-map/reference-align.js";
 import { buildDifFubarReferenceEvidence, buildFubarReferenceEvidence, DIFFUBAR_REFERENCE_HYPOTHESES, FUBAR_REFERENCE_HYPOTHESES } from "../src/features/reference-map/reference-hypotheses.js";
