@@ -1092,6 +1092,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .pipeline-threshold-card { min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 6px; padding: 10px; background: #fbfcfb; border: 1px solid #dde5e1; border-radius: 8px; }
 .pipeline-threshold-card > strong { grid-column: 1 / -1; overflow: hidden; color: #29483f; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .pipeline-threshold-card > small { grid-column: 1 / -1; color: #58766e; font-size: 7px; }
+.pipeline-threshold-card > small.pipeline-signal-description { padding-top: 5px; color: #778781; border-top: 1px solid #e5ebe8; line-height: 1.45; }
 .pipeline-comparison-plots { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(310px, .75fr); gap: 10px; margin-top: 12px; }
 .pipeline-comparison-plot { min-width: 0; overflow: hidden; background: #fbfcfb; border: 1px solid #dce5e0; border-radius: 9px; }
 .pipeline-comparison-plot > header, .pipeline-comparison-table > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 10px 12px; background: #f3f7f5; border-bottom: 1px solid #dfe7e3; }
@@ -1108,13 +1109,24 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .pipeline-comparison-scatter circle.is-both { fill: #d86452; fill-opacity: .72; }
 .pipeline-comparison-scatter circle.is-one { fill: #d49b42; fill-opacity: .7; }
 .pipeline-scatter-label { fill: #36564e !important; font-weight: 750 !important; }
+.pipeline-sites-results-plot { margin-top: 12px; }
+.pipeline-sites-results-plot__scroll { overflow-x: auto; background: linear-gradient(180deg, #fff, #fbfcfb); }
+.pipeline-sites-results-plot svg { display: block; width: 100%; min-width: 780px; height: auto; }
+.pipeline-site-lane-background { fill: #fff; stroke: #e4ebe7; stroke-width: 1; }
+.pipeline-site-series { stroke-width: 1.55; stroke-linejoin: round; stroke-linecap: round; }
+.pipeline-site-threshold { stroke: #d87a65; stroke-width: 1; stroke-dasharray: 4 4; }
+.pipeline-site-gridline { stroke: #dce5e1; stroke-width: .75; stroke-dasharray: 2 5; }
+.pipeline-site-method { fill: #29483f; font: 750 10px Inter, sans-serif; }
+.pipeline-site-metric, .pipeline-site-scale, .pipeline-site-threshold-label { fill: #6a7c76; font: 7px Inter, sans-serif; }
+.pipeline-site-threshold-label { fill: #a55747; font-weight: 750; }
 .pipeline-matrix-scroll { overflow: auto; padding: 10px; }
 .pipeline-matrix { min-width: max-content; display: grid; gap: 3px; align-items: stretch; }
 .pipeline-matrix > strong, .pipeline-matrix > span { min-height: 36px; display: grid; place-items: center; padding: 5px; border-radius: 4px; font-size: 7px; text-align: center; }
 .pipeline-matrix > strong { max-width: 120px; overflow: hidden; color: #526a63; text-overflow: ellipsis; white-space: nowrap; }
 .pipeline-matrix > span { color: #263f39; font-weight: 800; }
 .pipeline-comparison-table { margin-top: 12px; overflow: hidden; border: 1px solid #dce5e0; border-radius: 9px; }
-.pipeline-comparison-table > header > span { color: #5e776f; font-size: 7px; }
+.pipeline-table-mode { min-width: 170px; display: flex; flex-direction: column; gap: 3px; color: #60716c; font-size: 7px; font-weight: 800; }
+.pipeline-table-mode select { height: 29px; padding: 4px 6px; color: #29413b; background: #fff; border: 1px solid #cbd8d2; border-radius: 5px; font-size: 8px; }
 .pipeline-comparison-table .result-table th > strong, .pipeline-comparison-table .result-table th > small { display: block; }
 .pipeline-comparison-table .result-table th > small { margin-top: 3px; color: #71817c; font-size: 7px; font-weight: 500; text-transform: none; }
 .pipeline-comparison-table .result-table td.is-comparison-call { color: #176d60; background: #e9f5f1; font-weight: 800; }
