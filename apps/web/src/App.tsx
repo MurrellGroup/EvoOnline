@@ -10,6 +10,7 @@ import type { RecombinationCodonTreeSet } from "@phylo-workbench/model-diffubar/
 import type { SimulatedDataset, SimulatorAnalysisResult } from "@phylo-workbench/model-simulator/browser-source";
 import { WidgetBridge } from "@phylo-workbench/viewer-bridge";
 import { WidgetModal } from "./components/WidgetModal.js";
+import { PipelineBuilder } from "./components/PipelineBuilder.js";
 import { RecombinationTreeSummary, recombinationModeInfo } from "./components/RecombinationTreeSummary.js";
 import type { RunProgress } from "./lib/diffubar-client.js";
 import { getRegisteredModel, modelRegistry, type BrowserExecutorServices, type BrowserModelExecutor } from "./model-registry.js";
@@ -21,6 +22,7 @@ import {
   parseRecombinationTreeBundle,
   type EvoOnlineRecombinationTreeBundle,
 } from "./lib/recombination-bundle.js";
+import { PIPELINE_ADD_EVENT, PIPELINE_DRAG_TYPE } from "./lib/pipeline.js";
 
 interface WidgetSnapshot {
   readonly alignment?: string;
@@ -158,8 +160,10 @@ function ParameterControl({
 export function App() {
   const alignmentFrame = useRef<HTMLIFrameElement>(null);
   const treeFrame = useRef<HTMLIFrameElement>(null);
+  const sidebarDragging = useRef(false);
   const resultsRef = useRef<HTMLDivElement>(null);
   const [selectedModelId, setSelectedModelId] = useState(modelRegistry[0]?.plugin.manifest.id ?? "");
+  const [viewMode, setViewMode] = useState<"analysis" | "pipeline">(() => typeof window !== "undefined" && new URLSearchParams(window.location.hash.replace(/^#/, "")).has("pipeline") ? "pipeline" : "analysis");
   const selectedModel = getRegisteredModel(selectedModelId);
   const [bridges, setBridges] = useState<{ alignment: WidgetBridge; tree: WidgetBridge }>();
   const bridgesRef = useRef<typeof bridges>(undefined);
@@ -451,6 +455,7 @@ export function App() {
   };
 
   const openSavedAnalysis = (saved: SavedAnalysis): void => {
+    setViewMode("analysis");
     setActiveAnalysisId(saved.id);
     setAlignment(saved.alignment);
     setTree(saved.tree);
@@ -466,6 +471,12 @@ export function App() {
       setSelectedModelId(saved.modelId);
     }
     setNotice({ tone: "info", text: `Restored ${saved.title}. Inputs and results remain device-local.` });
+  };
+
+  const registerPipelineAnalyses = (completed: readonly SavedAnalysis[]): void => {
+    if (completed.length === 0) return;
+    setAnalyses((current) => [...completed].reverse().concat(current.filter((saved) => !completed.some((next) => next.id === saved.id))));
+    setActiveAnalysisId(completed.at(-1)?.id);
   };
 
   const removeSavedAnalysis = (saved: SavedAnalysis): void => {
@@ -652,25 +663,43 @@ export function App() {
 
       <aside className="model-sidebar">
         <div className="sidebar-heading">
-          <span>Analysis methods</span>
-          <strong>{modelRegistry.length}</strong>
+          <span>Modes and methods</span>
+          <strong>{modelRegistry.length + 1}</strong>
         </div>
+        <button
+          type="button"
+          className={`model-card model-card--pipeline ${viewMode === "pipeline" ? "is-active" : ""}`}
+          onClick={() => setViewMode("pipeline")}
+        >
+          <span className="model-card__glyph">PL</span>
+          <span><strong>Pipeline</strong><small>batch workflow canvas</small></span>
+          <span className="model-card__runtime">DRAG · CONNECT · RERUN</span>
+        </button>
+        {viewMode === "pipeline" && <div className="pipeline-sidebar-tools">
+          <div className="sidebar-heading"><span>Tree components</span><strong>2</strong></div>
+          <button type="button" draggable className="model-card" onClick={() => window.dispatchEvent(new CustomEvent(PIPELINE_ADD_EVENT, { detail: { kind: "fasttree" } }))} onDragStart={(event) => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData(PIPELINE_DRAG_TYPE, JSON.stringify({ kind: "fasttree" })); }}>
+            <span className="model-card__glyph">FT</span><span><strong>FastTree</strong><small>infer one tree per FASTA</small></span><span className="model-card__runtime">GTR + CAT · BIOWASM</span>
+          </button>
+          <button type="button" draggable className="model-card" onClick={() => window.dispatchEvent(new CustomEvent(PIPELINE_ADD_EVENT, { detail: { kind: "user-trees" } }))} onDragStart={(event) => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData(PIPELINE_DRAG_TYPE, JSON.stringify({ kind: "user-trees" })); }}>
+            <span className="model-card__glyph">NW</span><span><strong>User trees</strong><small>match by filename stem</small></span><span className="model-card__runtime">NEWICK · NEXUS</span>
+          </button>
+          <div className="sidebar-heading pipeline-sidebar-tools__methods"><span>Analysis components</span><strong>{modelRegistry.length - 1}</strong></div>
+        </div>}
         {modelRegistry.map((registration) => (
           <button
             key={registration.plugin.manifest.id}
             type="button"
-            className={`model-card ${registration.plugin.manifest.id === selectedModelId ? "is-active" : ""}`}
-            onClick={() => setSelectedModelId(registration.plugin.manifest.id)}
+            className={`model-card ${viewMode === "analysis" && registration.plugin.manifest.id === selectedModelId ? "is-active" : ""}`}
+            draggable={viewMode === "pipeline" && registration.plugin.manifest.id !== "simulator"}
+            onDragStart={(event) => { if (viewMode !== "pipeline" || registration.plugin.manifest.id === "simulator") return; sidebarDragging.current = true; event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData(PIPELINE_DRAG_TYPE, JSON.stringify({ kind: "model", modelId: registration.plugin.manifest.id })); }}
+            onDragEnd={() => window.setTimeout(() => { sidebarDragging.current = false; }, 0)}
+            onClick={() => { if (sidebarDragging.current) return; setViewMode("analysis"); setSelectedModelId(registration.plugin.manifest.id); }}
           >
             <span className="model-card__glyph">{registration.glyph}</span>
             <span><strong>{registration.plugin.manifest.shortTitle}</strong><small>{registration.plugin.manifest.category} analysis</small></span>
             <span className="model-card__runtime">{registration.runtimeLabel}</span>
           </button>
         ))}
-        <div className="future-models">
-          <span>+</span>
-          <p><strong>Model-ready architecture</strong>Additional methods register inputs, parameters, runtimes, and result renderers through the same contract.</p>
-        </div>
         <div className="analysis-history">
           <div className="sidebar-heading"><span>Saved analyses</span><strong>{analyses.length}</strong></div>
           {analyses.length === 0 && <p>No completed analyses yet. Results are retained here across method switches and page reloads.</p>}
@@ -679,10 +708,17 @@ export function App() {
       </aside>
 
       <main className="workspace">
+        {viewMode === "pipeline" ? (
+          <PipelineBuilder
+            {...(bridges?.alignment === undefined ? {} : { alignmentBridge: bridges.alignment })}
+            executorServices={executorServices.current}
+            onAnalysesCompleted={registerPipelineAnalyses}
+          />
+        ) : <>
         <section className="workspace-hero">
           <div>
             <p className="eyebrow">{manifest.category} analysis / {manifest.shortTitle}</p>
-            <h1>{manifest.id === "simulator" ? "Design, simulate, inspect, and export evolutionary datasets" : "Build an analysis-ready phylogenetic workspace"}</h1>
+            <h1>{manifest.id === "simulator" ? "Design, simulate, inspect, and export evolutionary datasets" : manifest.title}</h1>
             <p>{manifest.id === "simulator"
               ? "Shape a sampled coalescent genealogy, choose a codon process, optionally layer in ancestral recombination and hidden carrier lineages, then generate a reproducible batch entirely in your browser."
             : requiresForeground
@@ -849,9 +885,10 @@ export function App() {
         </section>
 
         {activeAnalysis !== undefined && (() => { const resultModel = getRegisteredModel(activeAnalysis.modelId); const ResultView = resultModel.ResultView; const simulationInferenceAnalyses = activeAnalysis.modelId === "simulator" ? analyses.filter((analysis) => analysis.simulationSource?.simulationAnalysisId === activeAnalysis.id) : undefined; return <div ref={resultsRef} className="results-anchor"><div className="saved-result-banner"><span>Viewing saved result</span><strong>{activeAnalysis.title}</strong><small>{new Date(activeAnalysis.createdAt).toLocaleString()}</small></div><ResultView result={activeAnalysis.result} parameters={activeAnalysis.parameters} alignment={activeAnalysis.alignment?.text ?? ""} onLoadRecombinationTrees={(method, treeSet, bundle) => void loadRecombinationTrees(method, treeSet, bundle)} onLoadSimulatedDataset={(dataset) => loadSimulatedDataset(dataset)} onBatchSimulatedDatasets={(method, datasets, result) => batchSimulatedDatasets(method, datasets, result)} {...(simulationInferenceAnalyses === undefined ? {} : { simulationInferenceAnalyses })} /></div>; })()}
+        </>}
       </main>
 
-      {bridges !== undefined && alignment !== undefined && (
+      {bridges !== undefined && (alignment !== undefined || viewMode === "pipeline") && (
         <WidgetModal
           open={alignmentOpen}
           title="Alignment viewer and editor"
