@@ -7,6 +7,7 @@ import { JemsprDisplayGraphFigure, JemsprSprAnimationFigure, JemsprSprStoryboard
 import { RecombinationCodonHandoff, type RecombinationCodonMethod } from "./RecombinationCodonHandoff.js";
 import { createJemsprCodonTreeSet } from "../lib/recombination-handoff.js";
 import type { RecombinationCodonTreeSet } from "@phylo-workbench/model-diffubar/browser-source";
+import { createJemsprRecombinationBundle, type EvoOnlineRecombinationTreeBundle } from "../lib/recombination-bundle.js";
 
 function downloadText(text: string, filename: string, type = "text/plain;charset=utf-8"): void {
   const url = URL.createObjectURL(new Blob([text], { type }));
@@ -17,20 +18,21 @@ function downloadText(text: string, filename: string, type = "text/plain;charset
   URL.revokeObjectURL(url);
 }
 
-export function JemsprResultsView({ result, onLoadRecombinationTrees }: { readonly result: JemsprAnalysisResult; readonly onLoadRecombinationTrees?: ((method: RecombinationCodonMethod, treeSet: RecombinationCodonTreeSet) => void) | undefined }) {
+export function JemsprResultsView({ result, onLoadRecombinationTrees }: { readonly result: JemsprAnalysisResult; readonly onLoadRecombinationTrees?: ((method: RecombinationCodonMethod, treeSet: RecombinationCodonTreeSet, bundle: EvoOnlineRecombinationTreeBundle) => void) | undefined }) {
   const elapsed = (result.timings.totalMs ?? 0) / 1000;
   const linked = result.likelihood.status === "complete" ? result.likelihood : undefined;
   const skippedReason = result.likelihood.status === "skipped" ? result.likelihood.reason : undefined;
   const masterTree = linked?.masterTree ?? result.network.masterTree;
   let codonTreeSet: RecombinationCodonTreeSet | undefined;
+  let recombinationBundle: EvoOnlineRecombinationTreeBundle | undefined;
   let codonTreeError: string | undefined;
-  try { codonTreeSet = createJemsprCodonTreeSet(result, result.sites); }
+  try { codonTreeSet = createJemsprCodonTreeSet(result, result.sites); recombinationBundle = createJemsprRecombinationBundle(result, codonTreeSet); }
   catch (error) { codonTreeError = error instanceof Error ? error.message : String(error); }
   return <section className="results" aria-labelledby="jemspr-results-heading">
     <div className="section-heading section-heading--results"><div><p className="eyebrow">Analysis complete · coherent overlapping event network</p><h2 id="jemspr-results-heading">JEMSPR</h2><p>Joint latent-master, local-tree path, switching network, and coherent linked-length ML</p></div><div className="result-downloads"><button type="button" className="button button--primary" onClick={() => downloadText(result.eventsCsv, "jemspr-events.csv", "text/csv;charset=utf-8")}>Events CSV</button><button type="button" className="button button--secondary" onClick={() => downloadText(result.localTreesTsv, "jemspr-local-trees.tsv")}>Local trees TSV</button><button type="button" className="button button--secondary" onClick={() => downloadText(result.breakpointsTsv, "jemspr-breakpoints.tsv")}>Breakpoints TSV</button><button type="button" className="button button--secondary" onClick={() => downloadText(result.networkJson, "jemspr-network.json", "application/json;charset=utf-8")}>Network JSON</button><button type="button" className="button button--secondary" onClick={() => downloadText(masterTree, "jemspr-master-linked-ml.nwk")}>ML master Newick</button><button type="button" className="button button--secondary" onClick={() => downloadText(JSON.stringify(result, null, 2), "jemspr-result.json", "application/json;charset=utf-8")}>Full result</button></div></div>
     <p className="method-note"><strong>What JEMSPR asks:</strong> which rooted latent master and persistent rSPR event templates form one coherent switching DAG whose overlapping active intervals explain the alignment? The master need not occur at any site, and event identity is retained across both endpoints.</p>
     <p className="method-note method-note--warning"><strong>Independence and search scope:</strong> topology, roots, SPR events, and breakpoint proposals are inferred internally—never supplied by FastTree, FSART, MosaicSPR, or an uploaded tree. When linked ML is enabled, FastTree is called once solely to estimate the fixed global GTR frequencies/exchangeabilities; every branch length, transition matrix, pruning pass, gradient, Gamma category, and genomic likelihood recursion is EvoOnline code.</p>
-    <RecombinationCodonHandoff treeSet={codonTreeSet} error={codonTreeError} onLoad={onLoadRecombinationTrees} />
+    <RecombinationCodonHandoff treeSet={codonTreeSet} bundle={recombinationBundle} error={codonTreeError} onLoad={onLoadRecombinationTrees} />
     {result.diagnostics.warnings.map((warning) => <p key={warning} className="method-note method-note--warning">{warning}</p>)}
     <div className="result-stats">
       <div><span>Latent master</span><strong>{result.network.masterStateId}</strong><small>{result.diagnostics.rootPlacements} inferred root starts</small></div>

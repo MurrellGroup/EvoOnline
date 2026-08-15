@@ -34,6 +34,7 @@ import { SimulatorClient } from "./lib/simulator-client.js";
 import type { BameRunResult, BsrelRunResult, CladeShiftRunResult, DifFubarRunResult, FubarRunResult, GlobalGammaRunResult } from "./types.js";
 import type { RecombinationCodonTreeSet } from "@phylo-workbench/model-diffubar/browser-source";
 import type { SavedAnalysis } from "./lib/analysis-store.js";
+import type { EvoOnlineRecombinationTreeBundle } from "./lib/recombination-bundle.js";
 
 export interface BrowserAnalysisRunContext {
   readonly recombinationTrees?: RecombinationCodonTreeSet;
@@ -59,7 +60,7 @@ interface ResultProps {
   readonly result: unknown;
   readonly parameters: ParameterValues;
   readonly alignment: string;
-  readonly onLoadRecombinationTrees?: (method: RecombinationCodonMethod, treeSet: RecombinationCodonTreeSet) => void;
+  readonly onLoadRecombinationTrees?: (method: RecombinationCodonMethod, treeSet: RecombinationCodonTreeSet, bundle: EvoOnlineRecombinationTreeBundle) => void;
   readonly onLoadSimulatedDataset?: (dataset: SimulatedDataset) => void | Promise<void>;
   readonly onBatchSimulatedDatasets?: (method: SimulatorBatchMethod, datasets: readonly SimulatedDataset[], result: SimulatorAnalysisResult) => void | Promise<void>;
   readonly simulationInferenceAnalyses?: readonly SavedAnalysis[];

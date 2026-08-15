@@ -8,6 +8,7 @@ interface WidgetModalProps {
   readonly frameRef: RefObject<HTMLIFrameElement | null>;
   readonly applyLabel: string;
   readonly applying: boolean;
+  readonly readOnly?: boolean;
   readonly onCancel: () => void;
   readonly onApply: () => void;
 }
@@ -20,6 +21,7 @@ export function WidgetModal({
   frameRef,
   applyLabel,
   applying,
+  readOnly = false,
   onCancel,
   onApply,
 }: WidgetModalProps) {
@@ -32,10 +34,10 @@ export function WidgetModal({
           <p>{description}</p>
         </div>
         <div className="widget-modal__actions">
-          <button type="button" className="button button--quiet" onClick={onCancel}>Cancel</button>
-          <button type="button" className="button button--primary" disabled={applying} onClick={onApply}>
+          <button type="button" className="button button--quiet" onClick={onCancel}>{readOnly ? "Close" : "Cancel"}</button>
+          {!readOnly && <button type="button" className="button button--primary" disabled={applying} onClick={onApply}>
             {applying ? "Applying…" : applyLabel}
-          </button>
+          </button>}
         </div>
       </div>
       <iframe

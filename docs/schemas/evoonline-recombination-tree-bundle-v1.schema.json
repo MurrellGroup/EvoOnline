@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://murrellgroup.github.io/EvoOnline/schemas/evoonline-recombination-tree-bundle-v1.schema.json",
+  "title": "EvoOnline recombination-tree bundle",
+  "type": "object",
+  "required": ["format", "schemaVersion", "representation", "sourceMethod", "alignment", "downstreamLikelihood", "codonTreeSet", "regionalTrees", "breakpoints", "history"],
+  "properties": {
+    "format": { "const": "evoonline-recombination-tree-bundle" },
+    "schemaVersion": { "const": 1 },
+    "representation": { "enum": ["independent-regional-trees", "spr-history"] },
+    "sourceMethod": { "type": "string", "minLength": 1 },
+    "alignment": {
+      "type": "object",
+      "required": ["nucleotideSites", "codonSites", "coordinates", "breakpointConvention"],
+      "properties": {
+        "nucleotideSites": { "type": "integer", "minimum": 3 },
+        "codonSites": { "type": "integer", "minimum": 1 },
+        "taxa": { "type": "integer", "minimum": 2 },
+        "coordinates": { "const": "one-based-inclusive" },
+        "breakpointConvention": { "const": "after-site" }
+      },
+      "additionalProperties": false
+    },
+    "downstreamLikelihood": {
+      "type": "object",
+      "required": ["codonAssignment", "branchScalePolicy", "branchLengthSource"],
+      "properties": {
+        "codonAssignment": { "const": "middle-nucleotide" },
+        "branchScalePolicy": { "const": "fixed-relative" },
+        "branchLengthSource": { "enum": ["jemspr-linked-ml", "segment-ml", "method-final-trees"] }
+      },
+      "additionalProperties": false
+    },
+    "codonTreeSet": { "$ref": "#/$defs/codonTreeSet" },
+    "regionalTrees": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/regionalTree" } },
+    "breakpoints": { "type": "array", "items": { "$ref": "#/$defs/breakpoint" } },
+    "history": { "oneOf": [{ "$ref": "#/$defs/independentHistory" }, { "$ref": "#/$defs/sprHistory" }] }
+  },
+  "allOf": [
+    { "if": { "properties": { "representation": { "const": "independent-regional-trees" } } }, "then": { "properties": { "history": { "$ref": "#/$defs/independentHistory" } } } },
+    { "if": { "properties": { "representation": { "const": "spr-history" } } }, "then": { "properties": { "history": { "$ref": "#/$defs/sprHistory" } } } }
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "codonSegment": {
+      "type": "object",
+      "required": ["startCodon", "endCodon", "tree"],
+      "properties": {
+        "startCodon": { "type": "integer", "minimum": 1 },
+        "endCodon": { "type": "integer", "minimum": 1 },
+        "tree": { "type": "string", "minLength": 4 },
+        "label": { "type": "string" },
+        "sourceNucleotideStart": { "type": "integer", "minimum": 1 },
+        "sourceNucleotideEnd": { "type": "integer", "minimum": 1 },
+        "mask": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "codonTreeSet": {
+      "type": "object",
+      "required": ["schemaVersion", "sourceMethod", "branchLengthSource", "branchScalePolicy", "codonAssignment", "segments"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "sourceMethod": { "type": "string", "minLength": 1 },
+        "branchLengthSource": { "enum": ["jemspr-linked-ml", "segment-ml", "method-final-trees"] },
+        "branchScalePolicy": { "const": "fixed-relative" },
+        "codonAssignment": { "const": "middle-nucleotide" },
+        "segments": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/codonSegment" } },
+        "sourceAnalysisId": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "regionalTree": {
+      "type": "object",
+      "required": ["id", "startCodon", "endCodon", "startNucleotide", "endNucleotide", "tree"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^R[1-9][0-9]*$" },
+        "startCodon": { "type": "integer", "minimum": 1 },
+        "endCodon": { "type": "integer", "minimum": 1 },
+        "startNucleotide": { "type": "integer", "minimum": 1 },
+        "endNucleotide": { "type": "integer", "minimum": 1 },
+        "tree": { "type": "string", "minLength": 4 },
+        "label": { "type": "string" },
+        "mask": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "breakpoint": {
+      "type": "object",
+      "required": ["afterCodon", "afterNucleotide"],
+      "properties": {
+        "afterCodon": { "type": "integer", "minimum": 1 },
+        "afterNucleotide": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": false
+    },
+    "independentHistory": {
+      "type": "object",
+      "required": ["kind", "interpretation"],
+      "properties": {
+        "kind": { "const": "independent-regional-trees" },
+        "interpretation": { "const": "each-region-tree-is-an-independent-estimate" },
+        "criterion": { "type": "string" },
+        "criterionValue": { "type": ["number", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "sprHistory": {
+      "type": "object",
+      "required": ["kind", "interpretation", "sprModel", "masterTree"],
+      "properties": {
+        "kind": { "const": "spr-history" },
+        "interpretation": { "const": "master-tree-plus-spr-events" },
+        "sprModel": { "enum": ["rooted-switching-network", "unrooted-edit-tape", "flattened-regional-projection"] },
+        "masterTree": { "type": "string", "minLength": 4 },
+        "eventTemplates": { "type": "array" },
+        "eventOccurrences": { "type": "array" },
+        "breakpointEvents": { "type": "array" },
+        "regionalMasks": { "type": "array" },
+        "switchingNetwork": {},
+        "states": { "type": "array" },
+        "derivations": { "type": "array" },
+        "temporal": {},
+        "searchCertificate": {},
+        "branchLinkage": { "type": "object" },
+        "note": { "type": "string" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

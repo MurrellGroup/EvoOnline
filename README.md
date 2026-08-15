@@ -16,8 +16,9 @@ The browser workflow currently supports:
 10. Exploring model-owned, linked interactive SVG figures, editing publication labels, and exporting lossless SVG or CSV.
 11. Profile-aligning the translated codon alignment to an uploaded PDB/mmCIF structure or an RCSB PDB entry, then exploring residue-level selection calls in a simplified Mol* view.
 12. Retaining completed analyses in browser IndexedDB so results survive method switches and page reloads.
-13. Handing final FSART, MosaicSPR, or JEMSPR regional trees directly to FUBAR, FAME, or FLAVOR through one generic fixed-relative tree-partition contract.
-14. Designing editable heterochronous coalescent population/sampling curves, simulating MG94 or SCUFF codon alignments, adding branch-interior ancestral recombination and hidden carrier lineages, exporting complete truth, and batching generated datasets into codon selection methods.
+13. Handing final FSART, MosaicSPR, or JEMSPR regional trees directly to FUBAR, FAME, or FLAVOR through one generic fixed-relative tree-partition contract, with an explicit compact breakpoint/tree schematic rather than presenting the first region as a single master tree.
+14. Downloading, restoring, and importing versioned `.evo-recomb.json` tree bundles that distinguish independent FSART-style regional estimates from master-plus-SPR histories and retain JEMSPR linked-ML or MosaicSPR edit provenance.
+15. Designing editable heterochronous coalescent population/sampling curves, simulating MG94 or SCUFF codon alignments, adding branch-interior ancestral recombination and hidden carrier lineages, exporting complete truth, and batching generated datasets into codon selection methods.
 
 Sequence and tree data remain device-local when using the browser executor.
 
@@ -48,6 +49,7 @@ docs/
   ARCHITECTURE.md
   ADDING_A_MODEL.md
   GENETIC_CODES.md
+  RECOMBINATION_TREE_BUNDLES.md
   WEBWIDGETS.md
 ```
 
@@ -96,6 +98,8 @@ Regular FUBAR shares DifFUBAR's fitted MG94 model and optimized likelihood kerne
 The result renderer highlights both positive selection, P(β > α), and purifying selection, P(α > β). Positive and purifying visibility checkboxes are enabled by default and jointly filter the table, overview, marginal rows, posterior-surface choices, and structural detection calls. The studio provides the codon overview, paper-style α/β posterior-mass lanes at detected sites, an interactive posterior surface for any linked site, editable labels, and direct SVG/CSV export.
 
 FUBAR, FAME, and FLAVOR also accept a generic recombination-tree partition. Every codon is assigned to the nucleotide region containing its middle base, so breakpoint-crossing codons are neither duplicated nor dropped. Regional conditional-likelihood columns are reassembled in original codon order. F3×4, GTR, and global codon-rate parameters are estimated once by summing likelihoods over all regions; only one common synonymous-rate multiplier is permitted, so no regional tree can be rescaled relative to another. JEMSPR handoff is additionally gated on completion of its linked-ML branch-length polishing. FSART and MosaicSPR use their final regional tree products through the same downstream code path.
+
+The browser now persists and exports that input as a versioned [EvoOnline recombination-tree bundle](docs/RECOMBINATION_TREE_BUNDLES.md). The stable likelihood layer contains a complete regional codon partition; a separate history layer explicitly says whether those regions are independent FSART-style estimates or displays of a master-plus-SPR construction. JEMSPR bundles retain the switching history and linked network-edge lengths, while MosaicSPR bundles retain its executable edit tape. This distinction is shown in both the tree-input card and run context, including a compact breakpoint schematic and per-region tree preview.
 
 **Also calculate approximate FEL** is an opt-in FUBAR checkbox and is off by default. It reuses each site's raw conditional likelihood grid before the Bayesian prior or mixture weights are applied; disabling it executes no FEL interpolation or optimization. Max-shifted log likelihoods are interpolated in the uniform FUBAR grid-index coordinate by a nodal-exact local bicubic surface; a deterministic local-curvature audit reduces cubic tension only when needed. Multi-start optimization finds the unrestricted surface maximum and the maximum on α=β, then reports the χ²(1) LRT plus separate signed-root positive and purifying p-values. Its controls, table, CSV, thresholds, conditional-likelihood SVG, and measured compute time are contained in a visibly separate result panel, so enabling it does not add columns to or alter the FUBAR posterior result.
 

@@ -8,6 +8,7 @@ import { FsartTripletFigure } from "./FsartTripletFigure.js";
 import { RecombinationCodonHandoff, type RecombinationCodonMethod } from "./RecombinationCodonHandoff.js";
 import { createFsartCodonTreeSet } from "../lib/recombination-handoff.js";
 import type { RecombinationCodonTreeSet } from "@phylo-workbench/model-diffubar/browser-source";
+import { createFsartRecombinationBundle, type EvoOnlineRecombinationTreeBundle } from "../lib/recombination-bundle.js";
 
 function downloadCsv(csv: string, filename: string): void {
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -27,7 +28,7 @@ function pairLabel(state: TripletState, names: readonly string[]): string {
   return state === 0 ? `${names[0]}=${names[1]}` : state === 1 ? `${names[0]}=${names[2]}` : `${names[1]}=${names[2]}`;
 }
 
-export function FsartResultsView({ result, onLoadRecombinationTrees }: { readonly result: FsartAnalysisResult; readonly onLoadRecombinationTrees?: ((method: RecombinationCodonMethod, treeSet: RecombinationCodonTreeSet) => void) | undefined }) {
+export function FsartResultsView({ result, onLoadRecombinationTrees }: { readonly result: FsartAnalysisResult; readonly onLoadRecombinationTrees?: ((method: RecombinationCodonMethod, treeSet: RecombinationCodonTreeSet, bundle: EvoOnlineRecombinationTreeBundle) => void) | undefined }) {
   const [selectedRank, setSelectedRank] = useState(result.breakpoints[0]?.rank ?? 1);
   const [minimumEvidence, setMinimumEvidence] = useState(0);
   const [showOnlyStrongTriplets, setShowOnlyStrongTriplets] = useState(false);
@@ -38,15 +39,16 @@ export function FsartResultsView({ result, onLoadRecombinationTrees }: { readonl
     .some((value) => value >= breakpoint.supportLow && value <= breakpoint.supportHigh);
   const commitRank = (raw: number): void => setSelectedRank(Math.max(1, Math.min(Math.max(1, result.breakpoints.length), Math.round(raw))));
   let codonTreeSet: RecombinationCodonTreeSet | undefined;
+  let recombinationBundle: EvoOnlineRecombinationTreeBundle | undefined;
   let codonTreeError: string | undefined;
-  try { codonTreeSet = createFsartCodonTreeSet(result, result.diagnostics.sites); }
+  try { codonTreeSet = createFsartCodonTreeSet(result, result.diagnostics.sites); recombinationBundle = createFsartRecombinationBundle(result, codonTreeSet); }
   catch (error) { codonTreeError = error instanceof Error ? error.message : String(error); }
 
   return <section className="results" aria-labelledby="fsart-results-heading">
     <div className="section-heading section-heading--results"><div><p className="eyebrow">Analysis complete · exploratory recombination analysis</p><h2 id="fsart-results-heading">FSART</h2><p>Fast Stepwise Approximate Recombination Test</p></div><div className="result-downloads"><button type="button" className="button button--primary" onClick={() => downloadCsv(result.breakpointCsv, "fsart-consensus-proposals.csv")}>Proposal CSV</button><button type="button" className="button button--secondary" onClick={() => downloadCsv(result.partitionCsv, "fsart-viterbi-runs.csv")}>Viterbi runs CSV</button><button type="button" className="button button--secondary" disabled={result.treeHmm.status !== "complete"} onClick={() => downloadCsv(result.treeHmmCsv, "fsart-tree-hmm.csv")}>Tree-HMM CSV</button></div></div>
     <p className="method-note"><strong>What FSART asks:</strong> does phylogenetic support change along the nucleotide alignment? A pair-covered informative-triplet scan generates an uncorrected evidence distribution without a multiple-comparisons admission gate. Independent triplet count and compressed evidence are aggregated into hard-spaced consensus boundaries; those boundaries only generate trees. EvoOnline fits every atomic segment, adjacent pair, adjacent triplet, and the whole alignment, caches every unique resolved topology's likelihood at every site, then performs a rapid beam plus add/drop/swap search in that cached likelihood space.</p>
     <p className="method-note method-note--warning"><strong>Approximate GARD competitor:</strong> AIC/AICc/BIC—not triplet p-values—selects the final topology set. A minimum-length Viterbi reconstruction is alternated with tree refits for a bounded number of rounds, and convergence is reported rather than required. This remains an exploratory FastTree-based method, not exact GARD, RDP, or proprietary BURT software.</p>
-    <RecombinationCodonHandoff treeSet={codonTreeSet} error={codonTreeError} onLoad={onLoadRecombinationTrees} />
+    <RecombinationCodonHandoff treeSet={codonTreeSet} bundle={recombinationBundle} error={codonTreeError} onLoad={onLoadRecombinationTrees} />
     <div className="result-stats">
       <div><span>Consensus proposals</span><strong>{result.breakpoints.length.toLocaleString()}</strong></div>
       <div><span>Refined Viterbi switches</span><strong>{result.partition.acceptedBreakpoints.length.toLocaleString()}</strong><small>{result.partition.status === "complete" ? result.partition.criterion.toUpperCase() : result.partition.status}</small></div>

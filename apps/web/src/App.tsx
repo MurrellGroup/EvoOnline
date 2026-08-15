@@ -10,11 +10,17 @@ import type { RecombinationCodonTreeSet } from "@phylo-workbench/model-diffubar/
 import type { SimulatedDataset, SimulatorAnalysisResult } from "@phylo-workbench/model-simulator/browser-source";
 import { WidgetBridge } from "@phylo-workbench/viewer-bridge";
 import { WidgetModal } from "./components/WidgetModal.js";
+import { RecombinationTreeSummary, recombinationModeInfo } from "./components/RecombinationTreeSummary.js";
 import type { RunProgress } from "./lib/diffubar-client.js";
 import { getRegisteredModel, modelRegistry, type BrowserExecutorServices, type BrowserModelExecutor } from "./model-registry.js";
 import { deleteSavedAnalysis, listSavedAnalyses, saveAnalysis, type SavedAnalysis } from "./lib/analysis-store.js";
 import type { RecombinationCodonMethod } from "./components/RecombinationCodonHandoff.js";
 import type { SimulatorBatchMethod } from "./components/simulator/SimulatorResultsView.js";
+import {
+  createProjectedRecombinationBundle,
+  parseRecombinationTreeBundle,
+  type EvoOnlineRecombinationTreeBundle,
+} from "./lib/recombination-bundle.js";
 
 interface WidgetSnapshot {
   readonly alignment?: string;
@@ -182,6 +188,8 @@ export function App() {
   const [analyses, setAnalyses] = useState<readonly SavedAnalysis[]>([]);
   const [activeAnalysisId, setActiveAnalysisId] = useState<string>();
   const [recombinationTrees, setRecombinationTrees] = useState<RecombinationCodonTreeSet>();
+  const [recombinationBundle, setRecombinationBundle] = useState<EvoOnlineRecombinationTreeBundle>();
+  const [treePreviewRegion, setTreePreviewRegion] = useState<number>();
   const [simulationSource, setSimulationSource] = useState<SavedAnalysis["simulationSource"]>();
   const activeAnalysis = analyses.find((analysis) => analysis.id === activeAnalysisId);
 
@@ -250,6 +258,8 @@ export function App() {
       const artifact = await createAlignmentArtifact(file.name, await readTextFile(file));
       setAlignment(artifact);
       setRecombinationTrees(undefined);
+      setRecombinationBundle(undefined);
+      setTreePreviewRegion(undefined);
       setSimulationSource(undefined);
       setNotice({ tone: "success", text: `${artifact.taxa} sequences loaded.` });
     } catch (error) {
@@ -264,6 +274,8 @@ export function App() {
       const artifact = await createTreeArtifact(file.name, preparedText, "upload");
       setTree(artifact);
       setRecombinationTrees(undefined);
+      setRecombinationBundle(undefined);
+      setTreePreviewRegion(undefined);
       setNotice({ tone: "success", text: "Phylogeny loaded." });
     } catch (error) {
       setNotice({ tone: "error", text: error instanceof Error ? error.message : String(error) });
@@ -305,6 +317,8 @@ export function App() {
       const artifact = await createAlignmentArtifact(alignment.name, snapshot.alignment);
       setAlignment(artifact);
       setRecombinationTrees(undefined);
+      setRecombinationBundle(undefined);
+      setTreePreviewRegion(undefined);
       setSimulationSource(undefined);
       if (tree === undefined && snapshot.tree) setTree(await createTreeArtifact("inferred-tree.nwk", snapshot.tree, "editor"));
       setAlignmentOpen(false);
@@ -329,6 +343,8 @@ export function App() {
       if (!snapshot.tree) throw new Error("FastTree returned no tree.");
       setTree(await createTreeArtifact("fasttree.nwk", snapshot.tree, "fasttree"));
       setRecombinationTrees(undefined);
+      setRecombinationBundle(undefined);
+      setTreePreviewRegion(undefined);
       setNotice({ tone: "success", text: "FastTree phylogeny added to the workspace." });
     } catch (error) {
       setNotice({ tone: "error", text: error instanceof Error ? error.message : String(error) });
@@ -339,6 +355,7 @@ export function App() {
 
   const openTreeTagger = (): void => {
     if (tree === undefined || bridges === undefined) return;
+    setTreePreviewRegion(undefined);
     setTreeOpen(true);
     void bridges.tree.request("set-tree", { text: tree.text })
       .catch((error: unknown) => setNotice({ tone: "error", text: error instanceof Error ? error.message : String(error) }));
@@ -353,6 +370,8 @@ export function App() {
       const artifact = await createTreeArtifact(tree.name, snapshot.tree, "editor");
       setTree(artifact);
       setRecombinationTrees(undefined);
+      setRecombinationBundle(undefined);
+      setTreePreviewRegion(undefined);
       setTreeOpen(false);
       setNotice(requiresForeground
         ? {
@@ -402,6 +421,7 @@ export function App() {
         ...(tree === undefined ? {} : { tree }),
         result: next,
         ...(!supportsRecombinationTrees || recombinationTrees === undefined ? {} : { recombinationTrees }),
+        ...(!supportsRecombinationTrees || recombinationBundle === undefined ? {} : { recombinationBundle }),
         ...(simulationSource === undefined || model.plugin.manifest.id === "simulator" ? {} : { simulationSource }),
       };
       setAnalyses((current) => [saved, ...current.filter((analysis) => analysis.id !== saved.id)]);
@@ -435,6 +455,10 @@ export function App() {
     setAlignment(saved.alignment);
     setTree(saved.tree);
     setRecombinationTrees(saved.recombinationTrees);
+    setRecombinationBundle(saved.recombinationBundle ?? (saved.recombinationTrees === undefined || saved.alignment === undefined
+      ? undefined
+      : createProjectedRecombinationBundle(saved.recombinationTrees, saved.alignment.sites, saved.alignment.taxa)));
+    setTreePreviewRegion(undefined);
     setSimulationSource(saved.simulationSource);
     if (saved.modelId === selectedModelId) setParameters(saved.parameters);
     else {
@@ -451,22 +475,80 @@ export function App() {
     void deleteSavedAnalysis(saved.id).catch((error: unknown) => setNotice({ tone: "error", text: error instanceof Error ? error.message : String(error) }));
   };
 
-  const loadRecombinationTrees = async (method: RecombinationCodonMethod, treeSet: RecombinationCodonTreeSet): Promise<void> => {
+  const loadRecombinationTrees = async (method: RecombinationCodonMethod, treeSet: RecombinationCodonTreeSet, bundle?: EvoOnlineRecombinationTreeBundle): Promise<void> => {
     const source = activeAnalysis;
     if (source?.alignment === undefined) return;
     try {
       const representative = treeSet.segments[0];
       if (representative === undefined) throw new Error("The recombination partition has no regional tree.");
-      const treeArtifact = await createTreeArtifact(`${treeSet.sourceMethod}-regional-master.nwk`, representative.tree, "editor");
+      const portable = bundle ?? createProjectedRecombinationBundle(treeSet, source.alignment.sites, source.alignment.taxa);
+      const treeArtifact = await createTreeArtifact(`${treeSet.sourceMethod}-region-1-preview.nwk`, representative.tree, "editor");
       setAlignment(source.alignment);
       setTree(treeArtifact);
       setRecombinationTrees(treeSet);
+      setRecombinationBundle(portable);
+      setTreePreviewRegion(undefined);
       setSelectedModelId(method);
-      setNotice({ tone: "success", text: `${treeSet.segments.length} ${treeSet.sourceMethod} regional trees loaded into ${method.toUpperCase()}. Relative branch-length scales are locked; the global codon model will be estimated jointly.` });
+      const info = recombinationModeInfo(portable);
+      setNotice({ tone: "success", text: `${info.shortTitle} loaded into ${method.toUpperCase()}: ${treeSet.segments.length} regions. Relative branch-length scales are locked; the global codon model will be estimated jointly.` });
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) {
       setNotice({ tone: "error", text: error instanceof Error ? error.message : String(error) });
     }
+  };
+
+  const importRecombinationBundle = async (file: File): Promise<void> => {
+    if (alignment === undefined) {
+      setNotice({ tone: "error", text: "Load the matching nucleotide alignment before importing its recombination tree set." });
+      return;
+    }
+    if (!alignment.divisibleByThree) {
+      setNotice({ tone: "error", text: "Recombination tree sets for codon analysis require an alignment length divisible by three." });
+      return;
+    }
+    try {
+      const bundle = parseRecombinationTreeBundle(await readTextFile(file), alignment.sites / 3);
+      const first = bundle.regionalTrees[0];
+      if (first === undefined) throw new Error("The recombination bundle contains no regional trees.");
+      const preview = await createTreeArtifact(`${bundle.sourceMethod}-region-1-preview.nwk`, first.tree, "editor");
+      setTree(preview);
+      setRecombinationTrees(bundle.codonTreeSet);
+      setRecombinationBundle(bundle);
+      setTreePreviewRegion(undefined);
+      const info = recombinationModeInfo(bundle);
+      setNotice({ tone: "success", text: `${info.title} imported: ${bundle.regionalTrees.length} regions and ${bundle.breakpoints.length} breakpoints match the loaded alignment.` });
+    } catch (error) {
+      setNotice({ tone: "error", text: error instanceof Error ? error.message : String(error) });
+    }
+  };
+
+  const recombinationInput = (event: ChangeEvent<HTMLInputElement>): void => {
+    const file = event.target.files?.[0];
+    if (file !== undefined) void importRecombinationBundle(file);
+    event.target.value = "";
+  };
+
+  const previewRecombinationRegion = async (index: number): Promise<void> => {
+    const bundle = recombinationBundle;
+    if (bundle === undefined || bridges === undefined) return;
+    const region = bundle.regionalTrees[index];
+    if (region === undefined) return;
+    try {
+      const preview = await createTreeArtifact(`${bundle.sourceMethod}-${region.id.toLowerCase()}-preview.nwk`, region.tree, "editor");
+      setTree(preview);
+      setTreePreviewRegion(index);
+      setTreeOpen(true);
+      await bridges.tree.request("set-tree", { text: region.tree });
+    } catch (error) {
+      setNotice({ tone: "error", text: error instanceof Error ? error.message : String(error) });
+    }
+  };
+
+  const useSingleTree = (): void => {
+    setRecombinationTrees(undefined);
+    setRecombinationBundle(undefined);
+    setTreePreviewRegion(undefined);
+    setNotice({ tone: "info", text: "Regional-tree mode disabled. The currently displayed regional preview is now the single analysis tree; replace it if that is not the tree you intend to use." });
   };
 
   const simulatorTreeSet = (dataset: SimulatedDataset): RecombinationCodonTreeSet | undefined => dataset.localTrees.length <= 1 ? undefined : {
@@ -483,9 +565,12 @@ export function App() {
     try {
       const nextAlignment = await createAlignmentArtifact(`${dataset.id}.fasta`, dataset.fasta);
       const nextTree = await createTreeArtifact(`${dataset.id}.nwk`, dataset.tree.newick, "editor");
+      const regionalTrees = simulatorTreeSet(dataset);
       setAlignment(nextAlignment);
       setTree(nextTree);
-      setRecombinationTrees(simulatorTreeSet(dataset));
+      setRecombinationTrees(regionalTrees);
+      setRecombinationBundle(regionalTrees === undefined ? undefined : createProjectedRecombinationBundle(regionalTrees, nextAlignment.sites, nextAlignment.taxa));
+      setTreePreviewRegion(undefined);
       if (activeAnalysis?.modelId === "simulator") {
         const simulation = activeAnalysis.result as SimulatorAnalysisResult;
         const datasetIndex = simulation.datasets.findIndex((candidate) => candidate.id === dataset.id);
@@ -518,6 +603,7 @@ export function App() {
         const nextAlignment = await createAlignmentArtifact(`${dataset.id}.fasta`, dataset.fasta);
         const nextTree = await createTreeArtifact(`${dataset.id}.nwk`, dataset.tree.newick, "editor");
         const regionalTrees = simulatorTreeSet(dataset);
+        const regionalBundle = regionalTrees === undefined ? undefined : createProjectedRecombinationBundle(regionalTrees, nextAlignment.sites, nextAlignment.taxa);
         const targetParameters = target.plugin.defaultParameters();
         const output = await batchExecutor.run(nextAlignment.text, nextTree.text, targetParameters, (entry) => {
           if (generation !== runGeneration.current) return;
@@ -530,7 +616,7 @@ export function App() {
         auxiliaryExecutor.current = undefined;
         const id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `analysis-${Date.now()}-${index}`;
         const datasetIndex = simulation.datasets.findIndex((candidate) => candidate.id === dataset.id);
-        const saved: SavedAnalysis = { id, modelId: method, title: `${target.plugin.manifest.shortTitle} · simulated dataset ${Math.max(0, datasetIndex) + 1}`, createdAt: Date.now() + index, parameters: targetParameters, alignment: nextAlignment, tree: nextTree, result: output, ...(regionalTrees === undefined ? {} : { recombinationTrees: regionalTrees }), simulationSource: { simulationAnalysisId, datasetId: dataset.id, datasetIndex: Math.max(0, datasetIndex) } };
+        const saved: SavedAnalysis = { id, modelId: method, title: `${target.plugin.manifest.shortTitle} · simulated dataset ${Math.max(0, datasetIndex) + 1}`, createdAt: Date.now() + index, parameters: targetParameters, alignment: nextAlignment, tree: nextTree, result: output, ...(regionalTrees === undefined ? {} : { recombinationTrees: regionalTrees }), ...(regionalBundle === undefined ? {} : { recombinationBundle: regionalBundle }), simulationSource: { simulationAnalysisId, datasetId: dataset.id, datasetIndex: Math.max(0, datasetIndex) } };
         completed.push(saved);
         await saveAnalysis(saved);
       }
@@ -588,7 +674,7 @@ export function App() {
         <div className="analysis-history">
           <div className="sidebar-heading"><span>Saved analyses</span><strong>{analyses.length}</strong></div>
           {analyses.length === 0 && <p>No completed analyses yet. Results are retained here across method switches and page reloads.</p>}
-          {analyses.map((saved) => <div key={saved.id} className={`analysis-history__item ${saved.id === activeAnalysisId ? "is-active" : ""}`}><button type="button" disabled={runState === "running"} onClick={() => openSavedAnalysis(saved)}><strong>{saved.title}</strong><small>{new Date(saved.createdAt).toLocaleString()} · {saved.modelId === "simulator" ? "generated datasets" : saved.recombinationTrees === undefined ? "single tree" : `${saved.recombinationTrees.segments.length} regional trees`}</small></button><button type="button" className="analysis-history__delete" aria-label={`Delete ${saved.title}`} onClick={() => removeSavedAnalysis(saved)}>×</button></div>)}
+          {analyses.map((saved) => <div key={saved.id} className={`analysis-history__item ${saved.id === activeAnalysisId ? "is-active" : ""}`}><button type="button" disabled={runState === "running"} onClick={() => openSavedAnalysis(saved)}><strong>{saved.title}</strong><small>{new Date(saved.createdAt).toLocaleString()} · {saved.modelId === "simulator" ? "generated datasets" : saved.recombinationTrees === undefined ? "single tree" : `${saved.recombinationTrees.segments.length} ${saved.recombinationBundle?.representation === "spr-history" ? "SPR-derived" : "independent"} regional trees`}</small></button><button type="button" className="analysis-history__delete" aria-label={`Delete ${saved.title}`} onClick={() => removeSavedAnalysis(saved)}>×</button></div>)}
         </div>
       </aside>
 
@@ -649,24 +735,29 @@ export function App() {
           {acceptsTree && <section className={`workflow-card ${tree !== undefined ? "is-complete" : ""}`}>
             <div className="step-number">02</div>
             <div className="workflow-card__heading">
-              <div><h2>Phylogeny</h2><p>Upload or infer a tree</p></div>
+              <div><h2>{supportsRecombinationTrees && recombinationBundle !== undefined ? "Recombination phylogenies" : "Phylogeny"}</h2><p>{supportsRecombinationTrees && recombinationBundle !== undefined ? recombinationModeInfo(recombinationBundle).shortTitle : "Upload or infer a tree"}</p></div>
               {tree !== undefined && <span className="ready-chip">Ready</span>}
             </div>
             {tree === undefined ? (
-              <div className="tree-choices">
-                <label className="tree-choice">
-                  <input type="file" accept=".nwk,.newick,.tree,.tre,.nex,.nexus,.txt" onChange={treeInput} />
-                  <span>↑</span><strong>Upload tree</strong><small>Newick or NEXUS</small>
-                </label>
-                <div className="choice-or">or</div>
-                <div className="tree-choice tree-choice--fasttree">
-                  <span>FT</span><strong>Infer with FastTree</strong><small>GTR+CAT via bioWASM</small>
-                  <label className="compact-toggle"><input type="checkbox" checked={fastTreeFastest} onChange={(event) => setFastTreeFastest(event.target.checked)} /> Fastest mode</label>
-                  <button type="button" className="button button--secondary" disabled={alignment === undefined || fastTreeRunning} onClick={() => void runFastTree()}>
-                    {fastTreeRunning ? "Running FastTree…" : "Run FastTree"}
-                  </button>
+              <div>
+                <div className="tree-choices">
+                  <label className="tree-choice">
+                    <input type="file" accept=".nwk,.newick,.tree,.tre,.nex,.nexus,.txt" onChange={treeInput} />
+                    <span>↑</span><strong>Upload tree</strong><small>Newick or NEXUS</small>
+                  </label>
+                  <div className="choice-or">or</div>
+                  <div className="tree-choice tree-choice--fasttree">
+                    <span>FT</span><strong>Infer with FastTree</strong><small>GTR+CAT via bioWASM</small>
+                    <label className="compact-toggle"><input type="checkbox" checked={fastTreeFastest} onChange={(event) => setFastTreeFastest(event.target.checked)} /> Fastest mode</label>
+                    <button type="button" className="button button--secondary" disabled={alignment === undefined || fastTreeRunning} onClick={() => void runFastTree()}>
+                      {fastTreeRunning ? "Running FastTree…" : "Run FastTree"}
+                    </button>
+                  </div>
                 </div>
+                {supportsRecombinationTrees && <label className={`recombination-import ${alignment === undefined ? "is-disabled" : ""}`}>Use a saved regional tree set <small>FSART-style independent trees or a master + SPR history</small><input type="file" disabled={alignment === undefined} accept=".json,.evo-recomb.json" onChange={recombinationInput} /></label>}
               </div>
+            ) : supportsRecombinationTrees && recombinationBundle !== undefined ? (
+              <RecombinationTreeSummary bundle={recombinationBundle} onPreviewRegion={(index) => void previewRecombinationRegion(index)} onImportFile={(file) => void importRecombinationBundle(file)} onUseSingleTree={useSingleTree} />
             ) : (
               <div className="artifact">
                 <div className="artifact__name"><span>NW</span><div><strong>{tree.name}</strong><small>{tree.source} · {tree.sha256.slice(0, 12)}…</small></div></div>
@@ -677,6 +768,7 @@ export function App() {
                 <div className="artifact__actions">
                   <button type="button" className="button button--secondary" onClick={openTreeTagger}>{requiresForeground ? "View and tag tree" : "View tree"}</button>
                   <label className="button button--quiet">Replace<input type="file" accept=".nwk,.newick,.tree,.tre,.nex,.nexus,.txt" onChange={treeInput} /></label>
+                  {supportsRecombinationTrees && <label className="button button--quiet">Import regional tree set<input type="file" accept=".json,.evo-recomb.json" onChange={recombinationInput} /></label>}
                 </div>
               </div>
             )}
@@ -706,7 +798,7 @@ export function App() {
             <div><p className="eyebrow">{manifest.id === "simulator" ? "Configure and generate" : `${requiresForeground ? "04" : acceptsTree ? "03" : "02"} / Configure and run`}</p><h2>{manifest.title}</h2><p>{manifest.description}</p></div>
             <div className="runtime-choice"><span>Execution</span><strong>{String(parameters.backend ?? selectedModel.runtimeLabel)}</strong><small>{manifest.id === "simulator" ? "Dedicated worker · exact stochastic process · device-local outputs" : manifest.id === "fsart" ? "Parallel informative-triplet workers · local FastTree WASM" : manifest.id === "jemspr" ? "Internal topology/network search · FastTree supplies only a fixed GTR matrix · custom linked ML" : webGpuAvailable ? "Parallel WASM recommended · WebGPU available" : "Parallel WASM available"}</small></div>
           </div>
-          {supportsRecombinationTrees && recombinationTrees !== undefined && <div className="recombination-context"><strong>{recombinationTrees.sourceMethod.toUpperCase()} regional-tree mode</strong><span>{recombinationTrees.segments.length} codon regions · {recombinationTrees.branchLengthSource} · fixed relative branch scales · middle-nucleotide codon assignment</span><button type="button" className="button button--quiet" onClick={() => setRecombinationTrees(undefined)}>Use only the displayed tree</button></div>}
+          {supportsRecombinationTrees && recombinationBundle !== undefined && <RecombinationTreeSummary bundle={recombinationBundle} variant="context" onUseSingleTree={useSingleTree} />}
           {selectedModel.SetupView === undefined ? <><div className="parameter-grid">
             {visibleParameters.map((parameter) => (
               <ParameterControl key={parameter.id} parameter={parameter} value={parameters[parameter.id] ?? parameter.default} onChange={(value) => updateParameter(parameter.id, value)} />
@@ -715,7 +807,7 @@ export function App() {
 
           <div className="validation-strip">
             {requiresAlignment && <div className={alignment !== undefined ? "is-valid" : ""}><span>{alignment !== undefined ? "✓" : "1"}</span>Alignment</div>}
-            {acceptsTree && <div className={tree !== undefined ? "is-valid" : ""}><span>{tree !== undefined ? "✓" : "2"}</span>Tree</div>}
+            {acceptsTree && <div className={tree !== undefined ? "is-valid" : ""}><span>{tree !== undefined ? "✓" : "2"}</span>{supportsRecombinationTrees && recombinationBundle !== undefined ? "Regional trees" : "Tree"}</div>}
             {requiresForeground && <div className={tagReady ? "is-valid" : ""}><span>{tagReady ? "✓" : "3"}</span>Two groups</div>}
             <div className={validation.ready ? "is-valid" : ""}><span>{validation.ready ? "✓" : requiresForeground ? "4" : acceptsTree ? "3" : requiresAlignment ? "2" : "1"}</span>{manifest.id === "simulator" ? "Configuration ready" : "Validated"}</div>
           </div>
@@ -756,7 +848,7 @@ export function App() {
           )}
         </section>
 
-        {activeAnalysis !== undefined && (() => { const resultModel = getRegisteredModel(activeAnalysis.modelId); const ResultView = resultModel.ResultView; const simulationInferenceAnalyses = activeAnalysis.modelId === "simulator" ? analyses.filter((analysis) => analysis.simulationSource?.simulationAnalysisId === activeAnalysis.id) : undefined; return <div ref={resultsRef} className="results-anchor"><div className="saved-result-banner"><span>Viewing saved result</span><strong>{activeAnalysis.title}</strong><small>{new Date(activeAnalysis.createdAt).toLocaleString()}</small></div><ResultView result={activeAnalysis.result} parameters={activeAnalysis.parameters} alignment={activeAnalysis.alignment?.text ?? ""} onLoadRecombinationTrees={(method, treeSet) => void loadRecombinationTrees(method, treeSet)} onLoadSimulatedDataset={(dataset) => loadSimulatedDataset(dataset)} onBatchSimulatedDatasets={(method, datasets, result) => batchSimulatedDatasets(method, datasets, result)} {...(simulationInferenceAnalyses === undefined ? {} : { simulationInferenceAnalyses })} /></div>; })()}
+        {activeAnalysis !== undefined && (() => { const resultModel = getRegisteredModel(activeAnalysis.modelId); const ResultView = resultModel.ResultView; const simulationInferenceAnalyses = activeAnalysis.modelId === "simulator" ? analyses.filter((analysis) => analysis.simulationSource?.simulationAnalysisId === activeAnalysis.id) : undefined; return <div ref={resultsRef} className="results-anchor"><div className="saved-result-banner"><span>Viewing saved result</span><strong>{activeAnalysis.title}</strong><small>{new Date(activeAnalysis.createdAt).toLocaleString()}</small></div><ResultView result={activeAnalysis.result} parameters={activeAnalysis.parameters} alignment={activeAnalysis.alignment?.text ?? ""} onLoadRecombinationTrees={(method, treeSet, bundle) => void loadRecombinationTrees(method, treeSet, bundle)} onLoadSimulatedDataset={(dataset) => loadSimulatedDataset(dataset)} onBatchSimulatedDatasets={(method, datasets, result) => batchSimulatedDatasets(method, datasets, result)} {...(simulationInferenceAnalyses === undefined ? {} : { simulationInferenceAnalyses })} /></div>; })()}
       </main>
 
       {bridges !== undefined && alignment !== undefined && (
@@ -775,13 +867,14 @@ export function App() {
       {bridges !== undefined && tree !== undefined && (
         <WidgetModal
           open={treeOpen}
-          title={requiresForeground ? "Phylogeny viewer and branch tagger" : "Phylogeny viewer"}
-          description={requiresForeground ? "Select branches or clades and assign G1 and G2. DifFUBAR compares those two foreground classes." : `Inspect the phylogeny and branch lengths. ${manifest.shortTitle} uses an untagged tree, so tags are not required.`}
+          title={treePreviewRegion === undefined ? requiresForeground ? "Phylogeny viewer and branch tagger" : "Phylogeny viewer" : `Regional phylogeny ${treePreviewRegion + 1} of ${recombinationBundle?.regionalTrees.length ?? 0}`}
+          description={treePreviewRegion !== undefined && recombinationBundle !== undefined ? `Read-only preview of ${recombinationBundle.regionalTrees[treePreviewRegion]?.id ?? "regional tree"}, nucleotides ${recombinationBundle.regionalTrees[treePreviewRegion]?.startNucleotide ?? "?"}–${recombinationBundle.regionalTrees[treePreviewRegion]?.endNucleotide ?? "?"}. Closing this viewer leaves the complete recombination tree set active.` : requiresForeground ? "Select branches or clades and assign G1 and G2. DifFUBAR compares those two foreground classes." : `Inspect the phylogeny and branch lengths. ${manifest.shortTitle} uses an untagged tree, so tags are not required.`}
           source={`${import.meta.env.BASE_URL}widgets/phylotagger.html`}
           frameRef={treeFrame}
           applyLabel={requiresForeground ? "Apply tagged tree" : "Apply tree"}
           applying={applyingWidget}
-          onCancel={() => setTreeOpen(false)}
+          readOnly={treePreviewRegion !== undefined}
+          onCancel={() => { setTreeOpen(false); setTreePreviewRegion(undefined); }}
           onApply={() => void applyTreeTagger()}
         />
       )}

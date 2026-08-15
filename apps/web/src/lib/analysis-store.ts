@@ -1,6 +1,7 @@
 import type { AlignmentArtifact, TreeArtifact } from "@phylo-workbench/domain";
 import type { ParameterValues } from "@phylo-workbench/model-sdk";
 import type { RecombinationCodonTreeSet } from "@phylo-workbench/model-diffubar/browser-source";
+import type { EvoOnlineRecombinationTreeBundle } from "./recombination-bundle.js";
 
 export interface SavedAnalysis {
   readonly id: string;
@@ -12,6 +13,7 @@ export interface SavedAnalysis {
   readonly tree?: TreeArtifact;
   readonly result: unknown;
   readonly recombinationTrees?: RecombinationCodonTreeSet;
+  readonly recombinationBundle?: EvoOnlineRecombinationTreeBundle;
   readonly simulationSource?: {
     readonly simulationAnalysisId: string;
     readonly datasetId: string;
