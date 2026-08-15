@@ -676,24 +676,27 @@ export function App() {
           <span className="model-card__runtime">DRAG · CONNECT · RERUN</span>
         </button>
         {viewMode === "pipeline" && <div className="pipeline-sidebar-tools">
-          <div className="sidebar-heading"><span>Tree components</span><strong>2</strong></div>
+          <div className="sidebar-heading"><span>Tree components</span><strong>3</strong></div>
           <button type="button" draggable className="model-card" onClick={() => window.dispatchEvent(new CustomEvent(PIPELINE_ADD_EVENT, { detail: { kind: "fasttree" } }))} onDragStart={(event) => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData(PIPELINE_DRAG_TYPE, JSON.stringify({ kind: "fasttree" })); }}>
             <span className="model-card__glyph">FT</span><span><strong>FastTree</strong><small>infer one tree per FASTA</small></span><span className="model-card__runtime">GTR + CAT · BIOWASM</span>
           </button>
           <button type="button" draggable className="model-card" onClick={() => window.dispatchEvent(new CustomEvent(PIPELINE_ADD_EVENT, { detail: { kind: "user-trees" } }))} onDragStart={(event) => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData(PIPELINE_DRAG_TYPE, JSON.stringify({ kind: "user-trees" })); }}>
             <span className="model-card__glyph">NW</span><span><strong>User trees</strong><small>match by filename stem</small></span><span className="model-card__runtime">NEWICK · NEXUS</span>
           </button>
-          <div className="sidebar-heading pipeline-sidebar-tools__methods"><span>Analysis components</span><strong>{modelRegistry.length - 1}</strong></div>
+          <button type="button" draggable className="model-card" onClick={() => window.dispatchEvent(new CustomEvent(PIPELINE_ADD_EVENT, { detail: { kind: "true-tree" } }))} onDragStart={(event) => { event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData(PIPELINE_DRAG_TYPE, JSON.stringify({ kind: "true-tree" })); }}>
+            <span className="model-card__glyph">T✓</span><span><strong>True tree</strong><small>simulator tree or recombination graph</small></span><span className="model-card__runtime">SIMULATION TRUTH</span>
+          </button>
+          <div className="sidebar-heading pipeline-sidebar-tools__methods"><span>Analysis components</span><strong>{modelRegistry.length}</strong></div>
         </div>}
         {modelRegistry.map((registration) => (
           <button
             key={registration.plugin.manifest.id}
             type="button"
             className={`model-card ${viewMode === "analysis" && registration.plugin.manifest.id === selectedModelId ? "is-active" : ""}`}
-            draggable={viewMode === "pipeline" && registration.plugin.manifest.id !== "simulator"}
-            onDragStart={(event) => { if (viewMode !== "pipeline" || registration.plugin.manifest.id === "simulator") return; sidebarDragging.current = true; event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData(PIPELINE_DRAG_TYPE, JSON.stringify({ kind: "model", modelId: registration.plugin.manifest.id })); }}
+            draggable={viewMode === "pipeline"}
+            onDragStart={(event) => { if (viewMode !== "pipeline") return; sidebarDragging.current = true; event.dataTransfer.effectAllowed = "copy"; event.dataTransfer.setData(PIPELINE_DRAG_TYPE, JSON.stringify({ kind: "model", modelId: registration.plugin.manifest.id })); }}
             onDragEnd={() => window.setTimeout(() => { sidebarDragging.current = false; }, 0)}
-            onClick={() => { if (sidebarDragging.current) return; setViewMode("analysis"); setSelectedModelId(registration.plugin.manifest.id); }}
+            onClick={() => { if (sidebarDragging.current) return; if (viewMode === "pipeline") window.dispatchEvent(new CustomEvent(PIPELINE_ADD_EVENT, { detail: { kind: "model", modelId: registration.plugin.manifest.id } })); else { setViewMode("analysis"); setSelectedModelId(registration.plugin.manifest.id); } }}
           >
             <span className="model-card__glyph">{registration.glyph}</span>
             <span><strong>{registration.plugin.manifest.shortTitle}</strong><small>{registration.plugin.manifest.category} analysis</small></span>

@@ -5,9 +5,9 @@ export const PIPELINE_DRAG_TYPE = "application/x-evoonline-pipeline-component";
 export const PIPELINE_ADD_EVENT = "evoonline:add-pipeline-node";
 export const PIPELINE_STORAGE_KEY = "evoonline-pipelines-v1";
 
-export type PipelineNodeKind = "fasttree" | "user-trees" | "model";
-export type PipelineStage = "source" | "selection";
-export type PipelineSourceOutputKind = "inferred-tree" | "user-tree" | "regional-trees";
+export type PipelineNodeKind = "fasttree" | "user-trees" | "true-tree" | "model";
+export type PipelineStage = "input" | "source" | "selection";
+export type PipelineSourceOutputKind = "inferred-tree" | "user-tree" | "regional-trees" | "simulation-truth";
 
 export interface PipelineNode {
   readonly id: string;
@@ -38,16 +38,17 @@ export interface TreeMatch<FileType extends PipelineFileLike = PipelineFileLike>
 const RECOMBINATION_SOURCE_MODELS = new Set(["fsart", "mosaic-spr", "jemspr"]);
 const SELECTION_SOURCE_KINDS: Readonly<Record<string, readonly PipelineSourceOutputKind[]>> = {
   diffubar: ["user-tree"],
-  fubar: ["inferred-tree", "user-tree", "regional-trees"],
-  bsrel: ["inferred-tree", "user-tree"],
-  fame: ["inferred-tree", "user-tree", "regional-trees"],
-  flavor: ["inferred-tree", "user-tree", "regional-trees"],
-  glamma: ["inferred-tree", "user-tree"],
-  "clade-shift": ["inferred-tree", "user-tree"],
+  fubar: ["inferred-tree", "user-tree", "regional-trees", "simulation-truth"],
+  bsrel: ["inferred-tree", "user-tree", "simulation-truth"],
+  fame: ["inferred-tree", "user-tree", "regional-trees", "simulation-truth"],
+  flavor: ["inferred-tree", "user-tree", "regional-trees", "simulation-truth"],
+  glamma: ["inferred-tree", "user-tree", "simulation-truth"],
+  "clade-shift": ["inferred-tree", "user-tree", "simulation-truth"],
 };
 
 export function pipelineNodeStage(node: PipelineNode): PipelineStage | undefined {
-  if (node.kind === "fasttree" || node.kind === "user-trees") return "source";
+  if (node.kind === "model" && node.modelId === "simulator") return "input";
+  if (node.kind === "fasttree" || node.kind === "user-trees" || node.kind === "true-tree") return "source";
   if (node.modelId !== undefined && RECOMBINATION_SOURCE_MODELS.has(node.modelId)) return "source";
   if (node.modelId !== undefined && node.modelId in SELECTION_SOURCE_KINDS) return "selection";
   return undefined;
@@ -56,6 +57,7 @@ export function pipelineNodeStage(node: PipelineNode): PipelineStage | undefined
 export function pipelineSourceOutputKind(node: PipelineNode): PipelineSourceOutputKind | undefined {
   if (node.kind === "fasttree") return "inferred-tree";
   if (node.kind === "user-trees") return "user-tree";
+  if (node.kind === "true-tree") return "simulation-truth";
   return node.modelId !== undefined && RECOMBINATION_SOURCE_MODELS.has(node.modelId) ? "regional-trees" : undefined;
 }
 
@@ -77,8 +79,8 @@ export function sortPipelineNodes(nodes: readonly PipelineNode[]): readonly Pipe
   return nodes
     .map((node, index) => ({ node, index, stage: pipelineNodeStage(node) }))
     .sort((left, right) => {
-      const leftRank = left.stage === "source" ? 0 : left.stage === "selection" ? 1 : 2;
-      const rightRank = right.stage === "source" ? 0 : right.stage === "selection" ? 1 : 2;
+      const leftRank = left.stage === "input" ? 0 : left.stage === "source" ? 1 : left.stage === "selection" ? 2 : 3;
+      const rightRank = right.stage === "input" ? 0 : right.stage === "source" ? 1 : right.stage === "selection" ? 2 : 3;
       return leftRank - rightRank || left.index - right.index;
     })
     .map(({ node }) => node);
@@ -139,7 +141,7 @@ export function parsePipelineDefinition(text: string): PipelineDefinition {
     throw new Error("This is not an EvoOnline pipeline definition (schema version 1).");
   }
   const nodes: PipelineNode[] = parsed.nodes.map((value, index) => {
-    if (!record(value) || typeof value.id !== "string" || !["fasttree", "user-trees", "model"].includes(String(value.kind)) || !parameterValues(value.parameters)) {
+    if (!record(value) || typeof value.id !== "string" || !["fasttree", "user-trees", "true-tree", "model"].includes(String(value.kind)) || !parameterValues(value.parameters)) {
       throw new Error(`Pipeline component ${index + 1} is invalid.`);
     }
     if (value.kind === "model" && typeof value.modelId !== "string") throw new Error(`Pipeline component ${index + 1} has no method identifier.`);

@@ -152,7 +152,7 @@ export function PipelineComparisonStudio({ records }: PipelineComparisonStudioPr
 
   return <section className="pipeline-comparison-studio" aria-labelledby="pipeline-comparison-heading">
     <div className="pipeline-comparison-studio__heading">
-      <div><p className="eyebrow">Cross-method results</p><h2 id="pipeline-comparison-heading">Aggregate table &amp; plotting studio</h2><p>Codon signals can be compared across every method × source route for one alignment; each column retains its source label. Branch comparisons remain source-specific because different trees do not share a reliable branch identity. Missing values use pairwise-complete rows.</p></div>
+      <div><p className="eyebrow">Cross-method results</p><h2 id="pipeline-comparison-heading">Aggregate table &amp; plotting studio</h2><p>Codon signals can be compared across every method × source route for one alignment; each column retains its source label. {records.some((record) => record.simulationDataset !== undefined) && "Exact simulator parameters, selection states, breakpoints, hotspot weights, and local-tree assignments appear as Truth signals. "}Branch comparisons remain source-specific because different trees do not share a reliable branch identity. Missing values use pairwise-complete rows.</p></div>
       <button type="button" className="button button--secondary" disabled={tableSignals.length === 0} onClick={downloadTable}>Download aggregate CSV</button>
     </div>
 

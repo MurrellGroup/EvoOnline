@@ -163,3 +163,42 @@ test("DifFUBAR labels marginal-mean dN proxies without claiming a joint expectat
   assert.equal(signal?.provenance, "derived");
   assert.match(signal?.description ?? "", /not E\[αω₂\]/u);
 });
+
+test("Simulator truth contributes exact rate and recombination quantities to every source-route table", () => {
+  const truth: PipelineComparisonRecord = {
+    analysis: analysis("simulator-run", "simulator", { method: "simulator" }, {}),
+    datasetName: "simulated-dataset-1.fasta",
+    sourceNodeId: "simulation-ground-truth",
+    sourceLabel: "Simulation truth",
+    methodNodeId: "truth-dataset-1",
+    methodLabel: "Truth",
+    simulationDataset: {
+      id: "dataset-1",
+      seed: 4,
+      tree: {} as never,
+      localTrees: [
+        { startCodon: 1, endCodon: 1, tree: {} as never, activeEventIds: [] },
+        { startCodon: 2, endCodon: 2, tree: {} as never, activeEventIds: [7] },
+      ],
+      recombinationEvents: [{ id: 7, age: 1, recipientBranch: 1, donorBranch: 2, intervals: [{ startCodon: 2, endCodon: 2 }], breakpoints: [1], visibleAfterSubsampling: true }],
+      hotspotWeights: [3],
+      names: ["A", "B"],
+      siteParameters: { alpha: [2, 4], omega: [0.5, 2] },
+      diagnostics: { treeHeight: 1, totalTreeLength: 2, carrierTips: 2, observedTips: 2, recombinationEvents: 1, localTrees: 2 },
+    },
+  };
+  const signals = extractComparisonSignals(truth);
+  const values = (metricId: string) => signals.find((signal) => signal.metricId === metricId)?.values.map((entry) => entry.value);
+  assert.deepEqual(values("true-dn"), [1, 8]);
+  assert.deepEqual(values("true-log-rate-ratio")?.map((value) => Math.round(value * 1e6) / 1e6), [Math.round(Math.log(0.5) * 1e6) / 1e6, Math.round(Math.log(2) * 1e6) / 1e6]);
+  assert.deepEqual(values("true-breakpoint"), [1, 0]);
+  assert.deepEqual(values("true-active-events"), [0, 1]);
+
+  const selectionResult = { sites: [{ site: 1, pPositive: 0.2, pPurifying: 0.8 }, { site: 2, pPositive: 0.9, pPurifying: 0.1 }] };
+  const sourceA = { ...record(analysis("fubar-truth-a", "fubar", selectionResult, { posteriorThreshold: 0.95 }), "source-a"), datasetName: truth.datasetName };
+  const sourceB = { ...record(analysis("fubar-truth-b", "fubar", selectionResult, { posteriorThreshold: 0.95 }), "source-b"), datasetName: truth.datasetName };
+  const groups = groupPipelineComparisons([truth, sourceA, sourceB]);
+  assert.equal(groups.length, 3);
+  assert.ok(groups.every((group) => group.records.includes(truth)));
+  assert.ok(groups.filter((group) => !group.allSources).every((group) => group.records.length === 2));
+});

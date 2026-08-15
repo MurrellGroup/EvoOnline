@@ -2,6 +2,7 @@ import type { RecombinationCodonTreeSet } from "@phylo-workbench/model-diffubar/
 import type { FsartAnalysisResult } from "@phylo-workbench/model-fsart/browser-source";
 import type { JemsprAnalysisResult } from "@phylo-workbench/model-jemspr/browser-source";
 import type { MosaicSprAnalysisResult } from "@phylo-workbench/model-mosaicspr/browser-source";
+import type { SimulatedDataset } from "@phylo-workbench/model-simulator/browser-source";
 
 export const RECOMBINATION_TREE_BUNDLE_FORMAT = "evoonline-recombination-tree-bundle" as const;
 
@@ -206,6 +207,41 @@ export function createMosaicSprRecombinationBundle(
     derivations: reconstruction.derivations,
     searchCertificate: reconstruction.certificate,
   }, result.taxa);
+}
+
+/** Preserve the simulator's actual local-tree history instead of presenting it as inferred regional trees. */
+export function createSimulationTruthRecombinationBundle(
+  dataset: SimulatedDataset,
+  treeSet: RecombinationCodonTreeSet,
+  nucleotideSites: number,
+  taxa?: number,
+): EvoOnlineRecombinationTreeBundle {
+  return baseBundle(treeSet, nucleotideSites, "spr-history", {
+    kind: "spr-history",
+    interpretation: "master-tree-plus-spr-events",
+    sprModel: "rooted-switching-network",
+    masterTree: dataset.carrierTree?.newick ?? dataset.tree.newick,
+    eventOccurrences: dataset.recombinationEvents,
+    breakpointEvents: dataset.recombinationEvents.flatMap((event) => event.breakpoints.map((afterCodon) => ({
+      eventId: event.id,
+      afterCodon,
+      visibleAfterSubsampling: event.visibleAfterSubsampling,
+    }))),
+    switchingNetwork: {
+      carrierTree: dataset.carrierTree,
+      observedTree: dataset.tree,
+      localTrees: dataset.localTrees,
+      recombinationEvents: dataset.recombinationEvents,
+    },
+    states: dataset.localTrees.map((region, index) => ({
+      id: `truth-${index + 1}`,
+      startCodon: region.startCodon,
+      endCodon: region.endCodon,
+      tree: region.tree.newick,
+      activeEventIds: region.activeEventIds,
+    })),
+    note: "Exact simulator truth: the carrier genealogy, sampled recombination events, and resulting local trees are retained with this route.",
+  }, taxa);
 }
 
 /** Fallback for old saved analyses that predate portable history bundles. */

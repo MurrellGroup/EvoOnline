@@ -10,6 +10,11 @@ import type { RecombinationCodonTreeSet } from "@phylo-workbench/model-diffubar/
 import type { FsartAnalysisResult } from "@phylo-workbench/model-fsart/browser-source";
 import type { MosaicSprAnalysisResult } from "@phylo-workbench/model-mosaicspr/browser-source";
 import type { JemsprAnalysisResult } from "@phylo-workbench/model-jemspr/browser-source";
+import {
+  decodeSimulatorConfig,
+  type SimulatedDataset,
+  type SimulatorAnalysisResult,
+} from "@phylo-workbench/model-simulator/browser-source";
 import type { WidgetBridge } from "@phylo-workbench/viewer-bridge";
 import {
   getRegisteredModel,
@@ -18,6 +23,7 @@ import {
   type BrowserModelExecutor,
 } from "../model-registry.js";
 import { PipelineComparisonStudio } from "./PipelineComparisonStudio.js";
+import { SimulatorSetup } from "./simulator/SimulatorSetup.js";
 import { saveAnalysis, type SavedAnalysis } from "../lib/analysis-store.js";
 import { downloadText } from "../lib/file-download.js";
 import type { PipelineComparisonRecord } from "../lib/pipeline-comparison.js";
@@ -25,6 +31,7 @@ import {
   createFsartRecombinationBundle,
   createJemsprRecombinationBundle,
   createMosaicSprRecombinationBundle,
+  createSimulationTruthRecombinationBundle,
   type EvoOnlineRecombinationTreeBundle,
 } from "../lib/recombination-bundle.js";
 import {
@@ -122,8 +129,9 @@ function normalizeDefinition(definition: PipelineDefinition): PipelineDefinition
   const nodes = definition.nodes.map((node): PipelineNode => {
     if (node.kind === "fasttree") return { id: node.id, kind: node.kind, parameters: { model: "gtr", fastest: false, ...node.parameters } };
     if (node.kind === "user-trees") return { id: node.id, kind: node.kind, parameters: {} };
+    if (node.kind === "true-tree") return { id: node.id, kind: node.kind, parameters: {} };
     const registration = modelForNode(node);
-    if (registration === undefined || registration.plugin.manifest.id === "simulator") {
+    if (registration === undefined) {
       throw new Error(`Pipeline method '${node.modelId ?? "unknown"}' is not available.`);
     }
     return { id: node.id, kind: "model", modelId: registration.plugin.manifest.id, parameters: { ...registration.plugin.defaultParameters(), ...node.parameters } };
@@ -137,15 +145,16 @@ function normalizeDefinition(definition: PipelineDefinition): PipelineDefinition
 function newNode(kind: PipelineNodeKind, modelId?: string): PipelineNode {
   if (kind === "fasttree") return { id: createPipelineId("component"), kind, parameters: { model: "gtr", fastest: false } };
   if (kind === "user-trees") return { id: createPipelineId("component"), kind, parameters: {} };
+  if (kind === "true-tree") return { id: createPipelineId("component"), kind, parameters: {} };
   if (modelId === undefined) throw new Error("No analysis method was supplied.");
   const registration = getRegisteredModel(modelId);
-  if (registration.plugin.manifest.id === "simulator") throw new Error("The simulator starts from generated data and cannot follow a pipeline upload.");
   return { id: createPipelineId("component"), kind, modelId, parameters: registration.plugin.defaultParameters() };
 }
 
 function nodeTitle(node: PipelineNode): string {
   if (node.kind === "fasttree") return "FastTree";
   if (node.kind === "user-trees") return "User trees";
+  if (node.kind === "true-tree") return "True tree";
   return modelForNode(node)?.plugin.manifest.shortTitle ?? node.modelId ?? "Unavailable method";
 }
 
@@ -158,19 +167,23 @@ function nodeInstanceLabel(node: PipelineNode, peers: readonly PipelineNode[]): 
 function nodeGlyph(node: PipelineNode): string {
   if (node.kind === "fasttree") return "FT";
   if (node.kind === "user-trees") return "NW";
+  if (node.kind === "true-tree") return "T✓";
   return modelForNode(node)?.glyph ?? "?";
 }
 
 function nodeCategory(node: PipelineNode): string {
   if (node.kind === "fasttree") return "tree inference";
   if (node.kind === "user-trees") return "filename matching";
+  if (node.kind === "true-tree") return "simulation truth";
+  if (node.modelId === "simulator") return "generated data input";
   return `${modelForNode(node)?.plugin.manifest.category ?? "analysis"} method`;
 }
 
 function sourceKindLabel(kind: PipelineSourceOutputKind): string {
   if (kind === "inferred-tree") return "inferred tree";
   if (kind === "user-tree") return "matched user tree";
-  return "regional tree set";
+  if (kind === "regional-trees") return "regional tree set";
+  return "true tree / recombination graph";
 }
 
 function acceptedSourceLabel(node: PipelineNode): string {
@@ -179,15 +192,36 @@ function acceptedSourceLabel(node: PipelineNode): string {
   return kinds.map(sourceKindLabel).join(", ");
 }
 
+function simulatorRecombinationEnabled(nodes: readonly PipelineNode[]): boolean {
+  const simulator = nodes.find((node) => node.modelId === "simulator");
+  return simulator !== undefined && decodeSimulatorConfig(simulator.parameters.simulatorConfig).recombination.enabled;
+}
+
+function compatibleSourcesForPipeline(target: PipelineNode, nodes: readonly PipelineNode[]): readonly PipelineNode[] {
+  const sources = nodes.filter((node) => pipelineNodeStage(node) === "source");
+  const compatible = compatiblePipelineSources(target, sources);
+  if (!simulatorRecombinationEnabled(nodes)) return compatible;
+  return compatible.filter((source) => source.kind !== "true-tree" || pipelineAcceptedSourceKinds(target).includes("regional-trees"));
+}
+
 function topologyIssuesForNodes(nodes: readonly PipelineNode[]): readonly string[] {
   const issues: string[] = [];
+  const simulators = nodes.filter((node) => node.modelId === "simulator");
+  const trueTrees = nodes.filter((node) => node.kind === "true-tree");
   const sources = nodes.filter((node) => pipelineNodeStage(node) === "source");
+  if (simulators.length > 1) issues.push("A pipeline can contain only one Simulator input.");
+  if (trueTrees.length > 1) issues.push("A pipeline can contain only one True tree source.");
+  if (trueTrees.length > 0 && simulators.length === 0) issues.push("True tree can only be placed after a Simulator input.");
+  if (simulators.length > 0 && nodes.some((node) => node.kind === "user-trees")) issues.push("User trees cannot be matched in a Simulator pipeline; use True tree for simulator truth.");
   for (const node of nodes) {
     const stage = pipelineNodeStage(node);
     if (stage === undefined) {
       issues.push(`${nodeTitle(node)} has no declared pipeline input/output contract.`);
-    } else if (stage === "selection" && compatiblePipelineSources(node, sources).length === 0) {
-      issues.push(`${nodeTitle(node)} cannot be placed: no source produces its required ${acceptedSourceLabel(node)} input.`);
+    } else if (stage === "selection" && compatibleSourcesForPipeline(node, nodes).length === 0) {
+      const trueGraphIsOnlyStaticRoute = simulatorRecombinationEnabled(nodes) && sources.some((source) => source.kind === "true-tree" && compatiblePipelineSources(node, [source]).length > 0);
+      issues.push(trueGraphIsOnlyStaticRoute
+        ? `${nodeTitle(node)} cannot consume a true recombination graph. Add a compatible inferred single-tree source, or use a regional-tree-aware selection method.`
+        : `${nodeTitle(node)} cannot be placed: no source produces its required ${acceptedSourceLabel(node)} input.`);
     }
   }
   return [...new Set(issues)];
@@ -280,6 +314,25 @@ function recombinationOutput(modelId: string, result: unknown, alignment: Alignm
   return undefined;
 }
 
+function simulatorTruthTreeSet(dataset: SimulatedDataset, codonSites: number): RecombinationCodonTreeSet {
+  const regions = dataset.localTrees.length > 0
+    ? dataset.localTrees
+    : [{ startCodon: 1, endCodon: codonSites, tree: dataset.tree, activeEventIds: [] }];
+  return {
+    schemaVersion: 1,
+    sourceMethod: "simulation-truth",
+    branchLengthSource: "method-final-trees",
+    branchScalePolicy: "fixed-relative",
+    codonAssignment: "middle-nucleotide",
+    segments: regions.map((region) => ({
+      startCodon: region.startCodon,
+      endCodon: region.endCodon,
+      tree: region.tree.newick,
+      label: `True local tree ${region.startCodon}–${region.endCodon}`,
+    })),
+  };
+}
+
 function storedPipelines(): readonly PipelineDefinition[] {
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(PIPELINE_STORAGE_KEY) ?? "[]");
@@ -346,14 +399,17 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
   const treeFiles = useMemo(() => files.filter(isPipelineTreeFile), [files]);
   const ignoredFiles = files.length - alignmentFiles.length - treeFiles.length;
   const selectedNode = definition.nodes.find((node) => node.id === selectedNodeId);
+  const simulatorNode = useMemo(() => definition.nodes.find((node) => pipelineNodeStage(node) === "input"), [definition.nodes]);
   const sourceNodes = useMemo(() => definition.nodes.filter((node) => pipelineNodeStage(node) === "source"), [definition.nodes]);
   const selectionNodes = useMemo(() => definition.nodes.filter((node) => pipelineNodeStage(node) === "selection"), [definition.nodes]);
   const usesUserTrees = sourceNodes.some((node) => node.kind === "user-trees");
+  const simulatedDatasetCount = simulatorNode === undefined ? undefined : decodeSimulatorConfig(simulatorNode.parameters.simulatorConfig).tree.replicates;
 
   const pipelineIssues = useMemo(() => {
     const issues: string[] = [];
-    if (alignmentFiles.length === 0) issues.push("Add at least one FASTA alignment.");
-    if (!definition.nodes.some((node) => node.kind === "model")) issues.push("Add at least one analysis method.");
+    if (simulatorNode === undefined && alignmentFiles.length === 0) issues.push("Add at least one FASTA alignment or use Simulator as the input.");
+    if (simulatorNode !== undefined && !decodeSimulatorConfig(simulatorNode.parameters.simulatorConfig).simulateAlignment) issues.push("Pipeline analysis requires Simulator → Simulate alignments to be enabled.");
+    if (!definition.nodes.some((node) => node.kind === "model" && node.modelId !== "simulator")) issues.push("Add at least one analysis method after the input.");
     for (const node of definition.nodes) {
       if (node.kind !== "model") continue;
       const registration = modelForNode(node);
@@ -362,7 +418,7 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
     issues.push(...topologyIssuesForNodes(definition.nodes));
     if (definition.nodes.some((node) => node.kind === "fasttree") && alignmentBridge === undefined) issues.push("The local FastTree runtime is still loading.");
     return [...new Set(issues)];
-  }, [alignmentBridge, alignmentFiles.length, definition.nodes]);
+  }, [alignmentBridge, alignmentFiles.length, definition.nodes, simulatorNode]);
 
   const updateDefinition = (updater: (current: PipelineDefinition) => PipelineDefinition): void => {
     setDefinition((current) => updater(current));
@@ -396,30 +452,33 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
 
   const addPipelineNode = (kind: PipelineNodeKind, modelId?: string): void => {
     try {
-      if (kind !== "model") {
-        const existing = definition.nodes.find((node) => node.kind === kind);
+      if (kind !== "model" || modelId === "simulator") {
+        const existing = kind === "model" ? undefined : definition.nodes.find((node) => node.kind === kind);
+        const existingSimulator = modelId === "simulator" ? definition.nodes.find((node) => node.modelId === "simulator") : undefined;
+        if (existingSimulator !== undefined) { setSelectedNodeId(existingSimulator.id); setNotice({ tone: "info", text: "Simulator is already the input for this pipeline." }); return; }
         if (existing !== undefined) { setSelectedNodeId(existing.id); setNotice({ tone: "info", text: `${nodeTitle(existing)} is already in this pipeline.` }); return; }
       }
       const node = newNode(kind, modelId);
       const stage = pipelineNodeStage(node);
       if (stage === undefined) throw new Error(`${nodeTitle(node)} has no declared pipeline input/output contract and cannot be placed.`);
-      const sources = definition.nodes.filter((candidate) => pipelineNodeStage(candidate) === "source");
-      const compatibleSources = compatiblePipelineSources(node, sources);
-      if (stage === "selection" && compatibleSources.length === 0) {
-        throw new Error(`${nodeTitle(node)} cannot be placed: add a source that produces ${acceptedSourceLabel(node)} first.`);
-      }
+      const prospectiveNodes = sortPipelineNodes([...definition.nodes, node]);
+      const compatibleSources = compatibleSourcesForPipeline(node, prospectiveNodes);
+      const prospectiveIssues = topologyIssuesForNodes(prospectiveNodes);
+      if (prospectiveIssues.length > 0) throw new Error(prospectiveIssues.join(" "));
       const connectedSelections = stage === "source"
-        ? definition.nodes.filter((candidate) => pipelineNodeStage(candidate) === "selection" && compatiblePipelineSources(candidate, [node]).length > 0)
+        ? definition.nodes.filter((candidate) => pipelineNodeStage(candidate) === "selection" && compatibleSourcesForPipeline(candidate, prospectiveNodes).some((source) => source.id === node.id))
         : [];
       updateDefinition((current) => ({ ...current, nodes: sortPipelineNodes([...current.nodes, node]) }));
       setComparisonRecords([]);
       setSelectedNodeId(node.id);
       const route = stage === "selection"
         ? ` It receives ${compatibleSources.map(nodeTitle).join(", ")} output${compatibleSources.length === 1 ? "" : "s"}.`
+        : stage === "input"
+          ? " It replaces Data upload and generates every replicate with retained ground truth."
         : connectedSelections.length > 0
           ? ` It also feeds ${connectedSelections.map(nodeTitle).join(", ")}.`
-          : " It reads each uploaded alignment directly.";
-      setNotice({ tone: "success", text: `${nodeTitle(node)} added to the ${stage === "source" ? "source" : "selection"} stage.${route}` });
+          : ` It reads each ${definition.nodes.some((candidate) => candidate.modelId === "simulator") || node.modelId === "simulator" ? "generated" : "uploaded"} alignment directly.`;
+      setNotice({ tone: "success", text: `${nodeTitle(node)} added to the ${stage === "input" ? "input" : stage === "source" ? "source" : "selection"} stage.${route}` });
     } catch (error) {
       setNotice({ tone: "error", text: error instanceof Error ? error.message : String(error) });
     }
@@ -428,7 +487,7 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
   useEffect(() => {
     const addFromSidebar = (event: Event): void => {
       const detail = (event as CustomEvent<{ readonly kind?: PipelineNodeKind; readonly modelId?: string }>).detail;
-      if (detail?.kind === "fasttree" || detail?.kind === "user-trees" || detail?.kind === "model") addPipelineNode(detail.kind, detail.modelId);
+      if (detail?.kind === "fasttree" || detail?.kind === "user-trees" || detail?.kind === "true-tree" || detail?.kind === "model") addPipelineNode(detail.kind, detail.modelId);
     };
     window.addEventListener(PIPELINE_ADD_EVENT, addFromSidebar);
     return () => window.removeEventListener(PIPELINE_ADD_EVENT, addFromSidebar);
@@ -440,7 +499,7 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
     if (raw.length === 0) return;
     try {
       const payload = JSON.parse(raw) as { readonly kind?: PipelineNodeKind; readonly modelId?: string };
-      if (payload.kind === "fasttree" || payload.kind === "user-trees" || payload.kind === "model") addPipelineNode(payload.kind, payload.modelId);
+      if (payload.kind === "fasttree" || payload.kind === "user-trees" || payload.kind === "true-tree" || payload.kind === "model") addPipelineNode(payload.kind, payload.modelId);
     } catch {
       setNotice({ tone: "error", text: "That pipeline component could not be added." });
     }
@@ -465,6 +524,14 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
     updateDefinition((current) => ({
       ...current,
       nodes: current.nodes.map((node) => node.id === nodeId ? { ...node, parameters: { ...node.parameters, [parameterId]: value } } : node),
+    }));
+    setComparisonRecords([]);
+  };
+
+  const updateNodeParameters = (nodeId: string, parameters: ParameterValues): void => {
+    updateDefinition((current) => ({
+      ...current,
+      nodes: current.nodes.map((node) => node.id === nodeId ? { ...node, parameters } : node),
     }));
     setComparisonRecords([]);
   };
@@ -549,10 +616,11 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
     if (pipelineIssues.length > 0) return;
     const generation = ++runGeneration.current;
     const normalized = normalizeDefinition(definition);
+    const normalizedSimulator = normalized.nodes.find((node) => pipelineNodeStage(node) === "input");
     const normalizedSources = normalized.nodes.filter((node) => pipelineNodeStage(node) === "source");
     const normalizedSelections = normalized.nodes.filter((node) => pipelineNodeStage(node) === "selection");
-    const selectionRouteCount = normalizedSelections.reduce((total, selection) => total + compatiblePipelineSources(selection, normalizedSources).length, 0);
-    const matched = matchPipelineTrees(files) as readonly TreeMatch<File>[];
+    const selectionRouteCount = normalizedSelections.reduce((total, selection) => total + compatibleSourcesForPipeline(selection, normalized.nodes).length, 0);
+    let matched: readonly TreeMatch<File>[] = normalizedSimulator === undefined ? matchPipelineTrees(files) as readonly TreeMatch<File>[] : [];
     const report = usesUserTrees ? matched.map((match): PairingReportRow => ({
       alignment: pipelineFilePath(match.alignment),
       status: match.status,
@@ -564,9 +632,13 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
     setRunLog([]);
     setComparisonRecords([]);
     setProgress(0);
-    setProgressLabel("Input manifest ready");
+    setProgressLabel(normalizedSimulator === undefined ? "Input manifest ready" : "Simulator ready");
     setRunState("running");
-    setNotice({ tone: "info", text: usesUserTrees ? `Input pairing report created for all ${matched.length} alignment${matched.length === 1 ? "" : "s"}. Analysis will start from exactly these matches and follow only compatible source routes.` : `Input manifest created for ${matched.length} alignment${matched.length === 1 ? "" : "s"}; only compatible source routes will run.` });
+    setNotice({ tone: "info", text: normalizedSimulator !== undefined
+      ? `Simulator will generate ${decodeSimulatorConfig(normalizedSimulator.parameters.simulatorConfig).tree.replicates} dataset${decodeSimulatorConfig(normalizedSimulator.parameters.simulatorConfig).tree.replicates === 1 ? "" : "s"}. True tree and every inferred source will run as independent, parallel routes.`
+      : usesUserTrees
+        ? `Input pairing report created for all ${matched.length} alignment${matched.length === 1 ? "" : "s"}. Analysis will start from exactly these matches and follow only compatible source routes.`
+        : `Input manifest created for ${matched.length} alignment${matched.length === 1 ? "" : "s"}; only compatible source routes will run.` });
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
     const completed: SavedAnalysis[] = [];
@@ -574,24 +646,96 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
     let failedDatasets = 0;
     let finishedSteps = 0;
     const stepsPerDataset = normalizedSources.length + selectionRouteCount;
-    const totalSteps = Math.max(1, matched.length * stepsPerDataset);
+    let simulatorResult: SimulatorAnalysisResult | undefined;
+    let simulatorAnalysis: SavedAnalysis | undefined;
+    let totalSteps = Math.max(1, matched.length * stepsPerDataset);
+    if (normalizedSimulator !== undefined) {
+      const registration = modelForNode(normalizedSimulator);
+      if (registration === undefined) {
+        setRunState("idle");
+        setNotice({ tone: "error", text: "Simulator is not registered." });
+        return;
+      }
+      const expectedDatasets = decodeSimulatorConfig(normalizedSimulator.parameters.simulatorConfig).tree.replicates;
+      totalSteps = Math.max(1, 1 + expectedDatasets * stepsPerDataset);
+      setProgressLabel("Simulator · generating alignments and truth");
+      appendLog({ dataset: "Pipeline input", component: "Simulator", tone: "running", detail: `Generating ${expectedDatasets} reproducible dataset${expectedDatasets === 1 ? "" : "s"}` });
+      const executor = registration.createExecutor(executorServices);
+      activeExecutor.current = executor;
+      try {
+        simulatorResult = await executor.run("", "", normalizedSimulator.parameters, (entry) => {
+          if (generation !== runGeneration.current) return;
+          const fraction = Math.max(0, Math.min(1, entry.fraction));
+          setProgress(fraction / totalSteps);
+          setProgressLabel(`Simulator · ${entry.message ?? entry.stage}`);
+        }) as SimulatorAnalysisResult;
+        const analysisId = createAnalysisId();
+        simulatorAnalysis = {
+          id: analysisId,
+          modelId: "simulator",
+          title: `Simulator · ${normalized.name}`,
+          createdAt: Date.now(),
+          parameters: { ...normalizedSimulator.parameters },
+          result: simulatorResult,
+        };
+        await saveAnalysis(simulatorAnalysis);
+        completed.push(simulatorAnalysis);
+        matched = simulatorResult.datasets.map((dataset, index): TreeMatch<File> => {
+          if (dataset.fasta === undefined) throw new Error(`Simulated dataset ${index + 1} did not contain an alignment.`);
+          const alignmentFile = new File([dataset.fasta], `simulated-dataset-${index + 1}.fasta`, { type: "text/plain", lastModified: Date.now() + index });
+          return { alignment: alignmentFile, candidates: [], status: "missing" };
+        });
+        finishedSteps = 1;
+        totalSteps = Math.max(1, 1 + matched.length * stepsPerDataset);
+        setProgress(finishedSteps / totalSteps);
+        appendLog({ dataset: "Pipeline input", component: "Simulator", tone: "complete", detail: `${matched.length} alignment${matched.length === 1 ? "" : "s"} generated with exact parameter, tree, and recombination truth retained` });
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setRunState("idle");
+        setProgressLabel("Simulator failed");
+        appendLog({ dataset: "Pipeline input", component: "Simulator", tone: "error", detail: error instanceof Error ? error.message : String(error) });
+        setNotice({ tone: "error", text: `Simulator could not create the pipeline input: ${error instanceof Error ? error.message : String(error)}` });
+        return;
+      } finally {
+        executor.dispose();
+        if (activeExecutor.current === executor) activeExecutor.current = undefined;
+      }
+    }
     for (let datasetIndex = 0; datasetIndex < matched.length; datasetIndex += 1) {
       if (generation !== runGeneration.current) break;
       const match = matched[datasetIndex]!;
       const datasetName = pipelineFilePath(match.alignment);
+      const simulationDataset = simulatorResult?.datasets[datasetIndex];
+      const simulationSource = simulatorAnalysis === undefined || simulationDataset === undefined ? undefined : {
+        simulationAnalysisId: simulatorAnalysis.id,
+        datasetId: simulationDataset.id,
+        datasetIndex,
+      };
       let datasetFailed = false;
       let alignment: AlignmentArtifact;
       try {
         setProgressLabel(`Reading ${datasetName}`);
         alignment = await createAlignmentArtifact(datasetName, await readPipelineFile(match.alignment));
-        appendLog({ dataset: datasetName, component: "Data upload", tone: "complete", detail: `${alignment.taxa} taxa · ${alignment.sites.toLocaleString()} sites` });
+        appendLog({ dataset: datasetName, component: normalizedSimulator === undefined ? "Data upload" : "Simulator", tone: "complete", detail: `${alignment.taxa} taxa · ${alignment.sites.toLocaleString()} sites` });
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") break;
         failedDatasets += 1;
         finishedSteps += stepsPerDataset;
         setProgress(finishedSteps / totalSteps);
-        appendLog({ dataset: datasetName, component: "Data upload", tone: "error", detail: error instanceof Error ? error.message : String(error) });
+        appendLog({ dataset: datasetName, component: normalizedSimulator === undefined ? "Data upload" : "Simulator", tone: "error", detail: error instanceof Error ? error.message : String(error) });
         continue;
+      }
+
+      if (simulatorAnalysis !== undefined && simulationDataset !== undefined) {
+        completedComparisons.push({
+          analysis: simulatorAnalysis,
+          datasetName,
+          sourceNodeId: "simulation-ground-truth",
+          sourceLabel: "Simulation truth",
+          methodNodeId: `truth-${simulationDataset.id}`,
+          methodLabel: "Truth",
+          simulationDataset,
+        });
       }
 
       const products = new Map<string, PipelineSourceProduct>();
@@ -602,11 +746,26 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
         const baseProgress = finishedSteps / totalSteps;
         setProgress(baseProgress);
         setProgressLabel(`${datasetName} · ${title}`);
-        appendLog({ dataset: datasetName, component: title, tone: "running", detail: "Source branch started from Data upload" });
+        appendLog({ dataset: datasetName, component: title, tone: "running", detail: `Source branch started from ${normalizedSimulator === undefined ? "Data upload" : "Simulator"}` });
         try {
           if (outputKind === undefined) throw new Error(`${title} has no declared source output.`);
           let product: PipelineSourceProduct;
-          if (node.kind === "user-trees") {
+          if (node.kind === "true-tree") {
+            if (simulationDataset === undefined) throw new Error("True tree requires a Simulator input.");
+            const treeSet = simulatorTruthTreeSet(simulationDataset, Math.floor(alignment.sites / 3));
+            const representative = treeSet.segments[0];
+            if (representative === undefined) throw new Error("The simulator produced no true genealogy.");
+            const tree = await createTreeArtifact(`${datasetName.replace(/\.[^.]+$/u, "")}.true-tree.nwk`, representative.tree, "editor");
+            const bundle = createSimulationTruthRecombinationBundle(simulationDataset, treeSet, alignment.sites, alignment.taxa);
+            product = {
+              node,
+              outputKind,
+              tree,
+              ...(treeSet.segments.length <= 1 ? {} : { recombinationTrees: treeSet }),
+              recombinationBundle: bundle,
+            };
+            appendLog({ dataset: datasetName, component: title, tone: "complete", detail: treeSet.segments.length <= 1 ? "Exact simulated tree" : `Exact simulated recombination graph · ${treeSet.segments.length} local trees` });
+          } else if (node.kind === "user-trees") {
             if (match.status === "missing") throw new Error(`No tree filename matches ${datasetName} after removing extensions.`);
             if (match.status === "ambiguous") throw new Error(`More than one tree matches ${datasetName}: ${match.candidates.map(pipelineFilePath).join(", ")}.`);
             if (match.tree === undefined) throw new Error(`The matched tree for ${datasetName} is unavailable.`);
@@ -660,6 +819,7 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
               alignment,
               result,
               ...(regional === undefined ? {} : { recombinationTrees: regional.treeSet, recombinationBundle: regional.bundle }),
+              ...(simulationSource === undefined ? {} : { simulationSource }),
             };
             await saveAnalysis(saved);
             completed.push(saved);
@@ -685,7 +845,7 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
       }
 
       for (const node of normalizedSelections) {
-        const routes = compatiblePipelineSources(node, normalizedSources);
+        const routes = compatibleSourcesForPipeline(node, normalized.nodes);
         for (const source of routes) {
           if (generation !== runGeneration.current) return;
           const title = nodeInstanceLabel(node, normalizedSelections);
@@ -738,6 +898,7 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
               result,
               ...(product.recombinationTrees === undefined ? {} : { recombinationTrees: product.recombinationTrees }),
               ...(product.recombinationBundle === undefined ? {} : { recombinationBundle: product.recombinationBundle }),
+              ...(simulationSource === undefined ? {} : { simulationSource }),
             };
             await saveAnalysis(saved);
             completed.push(saved);
@@ -784,7 +945,7 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
         <div><p className="eyebrow">Batch analysis / pipeline mode</p><h1>Pipeline builder</h1><p>Components are placed by their declared inputs and outputs. Methods in the same stage run side by side; selection results are never treated as inputs to other selection methods.</p></div>
         <div className="pipeline-header__actions">
           <input className="pipeline-name" aria-label="Pipeline name" value={definition.name} disabled={runState === "running"} onChange={(event) => updateDefinition((current) => ({ ...current, name: event.target.value }))} />
-          <select aria-label="Add pipeline component" defaultValue="" disabled={runState === "running"} onChange={(event) => { const [kind, modelId] = event.target.value.split(":"); if (kind === "fasttree" || kind === "user-trees") addPipelineNode(kind); else if (kind === "model" && modelId !== undefined) addPipelineNode("model", modelId); event.target.value = ""; }}><option value="">Add component…</option><optgroup label="Trees"><option value="fasttree">FastTree</option><option value="user-trees">User trees</option></optgroup><optgroup label="Methods">{modelRegistry.filter((registration) => registration.plugin.manifest.id !== "simulator").map((registration) => <option key={registration.plugin.manifest.id} value={`model:${registration.plugin.manifest.id}`}>{registration.plugin.manifest.shortTitle}</option>)}</optgroup></select>
+          <select aria-label="Add pipeline component" defaultValue="" disabled={runState === "running"} onChange={(event) => { const [kind, modelId] = event.target.value.split(":"); if (kind === "fasttree" || kind === "user-trees" || kind === "true-tree") addPipelineNode(kind); else if (kind === "model" && modelId !== undefined) addPipelineNode("model", modelId); event.target.value = ""; }}><option value="">Add component…</option><optgroup label="Input"><option value="model:simulator">Simulator</option></optgroup><optgroup label="Trees"><option value="fasttree">FastTree</option><option value="user-trees">User trees</option><option value="true-tree">True tree</option></optgroup><optgroup label="Methods">{modelRegistry.filter((registration) => registration.plugin.manifest.id !== "simulator").map((registration) => <option key={registration.plugin.manifest.id} value={`model:${registration.plugin.manifest.id}`}>{registration.plugin.manifest.shortTitle}</option>)}</optgroup></select>
           <select aria-label="Open saved pipeline" defaultValue="" disabled={runState === "running"} onChange={(event) => { openSavedPipeline(event.target.value); event.target.value = ""; }}><option value="">Open saved…</option>{savedDefinitions.map((saved) => <option key={saved.id} value={saved.id}>{saved.name}</option>)}</select>
           <button type="button" className="button button--secondary" disabled={runState === "running"} onClick={savePipelineLocally}>Save</button>
           <button type="button" className="button button--quiet" disabled={runState === "running"} onClick={exportPipeline}>Export</button>
@@ -796,25 +957,43 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
       </section>
 
       {notice !== undefined && <div className={`notice notice--${notice.tone}`} role={notice.tone === "error" ? "alert" : "status"}>{notice.text}<button type="button" aria-label="Dismiss message" onClick={() => setNotice(undefined)}>×</button></div>}
-      {shareUrl !== undefined && <div className="pipeline-share"><label><span>Shareable settings link</span><input readOnly value={shareUrl} onFocus={(event) => event.target.select()} /></label><small>Alignment and tree files are not embedded.</small></div>}
+      {shareUrl !== undefined && <div className="pipeline-share"><label><span>Shareable settings link</span><input readOnly value={shareUrl} onFocus={(event) => event.target.select()} /></label><small>Simulator designs are embedded; uploaded alignment and tree files are not.</small></div>}
 
       <div className="pipeline-builder-grid">
         <div className="pipeline-canvas" onDragOver={(event) => event.preventDefault()} onDrop={canvasDropped}>
-          <div className={`pipeline-node pipeline-node--data ${selectedNodeId === DATA_NODE_ID ? "is-selected" : ""}`} role="button" tabIndex={0} onDragOver={(event) => event.preventDefault()} onDrop={dataDropped} onClick={() => setSelectedNodeId(DATA_NODE_ID)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setSelectedNodeId(DATA_NODE_ID); }}>
+          {simulatorNode === undefined ? <div className={`pipeline-node pipeline-node--data ${selectedNodeId === DATA_NODE_ID ? "is-selected" : ""}`} role="button" tabIndex={0} onDragOver={(event) => event.preventDefault()} onDrop={dataDropped} onClick={() => setSelectedNodeId(DATA_NODE_ID)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setSelectedNodeId(DATA_NODE_ID); }}>
             <span className="pipeline-node__order">01</span><span className="pipeline-node__glyph">FA</span><div><strong>Data upload</strong><small>{alignmentFiles.length === 0 ? "Required first component" : `${alignmentFiles.length} FASTA · ${treeFiles.length} tree file${treeFiles.length === 1 ? "" : "s"}`}</small></div><span className="pipeline-node__locked">Required</span>
-          </div>
-          {sourceNodes.length > 0 && <><div className="pipeline-stage-connector" aria-hidden="true"><span>↓</span><strong>alignment</strong></div><section className="pipeline-stage"><header><span>02</span><div><strong>Tree &amp; recombination sources</strong><small>Parallel branches · each reads Data upload directly</small></div></header><div className="pipeline-stage__nodes">{sourceNodes.map((node, index) => <div key={node.id} className={`pipeline-node ${selectedNodeId === node.id ? "is-selected" : ""}`} role="button" tabIndex={0} onClick={() => setSelectedNodeId(node.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setSelectedNodeId(node.id); }}><span className="pipeline-node__order">02{String.fromCharCode(65 + index)}</span><span className="pipeline-node__glyph">{nodeGlyph(node)}</span><div><strong>{nodeTitle(node)}</strong><small>{nodeCategory(node)}</small><span className="pipeline-node__route">Outputs: {pipelineSourceOutputKind(node) === undefined ? "unavailable" : sourceKindLabel(pipelineSourceOutputKind(node)!)}</span></div><div className="pipeline-node__controls"><button type="button" aria-label={`Remove ${nodeTitle(node)}`} disabled={runState === "running"} onClick={(event) => { event.stopPropagation(); removeNode(node.id); }}>×</button></div></div>)}</div></section></>}
-          {selectionNodes.length > 0 && <><div className="pipeline-stage-connector pipeline-stage-connector--typed" aria-hidden="true"><span>↓</span><strong>compatible tree outputs only</strong></div><section className="pipeline-stage pipeline-stage--selection"><header><span>03</span><div><strong>Selection analyses</strong><small>Parallel terminal branches · outputs stop here</small></div></header><div className="pipeline-stage__nodes">{selectionNodes.map((node, index) => <div key={node.id} className={`pipeline-node ${selectedNodeId === node.id ? "is-selected" : ""}`} role="button" tabIndex={0} onClick={() => setSelectedNodeId(node.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setSelectedNodeId(node.id); }}><span className="pipeline-node__order">03{String.fromCharCode(65 + index)}</span><span className="pipeline-node__glyph">{nodeGlyph(node)}</span><div><strong>{nodeTitle(node)}</strong><small>{nodeCategory(node)}</small><span className="pipeline-node__route">Inputs: {compatiblePipelineSources(node, sourceNodes).map(nodeTitle).join(" · ")}</span></div><div className="pipeline-node__controls"><button type="button" aria-label={`Remove ${nodeTitle(node)}`} disabled={runState === "running"} onClick={(event) => { event.stopPropagation(); removeNode(node.id); }}>×</button></div></div>)}</div></section></>}
-          {definition.nodes.length === 0 && <div className="pipeline-canvas__empty"><strong>Drop a source component here</strong><span>Start with FastTree, User trees, or a recombination method. Selection methods become placeable only after a compatible source exists.</span></div>}
+          </div> : <div className={`pipeline-node pipeline-node--data ${selectedNodeId === simulatorNode.id ? "is-selected" : ""}`} role="button" tabIndex={0} onClick={() => setSelectedNodeId(simulatorNode.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setSelectedNodeId(simulatorNode.id); }}>
+            <span className="pipeline-node__order">01</span><span className="pipeline-node__glyph">{nodeGlyph(simulatorNode)}</span><div><strong>Simulator</strong><small>{simulatedDatasetCount} generated dataset{simulatedDatasetCount === 1 ? "" : "s"} · truth retained</small></div><div className="pipeline-node__controls"><button type="button" aria-label="Remove Simulator" disabled={runState === "running"} onClick={(event) => { event.stopPropagation(); removeNode(simulatorNode.id); }}>×</button></div>
+          </div>}
+          {sourceNodes.length > 0 && <><div className="pipeline-stage-connector" aria-hidden="true"><span>↓</span><strong>{simulatorNode === undefined ? "alignment" : "generated alignment"}</strong></div><section className="pipeline-stage"><header><span>02</span><div><strong>Tree &amp; recombination sources</strong><small>Parallel branches · each reads {simulatorNode === undefined ? "Data upload" : "Simulator"} directly</small></div></header><div className="pipeline-stage__nodes">{sourceNodes.map((node, index) => <div key={node.id} className={`pipeline-node ${selectedNodeId === node.id ? "is-selected" : ""}`} role="button" tabIndex={0} onClick={() => setSelectedNodeId(node.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setSelectedNodeId(node.id); }}><span className="pipeline-node__order">02{String.fromCharCode(65 + index)}</span><span className="pipeline-node__glyph">{nodeGlyph(node)}</span><div><strong>{nodeTitle(node)}</strong><small>{nodeCategory(node)}</small><span className="pipeline-node__route">Outputs: {pipelineSourceOutputKind(node) === undefined ? "unavailable" : sourceKindLabel(pipelineSourceOutputKind(node)!)}</span></div><div className="pipeline-node__controls"><button type="button" aria-label={`Remove ${nodeTitle(node)}`} disabled={runState === "running"} onClick={(event) => { event.stopPropagation(); removeNode(node.id); }}>×</button></div></div>)}</div></section></>}
+          {selectionNodes.length > 0 && <><div className="pipeline-stage-connector pipeline-stage-connector--typed" aria-hidden="true"><span>↓</span><strong>compatible tree outputs only</strong></div><section className="pipeline-stage pipeline-stage--selection"><header><span>03</span><div><strong>Selection analyses</strong><small>Parallel terminal branches · outputs stop here</small></div></header><div className="pipeline-stage__nodes">{selectionNodes.map((node, index) => <div key={node.id} className={`pipeline-node ${selectedNodeId === node.id ? "is-selected" : ""}`} role="button" tabIndex={0} onClick={() => setSelectedNodeId(node.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setSelectedNodeId(node.id); }}><span className="pipeline-node__order">03{String.fromCharCode(65 + index)}</span><span className="pipeline-node__glyph">{nodeGlyph(node)}</span><div><strong>{nodeTitle(node)}</strong><small>{nodeCategory(node)}</small><span className="pipeline-node__route">Inputs: {compatibleSourcesForPipeline(node, definition.nodes).map(nodeTitle).join(" · ")}</span></div><div className="pipeline-node__controls"><button type="button" aria-label={`Remove ${nodeTitle(node)}`} disabled={runState === "running"} onClick={(event) => { event.stopPropagation(); removeNode(node.id); }}>×</button></div></div>)}</div></section></>}
+          {sourceNodes.length === 0 && selectionNodes.length === 0 && <div className="pipeline-canvas__empty"><strong>Drop a source component here</strong><span>{simulatorNode === undefined ? "Start with Simulator, FastTree, User trees, or a recombination method." : "Add True tree, FastTree, or a recombination method; compatible sources can run side by side."} Selection methods become placeable only after a compatible source exists.</span></div>}
         </div>
 
         <aside className="pipeline-inspector">
-          {selectedNodeId === DATA_NODE_ID ? <><div className="pipeline-inspector__heading"><span>FA</span><div><p className="eyebrow">Required input</p><h2>Data upload</h2></div></div><div className="pipeline-upload" onDragOver={(event) => event.preventDefault()} onDrop={dataDropped}><strong>Drop FASTA files or a directory</strong><span>Tree files in the same selection are retained for User trees matching.</span><div><label className="button button--secondary">Choose files<input type="file" multiple accept={FILE_ACCEPT} onChange={fileInputChanged} /></label><button type="button" className="button button--quiet" onClick={() => directoryInput.current?.click()}>Choose folder</button><input ref={directoryInput} className="visually-hidden" type="file" multiple onChange={fileInputChanged} /></div></div><div className="pipeline-file-summary"><div><span>Alignments</span><strong>{alignmentFiles.length}</strong></div><div><span>Tree files</span><strong>{treeFiles.length}</strong></div><div><span>Ignored</span><strong>{ignoredFiles}</strong></div></div>{files.length > 0 && <><div className="pipeline-file-list">{files.map((file) => <span key={`${pipelineFilePath(file)}-${file.size}`} className={isPipelineAlignmentFile(file) ? "is-alignment" : isPipelineTreeFile(file) ? "is-tree" : "is-ignored"}>{pipelineFilePath(file)}</span>)}</div><button type="button" className="button button--quiet button--full" disabled={runState === "running"} onClick={() => { setFiles([]); setPairingReport([]); setRunLog([]); setComparisonRecords([]); }}>Clear files</button></>}</> : selectedNode !== undefined ? <><div className="pipeline-inspector__heading"><span>{nodeGlyph(selectedNode)}</span><div><p className="eyebrow">Component settings</p><h2>{nodeTitle(selectedNode)}</h2></div></div><div className="pipeline-routing-summary"><strong>{pipelineNodeStage(selectedNode) === "source" ? "Source branch" : "Terminal analysis"}</strong><span>{pipelineNodeStage(selectedNode) === "source" ? `Data upload → ${nodeTitle(selectedNode)} → ${pipelineSourceOutputKind(selectedNode) === undefined ? "unavailable" : sourceKindLabel(pipelineSourceOutputKind(selectedNode)!)}` : `${compatiblePipelineSources(selectedNode, sourceNodes).map(nodeTitle).join(" · ")} → ${nodeTitle(selectedNode)} → saved result`}</span>{selectedNode.modelId === "diffubar" && <small>Matched user trees must contain both G1 and G2 branch tags; this is checked before execution.</small>}</div>{selectedNode.kind === "fasttree" ? <div className="pipeline-compact-grid"><label className="pipeline-compact-field"><span>Model</span><select value={String(selectedNode.parameters.model ?? "gtr")} onChange={(event) => updateNodeParameter(selectedNode.id, "model", event.target.value)}><option value="gtr">GTR + CAT</option></select></label><label className="pipeline-compact-toggle"><input type="checkbox" checked={Boolean(selectedNode.parameters.fastest ?? false)} onChange={(event) => updateNodeParameter(selectedNode.id, "fastest", event.target.checked)} /><span>Fastest topology search</span></label></div> : selectedNode.kind === "user-trees" ? <div className="pipeline-match-rule"><strong>Exact stem matching</strong><span><code>sample.fasta</code> matches <code>sample.nwk</code>, <code>sample.tree</code>, or another supported tree extension. Zero or multiple matches stop only this source route; other source branches continue.</span></div> : <div className="pipeline-compact-grid">{(modelForNode(selectedNode)?.plugin.manifest.parameters ?? []).map((parameter) => <div key={parameter.id}>{compactParameterControl({ parameter, value: selectedNode.parameters[parameter.id] ?? parameter.default, onChange: (value) => updateNodeParameter(selectedNode.id, parameter.id, value) })}</div>)}</div>}</> : null}
+          {selectedNodeId === DATA_NODE_ID ? <><div className="pipeline-inspector__heading"><span>FA</span><div><p className="eyebrow">Required input</p><h2>Data upload</h2></div></div><div className="pipeline-upload" onDragOver={(event) => event.preventDefault()} onDrop={dataDropped}><strong>Drop FASTA files or a directory</strong><span>Tree files in the same selection are retained for User trees matching.</span><div><label className="button button--secondary">Choose files<input type="file" multiple accept={FILE_ACCEPT} onChange={fileInputChanged} /></label><button type="button" className="button button--quiet" onClick={() => directoryInput.current?.click()}>Choose folder</button><input ref={directoryInput} className="visually-hidden" type="file" multiple onChange={fileInputChanged} /></div></div><div className="pipeline-file-summary"><div><span>Alignments</span><strong>{alignmentFiles.length}</strong></div><div><span>Tree files</span><strong>{treeFiles.length}</strong></div><div><span>Ignored</span><strong>{ignoredFiles}</strong></div></div>{files.length > 0 && <><div className="pipeline-file-list">{files.map((file) => <span key={`${pipelineFilePath(file)}-${file.size}`} className={isPipelineAlignmentFile(file) ? "is-alignment" : isPipelineTreeFile(file) ? "is-tree" : "is-ignored"}>{pipelineFilePath(file)}</span>)}</div><button type="button" className="button button--quiet button--full" disabled={runState === "running"} onClick={() => { setFiles([]); setPairingReport([]); setRunLog([]); setComparisonRecords([]); }}>Clear files</button></>}</> : selectedNode !== undefined ? <>
+            <div className="pipeline-inspector__heading"><span>{nodeGlyph(selectedNode)}</span><div><p className="eyebrow">Component settings</p><h2>{nodeTitle(selectedNode)}</h2></div></div>
+            <div className="pipeline-routing-summary">
+              <strong>{pipelineNodeStage(selectedNode) === "input" ? "Input generator" : pipelineNodeStage(selectedNode) === "source" ? "Source branch" : "Terminal analysis"}</strong>
+              <span>{pipelineNodeStage(selectedNode) === "input"
+                ? "Simulator → generated alignments + retained ground truth"
+                : pipelineNodeStage(selectedNode) === "source"
+                  ? `${simulatorNode === undefined ? "Data upload" : "Simulator"} → ${nodeTitle(selectedNode)} → ${pipelineSourceOutputKind(selectedNode) === undefined ? "unavailable" : sourceKindLabel(pipelineSourceOutputKind(selectedNode)!)}`
+                  : `${compatibleSourcesForPipeline(selectedNode, definition.nodes).map(nodeTitle).join(" · ")} → ${nodeTitle(selectedNode)} → saved result`}</span>
+              {selectedNode.modelId === "diffubar" && <small>Matched user trees must contain both G1 and G2 branch tags; this is checked before execution.</small>}
+            </div>
+            {selectedNode.modelId === "simulator" ? <div className="pipeline-simulator-settings"><SimulatorSetup parameters={selectedNode.parameters} onChange={(parameters) => updateNodeParameters(selectedNode.id, parameters)} disabled={runState === "running"} /></div>
+              : selectedNode.kind === "fasttree" ? <div className="pipeline-compact-grid"><label className="pipeline-compact-field"><span>Model</span><select value={String(selectedNode.parameters.model ?? "gtr")} onChange={(event) => updateNodeParameter(selectedNode.id, "model", event.target.value)}><option value="gtr">GTR + CAT</option></select></label><label className="pipeline-compact-toggle"><input type="checkbox" checked={Boolean(selectedNode.parameters.fastest ?? false)} onChange={(event) => updateNodeParameter(selectedNode.id, "fastest", event.target.checked)} /><span>Fastest topology search</span></label></div>
+              : selectedNode.kind === "user-trees" ? <div className="pipeline-match-rule"><strong>Exact stem matching</strong><span><code>sample.fasta</code> matches <code>sample.nwk</code>, <code>sample.tree</code>, or another supported tree extension. Zero or multiple matches stop only this source route; other source branches continue.</span></div>
+              : selectedNode.kind === "true-tree" ? <div className="pipeline-match-rule"><strong>Exact simulator truth</strong><span>Uses the generated genealogy directly. With recombination, it also passes the exact local-tree partition and retains the carrier tree and event graph. Inferred tree/recombination sources beside it still run as separate routes.</span></div>
+              : <div className="pipeline-compact-grid">{(modelForNode(selectedNode)?.plugin.manifest.parameters ?? []).map((parameter) => <div key={parameter.id}>{compactParameterControl({ parameter, value: selectedNode.parameters[parameter.id] ?? parameter.default, onChange: (value) => updateNodeParameter(selectedNode.id, parameter.id, value) })}</div>)}</div>}
+          </> : null}
         </aside>
       </div>
 
       <section className="pipeline-run-panel">
-        <div><p className="eyebrow">Validate and run</p><h2>{alignmentFiles.length} dataset{alignmentFiles.length === 1 ? "" : "s"} · {sourceNodes.length} source branch{sourceNodes.length === 1 ? "" : "es"} · {selectionNodes.length} terminal selection{selectionNodes.length === 1 ? "" : "s"}</h2>{pipelineIssues.length > 0 ? <ul>{pipelineIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul> : <p>Ready. Each source reads the alignment independently; each selection runs once per compatible source output and is saved independently.</p>}</div>
+        <div><p className="eyebrow">Validate and run</p><h2>{simulatedDatasetCount ?? alignmentFiles.length} dataset{(simulatedDatasetCount ?? alignmentFiles.length) === 1 ? "" : "s"} · {sourceNodes.length} source branch{sourceNodes.length === 1 ? "" : "es"} · {selectionNodes.length} terminal selection{selectionNodes.length === 1 ? "" : "s"}</h2>{pipelineIssues.length > 0 ? <ul>{pipelineIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul> : <p>Ready. Each source reads the {simulatorNode === undefined ? "uploaded" : "generated"} alignment independently; each selection runs once per compatible source output and is saved independently.</p>}</div>
         {runState === "running" ? <div className="pipeline-run-progress"><strong>{progressLabel}</strong><div><span style={{ width: `${Math.round(progress * 100)}%` }} /></div><small>{Math.round(progress * 100)}%</small><button type="button" className="button button--quiet" onClick={cancelPipeline}>Cancel</button></div> : <button type="button" className="button button--run" disabled={pipelineIssues.length > 0} onClick={() => void runPipeline()}><span>Run pipeline</span><small>Pair inputs · execute locally · aggregate compatible selection results</small></button>}
       </section>
 

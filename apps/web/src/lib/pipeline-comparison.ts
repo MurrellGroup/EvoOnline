@@ -1,4 +1,5 @@
 import type { SavedAnalysis } from "./analysis-store.js";
+import type { SimulatedDataset } from "@phylo-workbench/model-simulator/browser-source";
 import type {
   BsrelRunResult,
   CladeShiftRunResult,
@@ -22,6 +23,8 @@ export interface PipelineComparisonRecord {
   readonly sourceLabel: string;
   readonly methodNodeId: string;
   readonly methodLabel: string;
+  /** Present only for the synthetic Truth record contributed by a Simulator pipeline input. */
+  readonly simulationDataset?: SimulatedDataset;
 }
 
 export interface ComparisonSignalValue {
@@ -188,6 +191,28 @@ function siteValues<T extends { readonly site: number }>(rows: readonly T[], val
   return finiteValues(rows, (row) => String(row.site), (row) => `Codon ${row.site}`, (row) => row.site, value);
 }
 
+function indexedSiteValues(values: ArrayLike<number> | undefined, transform: (value: number, index: number) => number | undefined = (value) => value): readonly ComparisonSignalValue[] {
+  if (values === undefined) return [];
+  return Array.from({ length: values.length }, (_, index) => {
+    const value = transform(values[index]!, index);
+    return value === undefined || !Number.isFinite(value) ? undefined : {
+      key: String(index + 1),
+      label: `Codon ${index + 1}`,
+      ordinal: index + 1,
+      value,
+    };
+  }).filter((entry): entry is ComparisonSignalValue => entry !== undefined);
+}
+
+function simulatorRegionalValues(dataset: SimulatedDataset, siteCount: number, value: (regionIndex: number, activeEvents: number) => number): readonly ComparisonSignalValue[] {
+  return Array.from({ length: siteCount }, (_, index) => {
+    const site = index + 1;
+    const regionIndex = dataset.localTrees.findIndex((region) => site >= region.startCodon && site <= region.endCodon);
+    const activeEvents = regionIndex < 0 ? 0 : dataset.localTrees[regionIndex]!.activeEventIds.length;
+    return { key: String(site), label: `Codon ${site}`, ordinal: site, value: value(Math.max(0, regionIndex), activeEvents) };
+  });
+}
+
 function branchValues<T extends { readonly branch: number; readonly nodeId: number; readonly name: string }>(rows: readonly T[], value: (row: T) => number | null): readonly ComparisonSignalValue[] {
   return finiteValues(rows, (row) => String(row.nodeId), (row) => row.name || `Branch ${row.branch}`, (row) => row.branch, value);
 }
@@ -270,6 +295,39 @@ function flavorPosteriorMeanDnParameter(result: FlavorRunResult): readonly numbe
 
 export function extractComparisonSignals(record: PipelineComparisonRecord): readonly ComparisonSignal[] {
   const { analysis } = record;
+  if (analysis.modelId === "simulator" && record.simulationDataset !== undefined) {
+    const dataset = record.simulationDataset;
+    const parameters = dataset.siteParameters;
+    if (parameters === undefined) return [];
+    const omega = parameters.omega ?? parameters.scuffMaximumExpectedDnds;
+    const dN = omega === undefined ? undefined : Array.from({ length: Math.min(parameters.alpha.length, omega.length) }, (_, index) => parameters.alpha[index]! * omega[index]!);
+    const breakpointCounts = new Array<number>(parameters.alpha.length).fill(0);
+    for (const event of dataset.recombinationEvents) {
+      for (const breakpoint of event.breakpoints) if (breakpoint >= 1 && breakpoint <= breakpointCounts.length) breakpointCounts[breakpoint - 1] = breakpointCounts[breakpoint - 1]! + 1;
+    }
+    return availableSignals([
+      numberSignal(record, "site", "true-alpha", "True dS · α", indexedSiteValues(parameters.alpha), 1),
+      numberSignal(record, "site", "true-dn", parameters.omega === undefined ? "True dN reference · αΩ(σ)" : "True dN · αω", indexedSiteValues(dN), 1),
+      numberSignal(record, "site", "true-omega", parameters.omega === undefined ? "True Ω(σ) reference" : "True dN/dS · ω", indexedSiteValues(omega), 1),
+      derivedSignal(numberSignal(record, "site", "true-log-ds", "True log(dS)", indexedSiteValues(parameters.alpha, (value) => logPositive(value)), 0), "Natural logarithm of the simulator's exact site-wise α draw."),
+      derivedSignal(numberSignal(record, "site", "true-log-dn", "True log(dN)", indexedSiteValues(dN, (value) => logPositive(value)), 0), parameters.omega === undefined ? "Natural logarithm of αΩ(σ), the simulator's SCUFF maximum-expected-dN/dS reference times α." : "Natural logarithm of the exact MG94 αω site parameter."),
+      derivedSignal(numberSignal(record, "site", "true-log-rate-ratio", "True log(dN) − log(dS)", indexedSiteValues(omega, (value) => logPositive(value)), 0), "Exact simulator log rate ratio; for SCUFF this uses Ω(σ), the stored maximum-expected-dN/dS reference."),
+      derivedSignal(numberSignal(record, "site", "true-exp-log-rate-ratio", "True exp(log(dN) − log(dS))", indexedSiteValues(omega), 1), "Exact simulator rate ratio; for SCUFF this is the stored Ω(σ) reference."),
+      ...(parameters.omega === undefined ? [] : [
+        derivedSignal(probabilitySignal(record, "site", "true-positive", "True positive-selection state", indexedSiteValues(parameters.omega, (value) => value > 1 ? 1 : 0), 0.5), "Binary indicator of the exact simulated MG94 ω > 1 state."),
+        derivedSignal(probabilitySignal(record, "site", "true-purifying", "True purifying-selection state", indexedSiteValues(parameters.omega, (value) => value < 1 ? 1 : 0), 0.5), "Binary indicator of the exact simulated MG94 ω < 1 state."),
+      ]),
+      numberSignal(record, "site", "true-scuff-event-rate", "True SCUFF fitness-event rate λ", indexedSiteValues(parameters.eventRate), 1),
+      numberSignal(record, "site", "true-scuff-sigma", "True SCUFF equilibrium fitness SD σ", indexedSiteValues(parameters.equilibriumSigma), 1),
+      numberSignal(record, "site", "true-scuff-mixing-rate", "True SCUFF mixing rate θ", indexedSiteValues(parameters.mixingRate), 1),
+      numberSignal(record, "site", "true-scuff-omega-star", "True SCUFF Ω(σ) reference", indexedSiteValues(parameters.scuffMaximumExpectedDnds), 1),
+      numberSignal(record, "site", "true-hotspot-weight", "True recombination hotspot weight", indexedSiteValues(dataset.hotspotWeights), 1),
+      derivedSignal(numberSignal(record, "site", "true-breakpoint-count", "True breakpoint-event count", indexedSiteValues(breakpointCounts), 1), "Number of exact simulated recombination-event breakpoints after each codon."),
+      derivedSignal(probabilitySignal(record, "site", "true-breakpoint", "True breakpoint state", indexedSiteValues(breakpointCounts, (value) => value > 0 ? 1 : 0), 0.5), "Binary indicator that at least one exact simulated event breaks after this codon."),
+      derivedSignal(numberSignal(record, "site", "true-active-events", "True active recombination events", simulatorRegionalValues(dataset, parameters.alpha.length, (_region, active) => active), 1), "Number of exact simulator recombination events active in the local genealogy at each codon."),
+      derivedSignal(numberSignal(record, "site", "true-local-tree-index", "True local-tree index", simulatorRegionalValues(dataset, parameters.alpha.length, (region) => region + 1), 1), "One-based ordinal of the exact simulator local-tree segment at each codon."),
+    ]);
+  }
   if (analysis.modelId === "diffubar") {
     const result = analysis.result as DifFubarRunResult;
     const threshold = numericParameter(analysis, "posteriorThreshold", 0.95);
@@ -461,23 +519,26 @@ export function groupPipelineComparisons(records: readonly PipelineComparisonRec
   }
   const output: PipelineComparisonGroup[] = [];
   for (const [datasetName, datasetRecords] of datasets) {
+    const truthRecords = datasetRecords.filter((record) => record.analysis.modelId === "simulator" && record.simulationDataset !== undefined);
+    const routeRecords = datasetRecords.filter((record) => !truthRecords.includes(record));
     const sources = new Map<string, PipelineComparisonRecord[]>();
-    for (const record of datasetRecords) sources.set(record.sourceNodeId, [...(sources.get(record.sourceNodeId) ?? []), record]);
-    if (sources.size > 1 && datasetRecords.some((record) => record.analysis.modelId !== "bsrel")) output.push({
+    for (const record of routeRecords) sources.set(record.sourceNodeId, [...(sources.get(record.sourceNodeId) ?? []), record]);
+    if (sources.size === 0 && truthRecords.length > 0) sources.set("simulation-ground-truth", []);
+    if (sources.size > 1 && routeRecords.some((record) => record.analysis.modelId !== "bsrel")) output.push({
       key: JSON.stringify([datasetName, "*"]),
       datasetName,
       sourceNodeId: "*",
       sourceLabel: "All source routes",
       allSources: true,
-      records: datasetRecords,
+      records: [...truthRecords, ...routeRecords],
     });
     for (const [sourceNodeId, sourceRecords] of sources) output.push({
       key: JSON.stringify([datasetName, sourceNodeId]),
       datasetName,
       sourceNodeId,
-      sourceLabel: sourceRecords[0]!.sourceLabel,
+      sourceLabel: sourceRecords[0]?.sourceLabel ?? "Simulation truth",
       allSources: false,
-      records: sourceRecords,
+      records: [...truthRecords, ...sourceRecords],
     });
   }
   return output.sort((left, right) => left.datasetName.localeCompare(right.datasetName) || Number(right.allSources) - Number(left.allSources) || left.sourceLabel.localeCompare(right.sourceLabel));

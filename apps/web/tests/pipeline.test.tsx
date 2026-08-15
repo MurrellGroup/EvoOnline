@@ -12,6 +12,9 @@ import {
   type PipelineDefinition,
   type PipelineNode,
 } from "../src/lib/pipeline.js";
+import { createSimulationTruthRecombinationBundle } from "../src/lib/recombination-bundle.js";
+import type { RecombinationCodonTreeSet } from "@phylo-workbench/model-diffubar/browser-source";
+import type { SimulatedDataset } from "@phylo-workbench/model-simulator/browser-source";
 
 interface NamedFile {
   readonly name: string;
@@ -92,6 +95,19 @@ test("typed source compatibility rejects scientifically invalid routes", () => {
   assert.equal(pipelineNodesCompatible(fasttree, fsart), false);
 });
 
+test("Simulator is an input and True tree is a simulator-truth source, not an inferred method", () => {
+  const simulator: PipelineNode = { id: "simulator", kind: "model", modelId: "simulator", parameters: { simulatorConfig: "{}" } };
+  const trueTree: PipelineNode = { id: "truth", kind: "true-tree", parameters: {} };
+  const fasttree: PipelineNode = { id: "fasttree", kind: "fasttree", parameters: {} };
+  const fubar: PipelineNode = { id: "fubar", kind: "model", modelId: "fubar", parameters: {} };
+  const diffubar: PipelineNode = { id: "diffubar", kind: "model", modelId: "diffubar", parameters: {} };
+  assert.equal(pipelineNodeStage(simulator), "input");
+  assert.equal(pipelineNodeStage(trueTree), "source");
+  assert.equal(pipelineNodesCompatible(trueTree, fubar), true);
+  assert.equal(pipelineNodesCompatible(trueTree, diffubar), false);
+  assert.deepEqual(sortPipelineNodes([fubar, trueTree, simulator, fasttree]).map((node) => node.id), ["simulator", "truth", "fasttree", "fubar"]);
+});
+
 test("pipeline stages sort sources and terminal methods without chaining peers", () => {
   const nodes: readonly PipelineNode[] = [
     { id: "fubar", kind: "model", modelId: "fubar", parameters: {} },
@@ -100,4 +116,31 @@ test("pipeline stages sort sources and terminal methods without chaining peers",
     { id: "user-trees", kind: "user-trees", parameters: {} },
   ];
   assert.deepEqual(sortPipelineNodes(nodes).map((node) => node.id), ["fsart", "user-trees", "fubar", "diffubar"]);
+});
+
+test("True tree bundles retain the exact simulator carrier genealogy and recombination events", () => {
+  const treeSet: RecombinationCodonTreeSet = {
+    schemaVersion: 1,
+    sourceMethod: "simulation-truth",
+    branchLengthSource: "method-final-trees",
+    branchScalePolicy: "fixed-relative",
+    codonAssignment: "middle-nucleotide",
+    segments: [{ startCodon: 1, endCodon: 2, tree: "(A:1,B:1);" }],
+  };
+  const dataset = {
+    id: "sim-1",
+    seed: 1,
+    tree: { newick: "(A:1,B:1);" },
+    carrierTree: { newick: "((A:1,B:1):1,C:2);" },
+    localTrees: [{ startCodon: 1, endCodon: 2, tree: { newick: "(A:1,B:1);" }, activeEventIds: [9] }],
+    recombinationEvents: [{ id: 9, age: 1, recipientBranch: 1, donorBranch: 2, intervals: [{ startCodon: 1, endCodon: 1 }], breakpoints: [1], visibleAfterSubsampling: true }],
+    hotspotWeights: [1],
+    names: ["A", "B"],
+    diagnostics: {},
+  } as unknown as SimulatedDataset;
+  const bundle = createSimulationTruthRecombinationBundle(dataset, treeSet, 6, 2);
+  assert.equal(bundle.representation, "spr-history");
+  assert.equal(bundle.history.kind, "spr-history");
+  assert.equal(bundle.history.masterTree, dataset.carrierTree?.newick);
+  assert.deepEqual(bundle.history.eventOccurrences, dataset.recombinationEvents);
 });

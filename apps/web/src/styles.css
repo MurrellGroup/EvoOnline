@@ -1046,6 +1046,33 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
 .pipeline-routing-summary strong { color: #29594f; font-size: 8px; text-transform: uppercase; }
 .pipeline-routing-summary span { overflow-wrap: anywhere; font-size: 8px; line-height: 1.45; }
 .pipeline-routing-summary small { color: #8b554c; font-size: 8px; line-height: 1.45; }
+.pipeline-simulator-settings { min-width: 0; }
+.pipeline-simulator-settings .simulator-setup { margin-top: 10px; }
+.pipeline-simulator-settings .sim-panel > summary { gap: 6px; padding: 8px; }
+.pipeline-simulator-settings .sim-panel > summary strong { font-size: 9px; }
+.pipeline-simulator-settings .sim-panel > summary span,
+.pipeline-simulator-settings .sim-equation,
+.pipeline-simulator-settings .sim-field small,
+.pipeline-simulator-settings .sim-curve-editor > small,
+.pipeline-simulator-settings .sim-recomb-note,
+.pipeline-simulator-settings .sim-explanation { display: none; }
+.pipeline-simulator-settings .sim-panel__body { padding: 7px; }
+.pipeline-simulator-settings .sim-preset-row,
+.pipeline-simulator-settings .sim-engine-tabs,
+.pipeline-simulator-settings .sim-curve-init,
+.pipeline-simulator-settings .sim-seed-strip { flex-wrap: wrap; }
+.pipeline-simulator-settings .sim-preset-row > label { width: 100%; }
+.pipeline-simulator-settings .sim-compact-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+.pipeline-simulator-settings .sim-field--wide { grid-column: span 1; }
+.pipeline-simulator-settings .sim-curve-grid,
+.pipeline-simulator-settings .sim-marginal-grid,
+.pipeline-simulator-settings .sim-gtr { grid-template-columns: 1fr; }
+.pipeline-simulator-settings .sim-engine-tabs > button { min-width: 0; flex: 1; }
+.pipeline-simulator-settings .sim-engine-tabs > .toggle { width: 100%; margin-left: 0; }
+.pipeline-simulator-settings .sim-marginal__body { grid-template-columns: 55px 55px minmax(80px, 1fr); }
+.pipeline-simulator-settings .sim-gtr > div,
+.pipeline-simulator-settings .sim-gtr > div:nth-child(2) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.pipeline-simulator-settings .sim-seed-strip { align-items: flex-start; gap: 5px; }
 .pipeline-run-panel { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, .65fr); gap: 20px; align-items: center; margin-top: 16px; padding: 18px 20px; background: #fff; border: 1px solid #d6dfda; border-radius: 12px; box-shadow: 0 6px 24px rgba(24,44,40,.05); }
 .pipeline-run-panel h2 { margin: 0; color: #233a34; font-size: 17px; }
 .pipeline-run-panel p:not(.eyebrow), .pipeline-run-panel ul { margin: 7px 0 0; color: #647570; font-size: 9px; line-height: 1.5; }
