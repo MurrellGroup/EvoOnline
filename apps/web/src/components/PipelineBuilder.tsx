@@ -17,8 +17,10 @@ import {
   type BrowserExecutorServices,
   type BrowserModelExecutor,
 } from "../model-registry.js";
+import { PipelineComparisonStudio } from "./PipelineComparisonStudio.js";
 import { saveAnalysis, type SavedAnalysis } from "../lib/analysis-store.js";
 import { downloadText } from "../lib/file-download.js";
+import type { PipelineComparisonRecord } from "../lib/pipeline-comparison.js";
 import {
   createFsartRecombinationBundle,
   createJemsprRecombinationBundle,
@@ -145,6 +147,12 @@ function nodeTitle(node: PipelineNode): string {
   if (node.kind === "fasttree") return "FastTree";
   if (node.kind === "user-trees") return "User trees";
   return modelForNode(node)?.plugin.manifest.shortTitle ?? node.modelId ?? "Unavailable method";
+}
+
+function nodeInstanceLabel(node: PipelineNode, peers: readonly PipelineNode[]): string {
+  const matching = peers.filter((candidate) => candidate.kind === node.kind && candidate.modelId === node.modelId);
+  if (matching.length <= 1) return nodeTitle(node);
+  return `${nodeTitle(node)} ${matching.findIndex((candidate) => candidate.id === node.id) + 1}`;
 }
 
 function nodeGlyph(node: PipelineNode): string {
@@ -310,6 +318,7 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
   const [progressLabel, setProgressLabel] = useState("Ready");
   const [pairingReport, setPairingReport] = useState<readonly PairingReportRow[]>([]);
   const [runLog, setRunLog] = useState<readonly PipelineLogEntry[]>([]);
+  const [comparisonRecords, setComparisonRecords] = useState<readonly PipelineComparisonRecord[]>([]);
 
   useEffect(() => { directoryInput.current?.setAttribute("webkitdirectory", ""); }, []);
 
@@ -369,6 +378,7 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
     });
     setPairingReport([]);
     setRunLog([]);
+    setComparisonRecords([]);
     setNotice({ tone: "success", text: `${incoming.length} file${incoming.length === 1 ? "" : "s"} added to the pipeline input.` });
   };
 
@@ -402,6 +412,7 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
         ? definition.nodes.filter((candidate) => pipelineNodeStage(candidate) === "selection" && compatiblePipelineSources(candidate, [node]).length > 0)
         : [];
       updateDefinition((current) => ({ ...current, nodes: sortPipelineNodes([...current.nodes, node]) }));
+      setComparisonRecords([]);
       setSelectedNodeId(node.id);
       const route = stage === "selection"
         ? ` It receives ${compatibleSources.map(nodeTitle).join(", ")} output${compatibleSources.length === 1 ? "" : "s"}.`
@@ -445,6 +456,7 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
       return;
     }
     updateDefinition((current) => ({ ...current, nodes: current.nodes.filter((node) => node.id !== nodeId) }));
+    setComparisonRecords([]);
     setSelectedNodeId(DATA_NODE_ID);
     setNotice({ tone: "info", text: `${nodeTitle(removing)} removed.` });
   };
@@ -454,6 +466,7 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
       ...current,
       nodes: current.nodes.map((node) => node.id === nodeId ? { ...node, parameters: { ...node.parameters, [parameterId]: value } } : node),
     }));
+    setComparisonRecords([]);
   };
 
   const savePipelineLocally = (): void => {
@@ -477,6 +490,7 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
     setFiles([]);
     setPairingReport([]);
     setRunLog([]);
+    setComparisonRecords([]);
     setShareUrl(undefined);
     setNotice({ tone: "info", text: `“${saved.name}” loaded. Input data is never stored with a pipeline.` });
   };
@@ -495,6 +509,7 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
       setFiles([]);
       setPairingReport([]);
       setRunLog([]);
+      setComparisonRecords([]);
       setShareUrl(undefined);
       setNotice({ tone: "success", text: `“${next.name}” imported. Add the input files to rerun it.` });
     } catch (error) {
@@ -547,6 +562,7 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
     setDefinition(normalized);
     setPairingReport(report);
     setRunLog([]);
+    setComparisonRecords([]);
     setProgress(0);
     setProgressLabel("Input manifest ready");
     setRunState("running");
@@ -554,6 +570,7 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
     const completed: SavedAnalysis[] = [];
+    const completedComparisons: PipelineComparisonRecord[] = [];
     let failedDatasets = 0;
     let finishedSteps = 0;
     const stepsPerDataset = normalizedSources.length + selectionRouteCount;
@@ -580,7 +597,7 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
       const products = new Map<string, PipelineSourceProduct>();
       for (const node of normalizedSources) {
         if (generation !== runGeneration.current) return;
-        const title = nodeTitle(node);
+        const title = nodeInstanceLabel(node, normalizedSources);
         const outputKind = pipelineSourceOutputKind(node);
         const baseProgress = finishedSteps / totalSteps;
         setProgress(baseProgress);
@@ -671,8 +688,8 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
         const routes = compatiblePipelineSources(node, normalizedSources);
         for (const source of routes) {
           if (generation !== runGeneration.current) return;
-          const title = nodeTitle(node);
-          const sourceTitle = nodeTitle(source);
+          const title = nodeInstanceLabel(node, normalizedSelections);
+          const sourceTitle = nodeInstanceLabel(source, normalizedSources);
           const routeTitle = `${title} via ${sourceTitle}`;
           const product = products.get(source.id);
           const baseProgress = finishedSteps / totalSteps;
@@ -724,6 +741,8 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
             };
             await saveAnalysis(saved);
             completed.push(saved);
+            completedComparisons.push({ analysis: saved, datasetName, sourceNodeId: source.id, sourceLabel: sourceTitle, methodNodeId: node.id, methodLabel: title });
+            setComparisonRecords([...completedComparisons]);
             appendLog({ dataset: datasetName, component: routeTitle, tone: "complete", detail: registration.completionMessage(result) });
             } catch (error) {
               if (error instanceof DOMException && error.name === "AbortError") return;
@@ -744,9 +763,10 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
     setProgress(1);
     setProgressLabel("Pipeline complete");
     if (completed.length > 0) onAnalysesCompleted(completed);
+    const comparisonMessage = completedComparisons.length > 1 ? " Cross-method aggregate tables and plots are ready below." : "";
     setNotice(failedDatasets === 0
-      ? { tone: "success", text: `Pipeline complete: ${completed.length} analysis result${completed.length === 1 ? "" : "s"} saved.` }
-      : { tone: completed.length === 0 ? "error" : "info", text: `Pipeline finished with ${completed.length} saved result${completed.length === 1 ? "" : "s"}; ${failedDatasets} dataset${failedDatasets === 1 ? "" : "s"} had one or more failed routes. See the run log below.` });
+      ? { tone: "success", text: `Pipeline complete: ${completed.length} analysis result${completed.length === 1 ? "" : "s"} saved.${comparisonMessage}` }
+      : { tone: completed.length === 0 ? "error" : "info", text: `Pipeline finished with ${completed.length} saved result${completed.length === 1 ? "" : "s"}; ${failedDatasets} dataset${failedDatasets === 1 ? "" : "s"} had one or more failed routes.${comparisonMessage} See the run log below.` });
   };
 
   const cancelPipeline = (): void => {
@@ -770,7 +790,7 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
           <button type="button" className="button button--quiet" disabled={runState === "running"} onClick={exportPipeline}>Export</button>
           <button type="button" className="button button--quiet" disabled={runState === "running"} onClick={() => importInput.current?.click()}>Import</button>
           <button type="button" className="button button--quiet" disabled={runState === "running"} onClick={() => void sharePipeline()}>Share link</button>
-          <button type="button" className="button button--quiet" disabled={runState === "running"} onClick={() => { const next = emptyDefinition(); setDefinition(next); setFiles([]); setSelectedNodeId(DATA_NODE_ID); setPairingReport([]); setRunLog([]); setShareUrl(undefined); setNotice({ tone: "info", text: "New empty pipeline created." }); }}>New</button>
+          <button type="button" className="button button--quiet" disabled={runState === "running"} onClick={() => { const next = emptyDefinition(); setDefinition(next); setFiles([]); setSelectedNodeId(DATA_NODE_ID); setPairingReport([]); setRunLog([]); setComparisonRecords([]); setShareUrl(undefined); setNotice({ tone: "info", text: "New empty pipeline created." }); }}>New</button>
           <input ref={importInput} className="visually-hidden" type="file" accept=".json,.evo-pipeline.json" onChange={importChanged} />
         </div>
       </section>
@@ -789,16 +809,18 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
         </div>
 
         <aside className="pipeline-inspector">
-          {selectedNodeId === DATA_NODE_ID ? <><div className="pipeline-inspector__heading"><span>FA</span><div><p className="eyebrow">Required input</p><h2>Data upload</h2></div></div><div className="pipeline-upload" onDragOver={(event) => event.preventDefault()} onDrop={dataDropped}><strong>Drop FASTA files or a directory</strong><span>Tree files in the same selection are retained for User trees matching.</span><div><label className="button button--secondary">Choose files<input type="file" multiple accept={FILE_ACCEPT} onChange={fileInputChanged} /></label><button type="button" className="button button--quiet" onClick={() => directoryInput.current?.click()}>Choose folder</button><input ref={directoryInput} className="visually-hidden" type="file" multiple onChange={fileInputChanged} /></div></div><div className="pipeline-file-summary"><div><span>Alignments</span><strong>{alignmentFiles.length}</strong></div><div><span>Tree files</span><strong>{treeFiles.length}</strong></div><div><span>Ignored</span><strong>{ignoredFiles}</strong></div></div>{files.length > 0 && <><div className="pipeline-file-list">{files.map((file) => <span key={`${pipelineFilePath(file)}-${file.size}`} className={isPipelineAlignmentFile(file) ? "is-alignment" : isPipelineTreeFile(file) ? "is-tree" : "is-ignored"}>{pipelineFilePath(file)}</span>)}</div><button type="button" className="button button--quiet button--full" disabled={runState === "running"} onClick={() => { setFiles([]); setPairingReport([]); setRunLog([]); }}>Clear files</button></>}</> : selectedNode !== undefined ? <><div className="pipeline-inspector__heading"><span>{nodeGlyph(selectedNode)}</span><div><p className="eyebrow">Component settings</p><h2>{nodeTitle(selectedNode)}</h2></div></div><div className="pipeline-routing-summary"><strong>{pipelineNodeStage(selectedNode) === "source" ? "Source branch" : "Terminal analysis"}</strong><span>{pipelineNodeStage(selectedNode) === "source" ? `Data upload → ${nodeTitle(selectedNode)} → ${pipelineSourceOutputKind(selectedNode) === undefined ? "unavailable" : sourceKindLabel(pipelineSourceOutputKind(selectedNode)!)}` : `${compatiblePipelineSources(selectedNode, sourceNodes).map(nodeTitle).join(" · ")} → ${nodeTitle(selectedNode)} → saved result`}</span>{selectedNode.modelId === "diffubar" && <small>Matched user trees must contain both G1 and G2 branch tags; this is checked before execution.</small>}</div>{selectedNode.kind === "fasttree" ? <div className="pipeline-compact-grid"><label className="pipeline-compact-field"><span>Model</span><select value={String(selectedNode.parameters.model ?? "gtr")} onChange={(event) => updateNodeParameter(selectedNode.id, "model", event.target.value)}><option value="gtr">GTR + CAT</option></select></label><label className="pipeline-compact-toggle"><input type="checkbox" checked={Boolean(selectedNode.parameters.fastest ?? false)} onChange={(event) => updateNodeParameter(selectedNode.id, "fastest", event.target.checked)} /><span>Fastest topology search</span></label></div> : selectedNode.kind === "user-trees" ? <div className="pipeline-match-rule"><strong>Exact stem matching</strong><span><code>sample.fasta</code> matches <code>sample.nwk</code>, <code>sample.tree</code>, or another supported tree extension. Zero or multiple matches stop only this source route; other source branches continue.</span></div> : <div className="pipeline-compact-grid">{(modelForNode(selectedNode)?.plugin.manifest.parameters ?? []).map((parameter) => <div key={parameter.id}>{compactParameterControl({ parameter, value: selectedNode.parameters[parameter.id] ?? parameter.default, onChange: (value) => updateNodeParameter(selectedNode.id, parameter.id, value) })}</div>)}</div>}</> : null}
+          {selectedNodeId === DATA_NODE_ID ? <><div className="pipeline-inspector__heading"><span>FA</span><div><p className="eyebrow">Required input</p><h2>Data upload</h2></div></div><div className="pipeline-upload" onDragOver={(event) => event.preventDefault()} onDrop={dataDropped}><strong>Drop FASTA files or a directory</strong><span>Tree files in the same selection are retained for User trees matching.</span><div><label className="button button--secondary">Choose files<input type="file" multiple accept={FILE_ACCEPT} onChange={fileInputChanged} /></label><button type="button" className="button button--quiet" onClick={() => directoryInput.current?.click()}>Choose folder</button><input ref={directoryInput} className="visually-hidden" type="file" multiple onChange={fileInputChanged} /></div></div><div className="pipeline-file-summary"><div><span>Alignments</span><strong>{alignmentFiles.length}</strong></div><div><span>Tree files</span><strong>{treeFiles.length}</strong></div><div><span>Ignored</span><strong>{ignoredFiles}</strong></div></div>{files.length > 0 && <><div className="pipeline-file-list">{files.map((file) => <span key={`${pipelineFilePath(file)}-${file.size}`} className={isPipelineAlignmentFile(file) ? "is-alignment" : isPipelineTreeFile(file) ? "is-tree" : "is-ignored"}>{pipelineFilePath(file)}</span>)}</div><button type="button" className="button button--quiet button--full" disabled={runState === "running"} onClick={() => { setFiles([]); setPairingReport([]); setRunLog([]); setComparisonRecords([]); }}>Clear files</button></>}</> : selectedNode !== undefined ? <><div className="pipeline-inspector__heading"><span>{nodeGlyph(selectedNode)}</span><div><p className="eyebrow">Component settings</p><h2>{nodeTitle(selectedNode)}</h2></div></div><div className="pipeline-routing-summary"><strong>{pipelineNodeStage(selectedNode) === "source" ? "Source branch" : "Terminal analysis"}</strong><span>{pipelineNodeStage(selectedNode) === "source" ? `Data upload → ${nodeTitle(selectedNode)} → ${pipelineSourceOutputKind(selectedNode) === undefined ? "unavailable" : sourceKindLabel(pipelineSourceOutputKind(selectedNode)!)}` : `${compatiblePipelineSources(selectedNode, sourceNodes).map(nodeTitle).join(" · ")} → ${nodeTitle(selectedNode)} → saved result`}</span>{selectedNode.modelId === "diffubar" && <small>Matched user trees must contain both G1 and G2 branch tags; this is checked before execution.</small>}</div>{selectedNode.kind === "fasttree" ? <div className="pipeline-compact-grid"><label className="pipeline-compact-field"><span>Model</span><select value={String(selectedNode.parameters.model ?? "gtr")} onChange={(event) => updateNodeParameter(selectedNode.id, "model", event.target.value)}><option value="gtr">GTR + CAT</option></select></label><label className="pipeline-compact-toggle"><input type="checkbox" checked={Boolean(selectedNode.parameters.fastest ?? false)} onChange={(event) => updateNodeParameter(selectedNode.id, "fastest", event.target.checked)} /><span>Fastest topology search</span></label></div> : selectedNode.kind === "user-trees" ? <div className="pipeline-match-rule"><strong>Exact stem matching</strong><span><code>sample.fasta</code> matches <code>sample.nwk</code>, <code>sample.tree</code>, or another supported tree extension. Zero or multiple matches stop only this source route; other source branches continue.</span></div> : <div className="pipeline-compact-grid">{(modelForNode(selectedNode)?.plugin.manifest.parameters ?? []).map((parameter) => <div key={parameter.id}>{compactParameterControl({ parameter, value: selectedNode.parameters[parameter.id] ?? parameter.default, onChange: (value) => updateNodeParameter(selectedNode.id, parameter.id, value) })}</div>)}</div>}</> : null}
         </aside>
       </div>
 
       <section className="pipeline-run-panel">
         <div><p className="eyebrow">Validate and run</p><h2>{alignmentFiles.length} dataset{alignmentFiles.length === 1 ? "" : "s"} · {sourceNodes.length} source branch{sourceNodes.length === 1 ? "" : "es"} · {selectionNodes.length} terminal selection{selectionNodes.length === 1 ? "" : "s"}</h2>{pipelineIssues.length > 0 ? <ul>{pipelineIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul> : <p>Ready. Each source reads the alignment independently; each selection runs once per compatible source output and is saved independently.</p>}</div>
-        {runState === "running" ? <div className="pipeline-run-progress"><strong>{progressLabel}</strong><div><span style={{ width: `${Math.round(progress * 100)}%` }} /></div><small>{Math.round(progress * 100)}%</small><button type="button" className="button button--quiet" onClick={cancelPipeline}>Cancel</button></div> : <button type="button" className="button button--run" disabled={pipelineIssues.length > 0} onClick={() => void runPipeline()}><span>Run pipeline</span><small>Show input pairing first · execute locally · save each result</small></button>}
+        {runState === "running" ? <div className="pipeline-run-progress"><strong>{progressLabel}</strong><div><span style={{ width: `${Math.round(progress * 100)}%` }} /></div><small>{Math.round(progress * 100)}%</small><button type="button" className="button button--quiet" onClick={cancelPipeline}>Cancel</button></div> : <button type="button" className="button button--run" disabled={pipelineIssues.length > 0} onClick={() => void runPipeline()}><span>Run pipeline</span><small>Pair inputs · execute locally · aggregate compatible selection results</small></button>}
       </section>
 
       {pairingReport.length > 0 && <section className="pipeline-report" aria-live="polite"><div className="pipeline-report__heading"><div><p className="eyebrow">Reported before computation</p><h2>User-tree input pairing</h2></div><span>{pairingReport.filter((row) => row.status === "matched").length}/{pairingReport.length} matched</span></div><div className="pipeline-pairing-table" role="table" aria-label="Full list of user tree matches"><div className="pipeline-pairing-table__header" role="row"><span role="columnheader">Alignment file</span><span role="columnheader">Matched tree file</span><span role="columnheader">Status</span></div>{pairingReport.map((row) => <div key={row.alignment} role="row"><span role="cell">{row.alignment}</span><span role="cell">{row.tree ?? (row.candidates.length > 0 ? row.candidates.join(", ") : "—")}</span><strong role="cell" className={`is-${row.status}`}>{row.status}</strong></div>)}</div></section>}
+
+      {comparisonRecords.length > 0 && <PipelineComparisonStudio records={comparisonRecords} />}
 
       {runLog.length > 0 && <section className="pipeline-report"><div className="pipeline-report__heading"><div><p className="eyebrow">Batch record</p><h2>Run log</h2></div><span>{runLog.filter((entry) => entry.tone === "complete").length} completed steps</span></div><div className="pipeline-log">{runLog.map((entry) => <div key={entry.id}><span>{entry.dataset}</span><strong>{entry.component}</strong><small className={`is-${entry.tone}`}>{entry.tone}</small><p>{entry.detail}</p></div>)}</div></section>}
     </div>
