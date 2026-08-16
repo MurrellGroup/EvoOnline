@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { methodLabel, nodeStage, parsePipelineDefinition, pluginById, compatibleSources } from "./pipeline.js";
 import { runPipeline } from "./runner.js";
 
-const VERSION = "0.1.0";
+const VERSION = "0.1.4";
 
 export function installBrokenPipeHandler(): void {
   const handler = (error: NodeJS.ErrnoException): void => {

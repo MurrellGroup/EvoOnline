@@ -151,23 +151,34 @@ jobs:
         with:
           name: evo-cli-windows-x64.zip
           path: release
-      - name: Run packaged Windows executables
+      - name: Extract Windows bundle
         shell: pwsh
         run: |
           Expand-Archive -Path release/evo-cli-windows-x64.zip -DestinationPath release
-          $bundle = "release/evo-cli-windows-x64"
-          & "$bundle/evo-cli.exe" version
+      - name: Verify packaged evo-cli starts on Windows
+        shell: pwsh
+        run: |
+          & "release/evo-cli-windows-x64/evo-cli.exe" version
           if ($LASTEXITCODE -ne 0) { throw "evo-cli version failed" }
+      - name: Verify packaged FastTree runs on Windows
+        shell: pwsh
+        run: |
           ">A`nACGTACGTACGT`n>B`nACGTACGTACGA`n>C`nACGTTCGTACGA" |
-            & "$bundle/FastTree.exe" -nt |
+            & "release/evo-cli-windows-x64/FastTree.exe" -nt |
             Set-Content release/fasttree-smoke.nwk
           if ($LASTEXITCODE -ne 0 -or !(Test-Path release/fasttree-smoke.nwk)) { throw "FastTree smoke test failed" }
-          & "$bundle/evo-cli.exe" run `
+      - name: Run packaged evo-cli pipeline on Windows
+        shell: pwsh
+        run: |
+          & "release/evo-cli-windows-x64/evo-cli.exe" run `
             --config apps/evo-cli/tests/fixtures/fasttree-fubar.pipeline.json `
             --input apps/evo-cli/tests/fixtures/smoke.fasta `
             --output release/evo-cli-smoke-output `
             --quiet
           if ($LASTEXITCODE -ne 0) { throw "evo-cli pipeline smoke test failed" }
+      - name: Check Windows pipeline manifest
+        shell: pwsh
+        run: |
           $manifest = Get-Content release/evo-cli-smoke-output/run-manifest.json -Raw | ConvertFrom-Json
           if ($manifest.summary.failedRoutes -ne 0 -or $manifest.summary.completedRoutes -ne 2) {
             throw "Unexpected evo-cli smoke-test route summary"
