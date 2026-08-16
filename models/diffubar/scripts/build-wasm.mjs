@@ -37,7 +37,11 @@ const args = [
 ];
 
 await new Promise((resolve, reject) => {
-  const child = spawn(asc, args, { cwd: root, stdio: "inherit" });
+  const child = spawn(asc, args, {
+    cwd: root,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  });
   child.on("error", reject);
   child.on("exit", (code) => code === 0 ? resolve() : reject(new Error(`AssemblyScript compiler exited with ${code}`)));
 });
