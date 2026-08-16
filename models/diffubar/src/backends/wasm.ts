@@ -61,11 +61,14 @@ export function configureWasmBinary(path: string | URL | undefined): void {
 }
 
 async function wasmBytes(): Promise<ArrayBuffer> {
+  if (typeof configuredWasmPath === "string") {
+    const { readFile } = await import("node:fs/promises");
+    const bytes = await readFile(configuredWasmPath);
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  }
   const url = configuredWasmPath === undefined
     ? new URL("../wasm/diffubar.wasm", import.meta.url)
-    : configuredWasmPath instanceof URL
-      ? configuredWasmPath
-      : new URL(configuredWasmPath, "file://");
+    : configuredWasmPath;
   if (url.protocol === "file:") {
     const { readFile } = await import("node:fs/promises");
     const bytes = await readFile(url);
