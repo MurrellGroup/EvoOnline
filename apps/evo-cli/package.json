@@ -1,0 +1,34 @@
+{
+  "name": "@phylo-workbench/evo-cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Standalone EvoOnline pipeline runner",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "@phylo-workbench/model-bame": "*",
+    "@phylo-workbench/model-bsrel": "*",
+    "@phylo-workbench/model-cladeshift": "*",
+    "@phylo-workbench/model-diffubar": "*",
+    "@phylo-workbench/model-fsart": "*",
+    "@phylo-workbench/model-fubar": "*",
+    "@phylo-workbench/model-jemspr": "*",
+    "@phylo-workbench/model-mosaicspr": "*",
+    "@phylo-workbench/model-sdk": "*",
+    "@phylo-workbench/model-simulator": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.2.1",
+    "@webgpu/types": "^0.1.64",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

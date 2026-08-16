@@ -14,6 +14,12 @@ The HTML files contain a small EvoOnline `postMessage` bridge and alivibe's same
 
 alivibe loads Aioli/bioWASM for Kalign and FastTree. Those runtime packages retain their own upstream licenses and notices.
 
+## FastTree in standalone evo-cli releases
+
+Self-contained `evo-cli` release archives include an unmodified, separately executed FastTree 2.1.11 executable compiled from `old/FastTree-2.1.11.c` in the official [morgannprice/fasttree](https://github.com/morgannprice/fasttree) repository at commit `29c5e62fbcd93230ee325f9c6a17b81f00e3c72a` (tag `v2.2.0`). The pinned source file SHA-256 is `9026ae550307374be92913d3098f8d44187d30bea07902b9dcbfb123eaa2050f`.
+
+FastTree's source notice permits use under the GNU General Public License, version 2 or (at the recipient's option) any later version. These bundles convey it under GPL-3.0 using the license file supplied by the upstream repository. It remains a separate executable beside `evo-cli`, is invoked through standard input/output, and is not linked into EvoOnline. Every release archive includes the exact corresponding source file and FastTree license. FastTree remains covered by the GPL, while the separate and independent EvoOnline code remains under its own license.
+
 ## DifFUBAR WebGPU implementation
 
 `models/diffubar` incorporates the previously supplied optimized DifFUBAR TypeScript/AssemblyScript implementation under its included MIT license. Its README and parity documentation are preserved in that package.

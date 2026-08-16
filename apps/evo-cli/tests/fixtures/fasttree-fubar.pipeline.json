@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "id": "release-smoke-fasttree-fubar",
+  "name": "Release smoke: FastTree into FUBAR",
+  "nodes": [
+    { "id": "fasttree", "kind": "fasttree", "parameters": { "model": "gtr", "fastest": true } },
+    { "id": "fubar", "kind": "model", "modelId": "fubar", "parameters": { "gridPoints": 4, "iterations": 20, "burnin": 5 } }
+  ]
+}

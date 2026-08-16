@@ -26,6 +26,7 @@ export {
 export { compileTree } from "./tree/compiler.js";
 export {
   WasmBackend,
+  configureWasmBinary,
   normalizeConditionalLikelihoods,
   normalizeConditionalLikelihoodsInPlace,
 } from "./backends/wasm.js";

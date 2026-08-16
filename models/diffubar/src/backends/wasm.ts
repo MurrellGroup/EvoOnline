@@ -51,9 +51,21 @@ type WasmExports = Record<string, any> & {
 
 let compiledModulePromise: Promise<WebAssembly.Module> | undefined;
 let defaultInstancePromise: Promise<WasmExports> | undefined;
+let configuredWasmPath: string | URL | undefined;
+
+/** Allow standalone hosts to point the engine at an embedded immutable WASM asset. */
+export function configureWasmBinary(path: string | URL | undefined): void {
+  configuredWasmPath = path;
+  compiledModulePromise = undefined;
+  defaultInstancePromise = undefined;
+}
 
 async function wasmBytes(): Promise<ArrayBuffer> {
-  const url = new URL("../wasm/diffubar.wasm", import.meta.url);
+  const url = configuredWasmPath === undefined
+    ? new URL("../wasm/diffubar.wasm", import.meta.url)
+    : configuredWasmPath instanceof URL
+      ? configuredWasmPath
+      : new URL(configuredWasmPath, "file://");
   if (url.protocol === "file:") {
     const { readFile } = await import("node:fs/promises");
     const bytes = await readFile(url);
