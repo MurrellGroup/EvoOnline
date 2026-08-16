@@ -173,9 +173,16 @@ jobs:
           & "release/evo-cli-windows-x64/evo-cli.exe" run `
             --config apps/evo-cli/tests/fixtures/fasttree-fubar.pipeline.json `
             --input apps/evo-cli/tests/fixtures/smoke.fasta `
-            --output release/evo-cli-smoke-output `
-            --quiet
-          if ($LASTEXITCODE -ne 0) { throw "evo-cli pipeline smoke test failed" }
+            --output release/evo-cli-smoke-output
+          if ($LASTEXITCODE -ne 0) {
+            $detail = if (Test-Path release/evo-cli-smoke-output/run-log.csv) {
+              (Get-Content release/evo-cli-smoke-output/run-log.csv | Select-Object -Last 8) -join " | "
+            } else {
+              "The CLI failed before writing run-log.csv."
+            }
+            Write-Output "::error title=Windows evo-cli pipeline failed::$detail"
+            exit 1
+          }
       - name: Check Windows pipeline manifest
         shell: pwsh
         run: |
