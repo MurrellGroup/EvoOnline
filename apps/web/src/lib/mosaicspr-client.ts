@@ -16,6 +16,7 @@ import type { ParameterValues } from "@phylo-workbench/model-sdk";
 import type { WidgetBridge } from "@phylo-workbench/viewer-bridge";
 import type { MosaicSprWorkerRequest, MosaicSprWorkerResponse } from "../workers/mosaicspr.worker.js";
 import type { RunProgress } from "./diffubar-client.js";
+import { allocateCpuBudget, mapWithConcurrency } from "./cpu-budget.js";
 
 interface FastTreeScore extends SegmentLikelihood {
   readonly version: string;
@@ -50,7 +51,10 @@ export class MosaicSprClient {
   private worker: Worker | undefined;
   private abort: AbortController | undefined;
 
-  constructor(private readonly getAlignmentBridge: () => WidgetBridge | undefined) {}
+  constructor(
+    private readonly getAlignmentBridge: () => WidgetBridge | undefined,
+    private readonly getMaxCpus: () => number = () => Math.max(1, navigator.hardwareConcurrency || 1),
+  ) {}
 
   private createWorker(): Worker {
     return new Worker(new URL("../workers/mosaicspr.worker.ts", import.meta.url), { type: "module" });
@@ -78,27 +82,23 @@ export class MosaicSprClient {
       let version: string | undefined;
       let sharedGtr: Pick<SegmentLikelihood, "gtrFrequencies" | "gtrRates"> | undefined;
       const draftTrees: MosaicSprDraftTree[] = [];
+      const fastTreeBudget = allocateCpuBudget(Math.max(1, Math.min(8, this.getMaxCpus())), windows.length);
       const unsubscribe = bridge.onEvent((message) => {
         if (message.type !== "status") return;
         const payload = message.payload as { message?: string } | undefined;
         onProgress({ stage: "mosaicspr-tree-family", fraction: draftTrees.length / windows.length, message: payload?.message ?? "FastTree proposal fit active", indeterminate: true });
       });
       try {
-        for (let index = 0; index < windows.length; index += 1) {
+        const globalIndex = windows.findIndex((window) => window.start === 1 && window.end === proposal.sites);
+        if (globalIndex < 0) throw new Error("MosaicSPR omitted its required whole-alignment FastTree seed.");
+        const fitWindow = async (window: typeof windows[number]): Promise<MosaicSprDraftTree | undefined> => {
           abort.signal.throwIfAborted();
-          const window = windows[index]!;
-          onProgress({
-            stage: "mosaicspr-tree-family",
-            fraction: index / windows.length,
-            message: `FastTree seed ${index + 1}/${windows.length} · ${window.kind} ${window.start}–${window.end}`,
-            current: index,
-            total: windows.length,
-          });
           const score = await raceAbort(bridge.request<FastTreeScore>("score-fasttree-segment", {
             alignment,
             start: window.start,
             end: window.end,
             fastest: Boolean(parameters.fastTreeFastest ?? true),
+            maxParallel: fastTreeBudget.parallelism,
             ...(sharedGtr?.gtrFrequencies === undefined ? {} : { gtrFrequencies: sharedGtr.gtrFrequencies }),
             ...(sharedGtr?.gtrRates === undefined ? {} : { gtrRates: sharedGtr.gtrRates }),
           }, 15 * 60_000), abort.signal);
@@ -106,8 +106,8 @@ export class MosaicSprClient {
           if (window.start === 1 && window.end === proposal.sites && score.gtrFrequencies !== undefined && score.gtrRates !== undefined) {
             sharedGtr = { gtrFrequencies: score.gtrFrequencies, gtrRates: score.gtrRates };
           }
-          if (!isFullyResolvedTopology(score.tree)) continue;
-          draftTrees.push({
+          if (!isFullyResolvedTopology(score.tree)) return undefined;
+          return {
             id: window.id,
             kind: window.kind,
             start: window.start,
@@ -116,8 +116,26 @@ export class MosaicSprClient {
             logLikelihood: score.logLikelihood,
             elapsedMs: score.elapsedMs,
             topologySignature: canonicalTopologySignature(score.tree),
+          };
+        };
+        const globalWindow = windows[globalIndex]!;
+        const globalDraft = await fitWindow(globalWindow);
+        if (globalDraft !== undefined) draftTrees.push(globalDraft);
+        let completedFits = 1;
+        const remaining = windows.map((window, index) => ({ window, index })).filter(({ index }) => index !== globalIndex);
+        const values = await mapWithConcurrency(remaining, fastTreeBudget.parallelism, async ({ window }) => {
+          const value = await fitWindow(window);
+          completedFits += 1;
+          onProgress({
+            stage: "mosaicspr-tree-family",
+            fraction: completedFits / windows.length,
+            message: `${fastTreeBudget.parallelism} concurrent FastTree runtime${fastTreeBudget.parallelism === 1 ? "" : "s"} · completed ${window.kind} ${window.start}–${window.end}`,
+            current: completedFits,
+            total: windows.length,
           });
-        }
+          return value;
+        });
+        draftTrees.push(...values.filter((value): value is MosaicSprDraftTree => value !== undefined));
       } finally {
         unsubscribe();
       }

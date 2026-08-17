@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { FsartAnalysisResult, TripletState } from "@phylo-workbench/model-fsart/browser-source";
 import { CommittedNumberInput } from "./CommittedNumberInput.js";
 import { FsartBreakpointFigure } from "./FsartBreakpointFigure.js";
+import { FsartHypothesisSpace } from "./FsartHypothesisSpace.js";
 import { FsartInferenceExplorer } from "./FsartInferenceExplorer.js";
 import { FsartPartitionFigure } from "./FsartPartitionFigure.js";
 import { FsartTripletFigure } from "./FsartTripletFigure.js";
@@ -9,6 +10,7 @@ import { RecombinationCodonHandoff, type RecombinationCodonMethod } from "./Reco
 import { createFsartCodonTreeSet } from "../lib/recombination-handoff.js";
 import type { RecombinationCodonTreeSet } from "@phylo-workbench/model-diffubar/browser-source";
 import { createFsartRecombinationBundle, type EvoOnlineRecombinationTreeBundle } from "../lib/recombination-bundle.js";
+import type { RunProgress } from "../lib/diffubar-client.js";
 
 function downloadCsv(csv: string, filename: string): void {
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -28,7 +30,7 @@ function pairLabel(state: TripletState, names: readonly string[]): string {
   return state === 0 ? `${names[0]}=${names[1]}` : state === 1 ? `${names[0]}=${names[2]}` : `${names[1]}=${names[2]}`;
 }
 
-export function FsartResultsView({ result, onLoadRecombinationTrees }: { readonly result: FsartAnalysisResult; readonly onLoadRecombinationTrees?: ((method: RecombinationCodonMethod, treeSet: RecombinationCodonTreeSet, bundle: EvoOnlineRecombinationTreeBundle) => void) | undefined }) {
+export function FsartResultsView({ result, onLoadRecombinationTrees, onPolishHypothesis }: { readonly result: FsartAnalysisResult; readonly onLoadRecombinationTrees?: ((method: RecombinationCodonMethod, treeSet: RecombinationCodonTreeSet, bundle: EvoOnlineRecombinationTreeBundle) => void) | undefined; readonly onPolishHypothesis?: ((treeIds: readonly string[], onProgress: (progress: RunProgress) => void) => Promise<void>) | undefined }) {
   const [selectedRank, setSelectedRank] = useState(result.breakpoints[0]?.rank ?? 1);
   const [minimumEvidence, setMinimumEvidence] = useState(0);
   const [showOnlyStrongTriplets, setShowOnlyStrongTriplets] = useState(false);
@@ -46,8 +48,8 @@ export function FsartResultsView({ result, onLoadRecombinationTrees }: { readonl
 
   return <section className="results" aria-labelledby="fsart-results-heading">
     <div className="section-heading section-heading--results"><div><p className="eyebrow">Analysis complete · exploratory recombination analysis</p><h2 id="fsart-results-heading">FSART</h2><p>Fast Stepwise Approximate Recombination Test</p></div><div className="result-downloads"><button type="button" className="button button--primary" onClick={() => downloadCsv(result.breakpointCsv, "fsart-consensus-proposals.csv")}>Proposal CSV</button><button type="button" className="button button--secondary" onClick={() => downloadCsv(result.partitionCsv, "fsart-viterbi-runs.csv")}>Viterbi runs CSV</button><button type="button" className="button button--secondary" disabled={result.treeHmm.status !== "complete"} onClick={() => downloadCsv(result.treeHmmCsv, "fsart-tree-hmm.csv")}>Tree-HMM CSV</button></div></div>
-    <p className="method-note"><strong>What FSART asks:</strong> does phylogenetic support change along the nucleotide alignment? A pair-covered informative-triplet scan generates an uncorrected evidence distribution without a multiple-comparisons admission gate. Independent triplet count and compressed evidence are aggregated into hard-spaced consensus boundaries; those boundaries only generate trees. EvoOnline fits every atomic segment, adjacent pair, adjacent triplet, and the whole alignment, caches every unique resolved topology's likelihood at every site, then performs a rapid beam plus add/drop/swap search in that cached likelihood space.</p>
-    <p className="method-note method-note--warning"><strong>Approximate GARD competitor:</strong> AIC/AICc/BIC—not triplet p-values—selects the final topology set. A minimum-length Viterbi reconstruction is alternated with tree refits for a bounded number of rounds, and convergence is reported rather than required. This remains an exploratory FastTree-based method, not exact GARD, RDP, or proprietary BURT software.</p>
+    <p className="method-note"><strong>What FSART asks:</strong> does phylogenetic support change along the nucleotide alignment? A pair-covered informative-triplet scan generates an uncorrected evidence distribution without a multiple-comparisons admission gate. Independent triplet count and compressed evidence are aggregated into hard-spaced consensus boundaries; those boundaries only generate trees. EvoOnline fits every atomic segment, adjacent pair, adjacent triplet, and the whole alignment, caches every unique resolved topology's likelihood at every site, performs a rapid beam plus add/drop/swap search, then exactly checks a bounded finalist set in that cached likelihood space.</p>
+    <p className="method-note method-note--warning"><strong>Approximate GARD competitor:</strong> {result.treeHmm.manualPolish === undefined ? "AIC/AICc/BIC—not triplet p-values—selects the automatic topology set." : `The displayed result is a user-selected alternative (${result.treeHmm.manualPolish.requestedTreeIds.join(" + ")}); the automatic IC search remains in the hypothesis audit.`} A minimum-length Viterbi reconstruction is alternated with tree refits for a bounded number of rounds, and convergence is reported rather than required. This remains an exploratory FastTree-based method, not exact GARD, RDP, or proprietary BURT software.</p>
     <RecombinationCodonHandoff treeSet={codonTreeSet} bundle={recombinationBundle} error={codonTreeError} onLoad={onLoadRecombinationTrees} />
     <div className="result-stats">
       <div><span>Consensus proposals</span><strong>{result.breakpoints.length.toLocaleString()}</strong></div>
@@ -58,13 +60,15 @@ export function FsartResultsView({ result, onLoadRecombinationTrees }: { readonl
       <div><span>Minimum tree span</span><strong>{result.diagnostics.minimumTreeSpan.toLocaleString()} nt</strong><small>≈ {result.diagnostics.expectedVariableSitesPerMinimumSpan.toFixed(1)} variable sites</small></div>
       <div><span>Scan window</span><strong>{result.diagnostics.scanWindow} + {result.diagnostics.scanWindow}</strong><small>informative events</small></div>
       <div><span>Scanner</span><strong>{result.diagnostics.parallelWorkers} worker{result.diagnostics.parallelWorkers === 1 ? "" : "s"}</strong><small>32-site bitsets · {result.diagnostics.pairEqualityCache ? "pair cache" : "bounded-memory path"}</small></div>
-      <div><span>FastTree</span><strong>{result.partition.fastTreeVersion ?? result.partition.status}</strong></div>
+      <div><span>FastTree</span><strong>{result.partition.fastTreeVersion ?? result.partition.status}</strong><small>{result.topologyBankAudit === undefined ? "" : `up to ${result.topologyBankAudit.fastTreeParallelism} independent runtime${result.topologyBankAudit.fastTreeParallelism === 1 ? "" : "s"}`}</small></div>
       <div><span>Tree family</span><strong>{result.partition.candidateTrees.length.toLocaleString()}</strong><small>global + segment spans 1–3</small></div>
       <div><span>Tree HMM</span><strong>{result.treeHmm.status === "complete" ? `${result.treeHmm.states.length} states` : result.treeHmm.status}</strong><small>{result.treeHmm.deltaCriterion === null ? "" : `Δ${result.treeHmm.criterion.toUpperCase()} ${result.treeHmm.deltaCriterion.toFixed(2)}`}</small></div>
       <div><span>Total time</span><strong>{((result.timings.totalMs ?? 0) / 1000).toFixed(2)} s</strong></div>
     </div>
 
     <details className="result-panel" open><summary><span>Breakpoint proposal landscape</span><small>Triplet peaks, consensus support, and refined Viterbi switches · editable · SVG</small></summary><div className="result-panel__body"><FsartBreakpointFigure result={result} selectedRank={selectedRank} onSelectRank={commitRank} /></div></details>
+
+    <details className="result-panel" open><summary><span>Searched hypothesis space and alternative polishing</span><small>{result.treeHmm.initialSubsetSearch?.evaluatedSubsets ?? result.treeHmm.subsetSearch?.evaluatedSubsets ?? 0} evaluated subsets · actual add/drop/swap neighborhood · selectable</small></summary><div className="result-panel__body"><FsartHypothesisSpace result={result} {...(onPolishHypothesis === undefined ? {} : { onPolish: onPolishHypothesis })} /></div></details>
 
     <details className="result-panel" open><summary><span>Topology-mixture HMM and linked segment trees</span><small>{result.treeHmm.status === "complete" ? `${result.treeHmm.states.length} conservative states · ${result.treeHmmProfiles.length} cached draft trees · two additional interactive inference modes` : result.treeHmm.message}</small></summary><div className="result-panel__body">
       {result.treeHmm.status === "complete" ? <FsartInferenceExplorer result={result} /> : <div className="figure-empty"><strong>Tree-HMM result unavailable.</strong><span>{result.treeHmm.message}</span></div>}

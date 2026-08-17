@@ -82,6 +82,7 @@ function evaluate(
     profiles.length,
     transitionProbability,
     weights,
+    normalized.logValues,
   );
   const viterbi = decodeTreeHmmViterbiParameters(
     profiles,

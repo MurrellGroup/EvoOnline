@@ -50,6 +50,8 @@ interface TreeHmmRequest {
   readonly beamWidth: number;
   readonly minimumRunLength: number;
   readonly stage?: string;
+  readonly searchMode?: "rapid" | "fixed";
+  readonly selectedIndexes?: readonly number[];
 }
 
 interface TreeHmmExploreInitRequest {
@@ -136,7 +138,8 @@ scope.onmessage = (event: MessageEvent<Request>): void => {
           maximumStates: request.maximumStates,
           beamWidth: request.beamWidth,
           minimumRunLength: request.minimumRunLength,
-          searchMode: "rapid",
+          searchMode: request.searchMode ?? "rapid",
+          ...(request.selectedIndexes === undefined ? {} : { selectedIndexes: request.selectedIndexes }),
           onProgress: (fraction, detail) => {
             const message: Response = { type: "progress", id: request.id, stage: request.stage ?? "tree-hmm", fraction, detail };
             scope.postMessage(message);

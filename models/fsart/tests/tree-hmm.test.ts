@@ -49,6 +49,64 @@ test("tree HMM recovers a topology transition and a local switch interval", () =
   assert.ok(result.switchIntervals[0]!.intervalHigh - result.switchIntervals[0]!.intervalLow < 30);
   assert.deepEqual(result.viterbi?.breakpoints, [100]);
   assert.ok((result.subsetSearch?.evaluatedSubsets ?? 0) >= 3);
+  assert.ok((result.subsetSearch?.hypotheses.length ?? 0) >= 3);
+  assert.ok((result.subsetSearch?.transitions.length ?? 0) >= 1);
+  assert.ok((result.subsetSearch?.exactVerifiedKeys.length ?? 0) >= 1);
+  assert.equal(result.subsetSearch?.exactSelectedKey, "0,1");
+});
+
+test("tree HMM remains finite across extreme per-site likelihood contrasts", () => {
+  const sites = 180;
+  const first = Array.from({ length: sites }, (_value, site) => site < 90 ? -1_000_000 : -1_001_200);
+  const second = Array.from({ length: sites }, (_value, site) => site < 90 ? -1_001_200 : -1_000_000);
+  const result = fitTreeHmm([profile("T1", first), profile("T2", second)], {
+    taxa: 4,
+    criterion: "bic",
+    maximumRateSlices: 9,
+  });
+  assert.equal(result.status, "complete");
+  assert.equal(result.states.length, 2);
+  assert.ok(Number.isFinite(result.logLikelihood));
+  assert.ok(Number.isFinite(result.criterionValue));
+  assert.deepEqual(result.viterbi?.breakpoints, [90]);
+});
+
+test("tree HMM rejects non-finite emissions instead of silently favoring one tree", () => {
+  const values = Array.from({ length: 120 }, () => -1);
+  const broken = values.slice();
+  broken[73] = Number.NaN;
+  assert.throws(() => fitTreeHmm([profile("T1", values), profile("T2", broken)], {
+    taxa: 4,
+    criterion: "bic",
+  }), /T2.*site 74/);
+});
+
+test("a narrow rapid beam always evaluates additions to the explicit global null", () => {
+  const sites = 150;
+  const global = Array.from({ length: sites }, () => -2);
+  const regional = Array.from({ length: sites }, (_value, site) => site < 75 ? -1 : -5);
+  const result = fitTreeHmm([profile("T1", global), profile("T2", regional)], {
+    taxa: 4,
+    criterion: "bic",
+    maximumStates: 2,
+    beamWidth: 1,
+    maximumRateSlices: 5,
+  });
+  assert.ok(result.subsetSearch?.transitions.some((transition) => transition.fromKey === "0" && transition.toKey === "0,1"));
+});
+
+test("AICc reports an infeasible multi-tree model instead of disguising it as an underflow failure", () => {
+  const sites = 100;
+  const first = Array.from({ length: sites }, (_value, site) => site < 50 ? 0 : -20);
+  const second = Array.from({ length: sites }, (_value, site) => site < 50 ? -20 : 0);
+  const result = fitTreeHmm([profile("T1", first), profile("T2", second)], {
+    taxa: 30,
+    criterion: "aicc",
+    maximumStates: 2,
+  });
+  assert.equal(result.states.length, 1);
+  const multiple = result.subsetSearch?.hypotheses.find((hypothesis) => hypothesis.stateCount === 2);
+  assert.equal(multiple?.criterionValue, Number.POSITIVE_INFINITY);
 });
 
 test("fixed low-switch exploration removes draft trees absent from the stabilized Viterbi path", () => {

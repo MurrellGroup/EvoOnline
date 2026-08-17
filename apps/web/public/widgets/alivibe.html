@@ -441,7 +441,10 @@ const state = {
     ctxTargetRow: null,
     pastedNameCounter: 1,
     aioliCLI: null,
-    fastTreeQueue: Promise.resolve(),
+    fastTreeRuntimePromises: [],
+    fastTreeRuntimeBusy: [],
+    fastTreeJobs: [],
+    fastTreeActiveJobs: 0,
     fastTreeJob: 0
 };
 
@@ -498,6 +501,8 @@ async function init() {
     // Initialize Aioli
     try {
         state.aioliCLI = await new Aioli(["kalign/3.3.1", "fasttree/2.1.11"], { printInterleaved: false });
+        state.fastTreeRuntimePromises[0] = Promise.resolve(state.aioliCLI);
+        state.fastTreeRuntimeBusy[0] = false;
     } catch (err) {
         console.error("Failed to initialize Aioli:", err);
     }
@@ -1616,8 +1621,8 @@ function inferTreeNJ() {
     }, 50);
 }
 
-async function runFastTreeTask() {
-    if (!state.aioliCLI) {
+async function runFastTreeTask(cli = state.aioliCLI) {
+    if (!cli) {
         alert("FastTree (bioWASM) is not yet initialized. Please wait or refresh.");
         return;
     }
@@ -1632,7 +1637,7 @@ async function runFastTreeTask() {
             return `>${idx}\n${s.seq.join('')}`;
         }).join('\n');
         
-        await state.aioliCLI.mount({
+        await cli.mount({
             name: "input_tree.fa",
             data: fastaInput
         });
@@ -1649,7 +1654,7 @@ async function runFastTreeTask() {
         flags += " " + document.getElementById('sel-ft-speed').value;
 
         const command = `fasttree ${flags.trim()} input_tree.fa`;
-        const execution = await state.aioliCLI.exec(command);
+        const execution = await cli.exec(command);
         const newick = typeof execution === 'string' ? execution : execution.stdout;
         
         if (newick && newick.includes('(')) {
@@ -1723,19 +1728,19 @@ function parseFastTreeModel(stderr) {
     };
 }
 
-async function fitFastTreeGtrModel(payload) {
-    if (!state.aioliCLI) throw new Error('FastTree (bioWASM) is not initialized.');
+async function fitFastTreeGtrModel(payload, cli) {
+    if (!cli) throw new Error('FastTree (bioWASM) is not initialized.');
     const parsed = parseStandaloneFasta(payload.alignment);
     const filename = `jemspr_gtr_${state.fastTreeJob++}.fa`;
     const input = parsed.sequences.map((sequence, index) => `>${index}\n${sequence}`).join('\n');
-    await state.aioliCLI.mount({ name: filename, data: input });
+    await cli.mount({ name: filename, data: input });
     const started = performance.now();
     try {
         // FastTree is used only as a whole-alignment estimator of the fixed
         // GTR matrix. Its inferred topology, branch lengths, CAT rates,
         // support values, and objective are deliberately neither returned nor
         // consumed by JEMSPR.
-        const execution = await state.aioliCLI.exec(`fasttree -nt -gtr -nosupport -nopr ${filename}`);
+        const execution = await cli.exec(`fasttree -nt -gtr -nosupport -nopr ${filename}`);
         const stderr = typeof execution === 'string' ? execution : execution.stderr;
         const fitted = parseFastTreeModel(String(stderr));
         if (!Array.isArray(fitted.gtrFrequencies) || fitted.gtrFrequencies.length !== 4 || fitted.gtrFrequencies.some(value => !(value > 0) || !Number.isFinite(value))) {
@@ -1752,7 +1757,7 @@ async function fitFastTreeGtrModel(payload) {
             elapsedMs: performance.now() - started,
         };
     } finally {
-        try { await state.aioliCLI.fs.unlink(filename); } catch (_error) { /* virtual scratch cleanup is best-effort */ }
+        try { await cli.fs.unlink(filename); } catch (_error) { /* virtual scratch cleanup is best-effort */ }
     }
 }
 
@@ -1778,8 +1783,8 @@ function parseFastTreeSiteLikelihoods(logText, sites) {
     return output;
 }
 
-async function scoreFastTreeSegment(payload) {
-    if (!state.aioliCLI) throw new Error('FastTree (bioWASM) is not initialized.');
+async function scoreFastTreeSegment(payload, cli) {
+    if (!cli) throw new Error('FastTree (bioWASM) is not initialized.');
     const parsed = parseStandaloneFasta(payload.alignment);
     const start = Math.max(1, Math.floor(Number(payload.start)));
     const end = Math.min(parsed.sequences[0].length, Math.floor(Number(payload.end)));
@@ -1787,7 +1792,7 @@ async function scoreFastTreeSegment(payload) {
     const sliced = parsed.sequences.map(sequence => sequence.slice(start - 1, end));
     const filename = `fsart_${state.fastTreeJob++}.fa`;
     const input = sliced.map((sequence, index) => `>${index}\n${sequence}`).join('\n');
-    await state.aioliCLI.mount({ name: filename, data: input });
+    await cli.mount({ name: filename, data: input });
     const frequencies = Array.from(payload.gtrFrequencies ?? [], Number);
     const rates = Array.from(payload.gtrRates ?? [], Number);
     const fixedModel = frequencies.length === 4 && rates.length === 6
@@ -1796,7 +1801,7 @@ async function scoreFastTreeSegment(payload) {
     const modelArgs = fixedModel ? `-gtrfreq ${frequencies.join(' ')} -gtrrates ${rates.join(' ')} ` : '';
     const command = `fasttree -nt -gtr ${modelArgs}-nosupport -gamma -nopr ${payload.fastest ? '-fastest ' : ''}${filename}`;
     const started = performance.now();
-    const execution = await state.aioliCLI.exec(command);
+    const execution = await cli.exec(command);
     const stdout = typeof execution === 'string' ? execution : execution.stdout;
     const stderr = typeof execution === 'string' ? execution : execution.stderr;
     const treeLine = String(stdout).split(/\r?\n/).filter(line => line.includes('(')).pop();
@@ -1809,7 +1814,7 @@ async function scoreFastTreeSegment(payload) {
         for (const sequence of sliced) if (/[ACGT]/.test(sequence[site])) states.add(sequence[site]);
         if (states.size > 1) variableSites += 1;
     }
-    try { await state.aioliCLI.fs.unlink(filename); } catch (_error) { /* virtual scratch cleanup is best-effort */ }
+    try { await cli.fs.unlink(filename); } catch (_error) { /* virtual scratch cleanup is best-effort */ }
     return {
         start,
         end,
@@ -1836,15 +1841,15 @@ function normalizeFastTreeRanges(payload, sites) {
     return [[start, end]];
 }
 
-async function scoreFastTreeRanges(payload) {
-    if (!state.aioliCLI) throw new Error('FastTree (bioWASM) is not initialized.');
+async function scoreFastTreeRanges(payload, cli) {
+    if (!cli) throw new Error('FastTree (bioWASM) is not initialized.');
     const parsed = parseStandaloneFasta(payload.alignment);
     const ranges = normalizeFastTreeRanges(payload, parsed.sequences[0].length);
     const sliced = parsed.sequences.map(sequence => ranges.map(range => sequence.slice(range[0] - 1, range[1])).join(''));
     if (sliced[0].length < 1) throw new Error('The Viterbi-assigned FastTree source has no aligned sites.');
     const filename = `fsart_ranges_${state.fastTreeJob++}.fa`;
     const input = sliced.map((sequence, index) => `>${index}\n${sequence}`).join('\n');
-    await state.aioliCLI.mount({ name: filename, data: input });
+    await cli.mount({ name: filename, data: input });
     const frequencies = Array.from(payload.gtrFrequencies ?? [], Number);
     const rates = Array.from(payload.gtrRates ?? [], Number);
     const fixedModel = frequencies.length === 4 && rates.length === 6
@@ -1854,7 +1859,7 @@ async function scoreFastTreeRanges(payload) {
     const command = `fasttree -nt -gtr ${modelArgs}-nosupport -gamma -nopr ${payload.fastest ? '-fastest ' : ''}${filename}`;
     const started = performance.now();
     try {
-        const execution = await state.aioliCLI.exec(command);
+        const execution = await cli.exec(command);
         const stdout = typeof execution === 'string' ? execution : execution.stdout;
         const stderr = typeof execution === 'string' ? execution : execution.stderr;
         const treeLine = String(stdout).split(/\r?\n/).filter(line => line.includes('(')).pop();
@@ -1879,12 +1884,12 @@ async function scoreFastTreeRanges(payload) {
             ...parseFastTreeModel(String(stderr)),
         };
     } finally {
-        try { await state.aioliCLI.fs.unlink(filename); } catch (_error) { /* virtual scratch cleanup is best-effort */ }
+        try { await cli.fs.unlink(filename); } catch (_error) { /* virtual scratch cleanup is best-effort */ }
     }
 }
 
-async function scoreFastTreeTopology(payload) {
-    if (!state.aioliCLI) throw new Error('FastTree (bioWASM) is not initialized.');
+async function scoreFastTreeTopology(payload, cli) {
+    if (!cli) throw new Error('FastTree (bioWASM) is not initialized.');
     const parsed = parseStandaloneFasta(payload.alignment);
     const job = state.fastTreeJob++;
     const alignmentFilename = `fsart_hmm_${job}.fa`;
@@ -1903,8 +1908,8 @@ async function scoreFastTreeTopology(payload) {
     });
     const alignmentInput = scoringSequences.map((sequence, index) => `>${index}\n${sequence}`).join('\n');
     const indexedTree = indexFastTreeNames(String(payload.tree), parsed.names);
-    await state.aioliCLI.mount({ name: alignmentFilename, data: alignmentInput });
-    await state.aioliCLI.mount({ name: treeFilename, data: indexedTree.endsWith(';') ? indexedTree : `${indexedTree};` });
+    await cli.mount({ name: alignmentFilename, data: alignmentInput });
+    await cli.mount({ name: treeFilename, data: indexedTree.endsWith(';') ? indexedTree : `${indexedTree};` });
     const frequencies = Array.from(payload.gtrFrequencies ?? [], Number);
     const rates = Array.from(payload.gtrRates ?? [], Number);
     if (frequencies.length !== 4 || frequencies.some(value => !(value > 0) || !Number.isFinite(value))) throw new Error('A valid shared four-frequency GTR fit is required.');
@@ -1912,10 +1917,10 @@ async function scoreFastTreeTopology(payload) {
     const command = `fasttree -nt -gtr -gtrfreq ${frequencies.join(' ')} -gtrrates ${rates.join(' ')} -nosupport -gamma -nopr -nome -mllen -intree ${treeFilename} -log ${logFilename} ${alignmentFilename}`;
     const started = performance.now();
     try {
-        const execution = await state.aioliCLI.exec(command);
+        const execution = await cli.exec(command);
         const stdout = typeof execution === 'string' ? execution : execution.stdout;
         const stderr = typeof execution === 'string' ? execution : execution.stderr;
-        const logText = await state.aioliCLI.cat(logFilename);
+        const logText = await cli.cat(logFilename);
         if (typeof logText !== 'string') throw new Error('FastTree did not create its per-site likelihood log.');
         const treeLine = String(stdout).split(/\r?\n/).filter(line => line.includes('(')).pop();
         if (!treeLine) throw new Error('FastTree returned no fixed-topology Newick tree.');
@@ -1937,33 +1942,75 @@ async function scoreFastTreeTopology(payload) {
         };
     } finally {
         for (const filename of [alignmentFilename, treeFilename, logFilename]) {
-            try { await state.aioliCLI.fs.unlink(filename); } catch (_error) { /* virtual scratch cleanup is best-effort */ }
+            try { await cli.fs.unlink(filename); } catch (_error) { /* virtual scratch cleanup is best-effort */ }
         }
     }
 }
 
-function queueFastTreeSegment(payload) {
-    const pending = state.fastTreeQueue.then(() => scoreFastTreeSegment(payload));
-    state.fastTreeQueue = pending.catch(() => undefined);
+function requestedFastTreeParallelism(payload) {
+    const hardware = Math.max(1, Math.floor(Number(navigator.hardwareConcurrency || 1)));
+    const requested = Math.max(1, Math.floor(Number(payload?.maxParallel ?? 1)));
+    return Math.min(8, hardware, requested);
+}
+
+function fastTreeRuntime(index) {
+    if (state.fastTreeRuntimePromises[index]) return state.fastTreeRuntimePromises[index];
+    // Each Aioli instance owns an independent worker and virtual filesystem.
+    // A single instance cannot safely execute two FastTree commands at once.
+    const pending = Promise.resolve(new Aioli(["fasttree/2.1.11"], { printInterleaved: false }));
+    state.fastTreeRuntimePromises[index] = pending;
+    state.fastTreeRuntimeBusy[index] = false;
     return pending;
+}
+
+function pumpFastTreeJobs() {
+    const first = state.fastTreeJobs[0];
+    if (!first) return;
+    const limit = first.maximumParallel;
+    while (state.fastTreeJobs.length > 0 && state.fastTreeActiveJobs < limit) {
+        let slot = -1;
+        for (let index = 0; index < limit; index += 1) {
+            if (!state.fastTreeRuntimeBusy[index]) { slot = index; break; }
+        }
+        if (slot < 0) return;
+        const job = state.fastTreeJobs.shift();
+        // Do not let later jobs with a lower user CPU limit be overtaken by
+        // work from a larger pre-existing pool.
+        if (state.fastTreeActiveJobs >= job.maximumParallel || slot >= job.maximumParallel) {
+            state.fastTreeJobs.unshift(job);
+            return;
+        }
+        state.fastTreeRuntimeBusy[slot] = true;
+        state.fastTreeActiveJobs += 1;
+        fastTreeRuntime(slot).then(job.task).then(job.resolve, job.reject).finally(() => {
+            state.fastTreeRuntimeBusy[slot] = false;
+            state.fastTreeActiveJobs -= 1;
+            pumpFastTreeJobs();
+        });
+    }
+}
+
+function queueFastTreeJob(payload, task) {
+    return new Promise((resolve, reject) => {
+        state.fastTreeJobs.push({ maximumParallel: requestedFastTreeParallelism(payload), task, resolve, reject });
+        pumpFastTreeJobs();
+    });
+}
+
+function queueFastTreeSegment(payload) {
+    return queueFastTreeJob(payload, cli => scoreFastTreeSegment(payload, cli));
 }
 
 function queueFastTreeRanges(payload) {
-    const pending = state.fastTreeQueue.then(() => scoreFastTreeRanges(payload));
-    state.fastTreeQueue = pending.catch(() => undefined);
-    return pending;
+    return queueFastTreeJob(payload, cli => scoreFastTreeRanges(payload, cli));
 }
 
 function queueFastTreeTopology(payload) {
-    const pending = state.fastTreeQueue.then(() => scoreFastTreeTopology(payload));
-    state.fastTreeQueue = pending.catch(() => undefined);
-    return pending;
+    return queueFastTreeJob(payload, cli => scoreFastTreeTopology(payload, cli));
 }
 
 function queueFastTreeGtrModel(payload) {
-    const pending = state.fastTreeQueue.then(() => fitFastTreeGtrModel(payload));
-    state.fastTreeQueue = pending.catch(() => undefined);
-    return pending;
+    return queueFastTreeJob(payload, cli => fitFastTreeGtrModel(payload, cli));
 }
 
 // --- Export Tree as Newick ---
