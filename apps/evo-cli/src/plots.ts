@@ -1,12 +1,14 @@
 import { resolve } from "node:path";
-import type { ComparisonSignal } from "./comparison.js";
+import type { ComparisonRecord, ComparisonSignal } from "./comparison.js";
 import { agreement, defaultPlotSignals, pairedValues, pearson } from "./comparison.js";
 import { rowsToCsv, writeText } from "./io.js";
+import type { ResolvedVisualizationSettings } from "./visualization.js";
+import { selectMethodSiteSignal } from "./visualization.js";
 
 export interface PlotFile {
   readonly path: string;
   readonly title: string;
-  readonly kind: "sites-by-results" | "correlation" | "agreement" | "scatter" | "fubar-selection" | "fubar-rates";
+  readonly kind: "sites-by-results" | "correlation" | "agreement" | "scatter" | "fubar-selection" | "fubar-rates" | "method-profile" | "posterior-violin";
   readonly companionPaths?: readonly string[];
 }
 
@@ -195,4 +197,241 @@ export async function writeComparisonPlots(directory: string, signals: readonly 
     scatterPlot(directory, signals),
   ]);
   return [...plots.filter((plot): plot is PlotFile => plot !== undefined), ...await fubarPlots(directory, signals)];
+}
+
+function object(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value) && !ArrayBuffer.isView(value);
+}
+
+function arrayLike(value: unknown): ArrayLike<number> | undefined {
+  return Array.isArray(value) || (ArrayBuffer.isView(value) && !(value instanceof DataView)) ? value as ArrayLike<number> : undefined;
+}
+
+function uniqueSignals(signals: readonly (ComparisonSignal | undefined)[]): readonly ComparisonSignal[] {
+  return [...new Map(signals.filter((signal): signal is ComparisonSignal => signal !== undefined).map((signal) => [signal.metricId, signal])).values()];
+}
+
+async function seriesPlot(
+  directory: string,
+  filename: string,
+  title: string,
+  subtitle: string,
+  signals: readonly ComparisonSignal[],
+): Promise<PlotFile | undefined> {
+  if (signals.length === 0 || signals.every((signal) => signal.values.length === 0)) return undefined;
+  const width = 1080;
+  const height = 440;
+  const left = 82;
+  const right = 28;
+  const top = 76;
+  const bottom = 68;
+  const ordinals = signals.flatMap((signal) => signal.values.map((value) => value.ordinal));
+  const [minimumOrdinal, maximumOrdinal] = finiteExtent(ordinals);
+  const [rawMinimum, rawMaximum] = finiteExtent(signals.flatMap((signal) => [...signal.values.map((value) => value.value), signal.threshold]));
+  const padding = Math.max(Number.EPSILON, (rawMaximum - rawMinimum) * 0.04);
+  const minimum = rawMinimum - padding;
+  const maximum = rawMaximum + padding;
+  const x = (ordinal: number): number => left + (ordinal - minimumOrdinal) / Math.max(1, maximumOrdinal - minimumOrdinal) * (width - left - right);
+  const y = (value: number): number => height - bottom - (value - minimum) / Math.max(Number.EPSILON, maximum - minimum) * (height - top - bottom);
+  const grid = [0, .25, .5, .75, 1].map((fraction) => {
+    const value = minimum + fraction * (maximum - minimum);
+    return `<line class="grid" x1="${left}" y1="${y(value)}" x2="${width - right}" y2="${y(value)}"/><text class="tick" x="${left - 8}" y="${y(value) + 3}" text-anchor="end">${value.toPrecision(4)}</text>`;
+  }).join("");
+  const thresholds = [...new Set(signals.map((signal) => signal.threshold).filter((value) => value >= minimum && value <= maximum))]
+    .map((value) => `<line class="threshold" x1="${left}" y1="${y(value)}" x2="${width - right}" y2="${y(value)}"/><text class="tick" x="${width - right - 4}" y="${y(value) - 4}" text-anchor="end">threshold ${value.toPrecision(4)}</text>`).join("");
+  const series = signals.map((signal, index) => {
+    const color = palette[index % palette.length]!;
+    const ordered = [...signal.values].sort((a, b) => a.ordinal - b.ordinal);
+    const path = ordered.map((value, point) => `${point === 0 ? "M" : "L"}${x(value.ordinal).toFixed(2)},${y(value.value).toFixed(2)}`).join(" ");
+    const legendX = left + (index % 4) * 230;
+    const legendY = 53 + Math.floor(index / 4) * 16;
+    return `<path d="${path}" fill="none" stroke="${color}" stroke-width="2"/><line x1="${legendX}" y1="${legendY}" x2="${legendX + 22}" y2="${legendY}" stroke="${color}" stroke-width="3"/><text class="legend" x="${legendX + 28}" y="${legendY + 3}">${escapeXml(compact(signal.metricLabel, 29))}</text>`;
+  }).join("");
+  const path = resolve(directory, filename);
+  await writeText(path, svgDocument(width, height, title, `<text class="title" x="18" y="25">${escapeXml(title)}</text><text class="subtitle" x="18" y="40">${escapeXml(subtitle)}</text>${grid}${thresholds}<line class="axis" x1="${left}" y1="${height - bottom}" x2="${width - right}" y2="${height - bottom}"/><line class="axis" x1="${left}" y1="${top}" x2="${left}" y2="${height - bottom}"/>${series}<text class="label" x="${(left + width - right) / 2}" y="${height - 23}" text-anchor="middle">${signals[0]!.unit === "site" ? "Codon site" : "Branch order"}</text><text class="tick" x="${left}" y="${height - bottom + 17}" text-anchor="middle">${Math.round(minimumOrdinal)}</text><text class="tick" x="${width - right}" y="${height - bottom + 17}" text-anchor="middle">${Math.round(maximumOrdinal)}</text>`));
+  return { path, title, kind: "method-profile" };
+}
+
+function distributionPath(
+  values: ArrayLike<number>,
+  masses: ArrayLike<number>,
+  center: number,
+  x: (value: number, index: number) => number,
+  maximumThickness: number,
+): string {
+  let maximum = 0;
+  for (let index = 0; index < masses.length; index += 1) maximum = Math.max(maximum, masses[index] ?? 0);
+  if (!(maximum > 0)) return "";
+  const upper = Array.from({ length: Math.min(values.length, masses.length) }, (_, index) => `${x(values[index]!, index).toFixed(2)},${(center - maximumThickness * masses[index]! / maximum).toFixed(2)}`);
+  const lower = Array.from({ length: Math.min(values.length, masses.length) }, (_, index) => `${x(values[index]!, index).toFixed(2)},${(center + maximumThickness * masses[index]! / maximum).toFixed(2)}`).reverse();
+  return `M${upper.join(" L")} L${lower.join(" L")} Z`;
+}
+
+interface ViolinLane {
+  readonly label: string;
+  readonly values: ArrayLike<number>;
+  readonly masses: ArrayLike<number>;
+  readonly color: string;
+}
+
+async function posteriorViolinPlot(
+  directory: string,
+  filename: string,
+  title: string,
+  subtitle: string,
+  rows: readonly { readonly site: number; readonly call: string; readonly lanes: readonly ViolinLane[] }[],
+): Promise<PlotFile> {
+  const width = 760;
+  const left = 108;
+  const right = 24;
+  const top = 88;
+  const rowHeight = 62;
+  const bottom = 74;
+  const height = top + Math.max(1, rows.length) * rowHeight + bottom;
+  const allValues = rows.flatMap((row) => row.lanes.flatMap((lane) => Array.from(lane.values)));
+  const [minimum, maximum] = finiteExtent(allValues);
+  const x = (value: number, index: number, length: number): number => Number.isFinite(value)
+    ? left + (value - minimum) / Math.max(Number.EPSILON, maximum - minimum) * (width - left - right)
+    : left + index / Math.max(1, length - 1) * (width - left - right);
+  const body = rows.length === 0
+    ? `<text class="label" x="${width / 2}" y="${top + 34}" text-anchor="middle">No sites exceed the configured plotting threshold.</text>`
+    : rows.map((row, rowIndex) => {
+      const center = top + rowIndex * rowHeight + rowHeight / 2;
+      const laneGap = Math.min(16, 38 / Math.max(1, row.lanes.length));
+      const lanes = row.lanes.map((lane, laneIndex) => {
+        const laneCenter = center + (laneIndex - (row.lanes.length - 1) / 2) * laneGap;
+        const path = distributionPath(lane.values, lane.masses, laneCenter, (value, index) => x(value, index, lane.values.length), Math.max(3, laneGap * .42));
+        return `<path d="${path}" fill="${lane.color}" fill-opacity="0.58" stroke="${lane.color}" stroke-width="1"><title>${escapeXml(`Codon ${row.site} · ${lane.label}`)}</title></path>`;
+      }).join("");
+      return `<rect x="${left}" y="${top + rowIndex * rowHeight}" width="${width - left - right}" height="${rowHeight}" fill="${rowIndex % 2 === 0 ? "#f7faf8" : "#ffffff"}"/><text class="label" x="${left - 12}" y="${center - 2}" text-anchor="end">Codon ${row.site}</text><text class="tick" x="${left - 12}" y="${center + 12}" text-anchor="end">${escapeXml(row.call)}</text>${lanes}`;
+    }).join("");
+  const legend = rows[0]?.lanes.map((lane, index) => `<rect x="${left + index * 160}" y="56" width="20" height="8" fill="${lane.color}" fill-opacity="0.65"/><text class="legend" x="${left + index * 160 + 27}" y="64">${escapeXml(lane.label)}</text>`).join("") ?? "";
+  const ticks = [0, .25, .5, .75, 1].map((fraction) => {
+    const value = minimum + fraction * (maximum - minimum);
+    const tickX = left + fraction * (width - left - right);
+    return `<line class="grid" x1="${tickX}" y1="${top}" x2="${tickX}" y2="${height - bottom}"/><text class="tick" x="${tickX}" y="${height - bottom + 19}" text-anchor="middle">${Number.isFinite(value) ? value.toPrecision(4) : "—"}</text>`;
+  }).join("");
+  const path = resolve(directory, filename);
+  await writeText(path, svgDocument(width, height, title, `<text class="title" x="18" y="25">${escapeXml(title)}</text><text class="subtitle" x="18" y="41">${escapeXml(subtitle)}</text>${legend}${ticks}${body}<text class="label" x="${(left + width - right) / 2}" y="${height - 22}" text-anchor="middle">Posterior parameter value</text>`));
+  return { path, title, kind: "posterior-violin" };
+}
+
+function fubarViolinRows(
+  source: ComparisonRecord,
+  settings: ResolvedVisualizationSettings,
+  includePurifying: boolean,
+): readonly { readonly site: number; readonly call: string; readonly lanes: readonly ViolinLane[] }[] {
+  if (!object(source.result) || !Array.isArray(source.result.sites) || !object(source.result.posterior)) return [];
+  const posterior = source.result.posterior;
+  const siteCount = Number(posterior.siteCount ?? 0);
+  const bins = Number(posterior.gridSize ?? 0);
+  const grid = arrayLike(posterior.gridValues);
+  const alpha = arrayLike(posterior.alpha);
+  const beta = arrayLike(posterior.beta);
+  if (siteCount <= 0 || bins <= 0 || grid === undefined || alpha === undefined || beta === undefined) return [];
+  return source.result.sites.filter(object).flatMap((site) => {
+    const siteNumber = Number(site.site);
+    const positive = Number(site.pPositive) > settings.positivePosteriorThreshold;
+    const purifying = Number(site.pPurifying) > settings.purifyingPosteriorThreshold;
+    if (!positive && !(includePurifying && purifying)) return [];
+    const offset = (siteNumber - 1) * bins;
+    return [{
+      site: siteNumber,
+      call: positive ? "positive" : "purifying",
+      lanes: [
+        { label: "dS (alpha)", values: grid, masses: Array.from({ length: bins }, (_, index) => alpha[offset + index] ?? 0), color: "#54aa61" },
+        { label: "dN (beta)", values: grid, masses: Array.from({ length: bins }, (_, index) => beta[offset + index] ?? 0), color: positive ? "#d84e52" : "#4f46d8" },
+      ],
+    }];
+  }).slice(0, settings.maxSitesPerPlot);
+}
+
+function diffubarViolinRows(
+  source: ComparisonRecord,
+  settings: ResolvedVisualizationSettings,
+): readonly { readonly site: number; readonly call: string; readonly lanes: readonly ViolinLane[] }[] {
+  if (!object(source.result) || !Array.isArray(source.result.sites) || !object(source.result.posteriorMarginals)) return [];
+  const posterior = source.result.posteriorMarginals;
+  const siteCount = Number(posterior.siteCount ?? 0);
+  const alphaValues = arrayLike(posterior.alphaValues);
+  const omegaValues = arrayLike(posterior.omegaValues);
+  const alpha = arrayLike(posterior.alpha);
+  const omega1 = arrayLike(posterior.omega1);
+  const omega2 = arrayLike(posterior.omega2);
+  if (siteCount <= 0 || alphaValues === undefined || omegaValues === undefined || alpha === undefined || omega1 === undefined || omega2 === undefined) return [];
+  return source.result.sites.filter(object).flatMap((site) => {
+    const evidence = Math.max(Number(site.pOmega1Greater), Number(site.pOmega2Greater), Number(site.pOmega1Positive), Number(site.pOmega2Positive));
+    if (!(evidence > settings.posteriorThreshold)) return [];
+    const siteNumber = Number(site.site);
+    const alphaOffset = (siteNumber - 1) * alphaValues.length;
+    const omegaOffset = (siteNumber - 1) * omegaValues.length;
+    return [{
+      site: siteNumber,
+      call: `max P=${evidence.toFixed(3)}`,
+      lanes: [
+        { label: "dS (alpha)", values: alphaValues, masses: Array.from({ length: alphaValues.length }, (_, index) => alpha[alphaOffset + index] ?? 0), color: "#54aa61" },
+        { label: "omega group 1", values: omegaValues, masses: Array.from({ length: omegaValues.length }, (_, index) => omega1[omegaOffset + index] ?? 0), color: "#d84e52" },
+        { label: "omega group 2", values: omegaValues, masses: Array.from({ length: omegaValues.length }, (_, index) => omega2[omegaOffset + index] ?? 0), color: "#4f46d8" },
+      ],
+    }];
+  }).slice(0, settings.maxSitesPerPlot);
+}
+
+export async function writeMethodPlots(
+  directory: string,
+  source: ComparisonRecord,
+  signals: readonly ComparisonSignal[],
+  settings: ResolvedVisualizationSettings,
+): Promise<readonly PlotFile[]> {
+  const output: PlotFile[] = [];
+  const byMetric = new Map(signals.map((signal) => [signal.metricId, signal]));
+  const selectedSite = selectMethodSiteSignal(signals, settings);
+  const siteSignals = source.methodId === "fubar"
+    ? uniqueSignals([byMetric.get("pPositive"), byMetric.get("pPurifying")])
+    : source.methodId === "diffubar"
+      ? uniqueSignals([byMetric.get("pOmega1Greater"), byMetric.get("pOmega2Greater"), byMetric.get("pOmega1Positive"), byMetric.get("pOmega2Positive")])
+      : uniqueSignals([selectedSite]);
+  const sitePlot = await seriesPlot(directory, "site-results.svg", `${source.methodLabel} site results`, `${source.dataset} · ${source.sourceLabel}`, siteSignals);
+  if (sitePlot !== undefined) output.push(sitePlot);
+
+  const rateSignals = source.methodId === "fubar"
+    ? uniqueSignals([byMetric.get("posterior-mean-ds"), byMetric.get("posterior-mean-dn"), byMetric.get("exp-log-mean-rate-ratio")])
+    : source.methodId === "diffubar"
+      ? uniqueSignals([byMetric.get("meanOmega1"), byMetric.get("meanOmega2"), byMetric.get("posterior-mean-ds")])
+      : [];
+  const ratePlot = await seriesPlot(directory, "posterior-rate-profile.svg", `${source.methodLabel} posterior rate profile`, `${source.dataset} · ${source.sourceLabel}`, rateSignals);
+  if (ratePlot !== undefined) output.push(ratePlot);
+
+  const branchPreference = ["pValueHolm", "maximumSitePosterior", "anySitePositivePosterior", "meanOmega"];
+  const branchSignal = branchPreference.map((metric) => byMetric.get(metric)).find((signal) => signal?.unit === "branch")
+    ?? signals.find((signal) => signal.unit === "branch");
+  const branchPlot = await seriesPlot(directory, "branch-results.svg", `${source.methodLabel} branch results`, `${source.dataset} · ${source.sourceLabel}`, uniqueSignals([branchSignal]));
+  if (branchPlot !== undefined) output.push(branchPlot);
+
+  if (source.methodId === "fubar") {
+    output.push(await posteriorViolinPlot(
+      directory,
+      "fubar-positive-violin.svg",
+      "FUBAR posterior distributions · positive selections",
+      `P(beta > alpha) > ${settings.positivePosteriorThreshold}; up to ${settings.maxSitesPerPlot} sites`,
+      fubarViolinRows(source, settings, false),
+    ));
+    output.push(await posteriorViolinPlot(
+      directory,
+      "fubar-positive-and-purifying-violin.svg",
+      "FUBAR posterior distributions · positive and purifying selections",
+      `positive > ${settings.positivePosteriorThreshold}; purifying > ${settings.purifyingPosteriorThreshold}; up to ${settings.maxSitesPerPlot} sites`,
+      fubarViolinRows(source, settings, true),
+    ));
+  }
+  if (source.methodId === "diffubar") {
+    output.push(await posteriorViolinPlot(
+      directory,
+      "diffubar-detected-sites-violin.svg",
+      "DifFUBAR parameter posteriors at detected sites",
+      `Maximum posterior evidence > ${settings.posteriorThreshold}; up to ${settings.maxSitesPerPlot} sites`,
+      diffubarViolinRows(source, settings),
+    ));
+  }
+  return output;
 }

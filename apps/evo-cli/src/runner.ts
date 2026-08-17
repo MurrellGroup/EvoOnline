@@ -1,9 +1,7 @@
-import { cpus } from "node:os";
 import { basename, extname, resolve } from "node:path";
 import { readFile } from "node:fs/promises";
-import { decodeSimulatorConfig, runSimulator, type SimulatedDataset, type SimulatorAnalysisResult } from "@phylo-workbench/model-simulator";
+import { decodeSimulatorConfig, type SimulatedDataset, type SimulatorAnalysisResult } from "@phylo-workbench/model-simulator";
 import { normalizeDifFubarTreeText, type RecombinationCodonTreeSet } from "@phylo-workbench/model-diffubar";
-import { extractSignals, megaTableCsv, type ComparisonRecord, type ComparisonSignal } from "./comparison.js";
 import {
   describeArtifact,
   exportJsonArtifact,
@@ -14,7 +12,9 @@ import {
 } from "./exporter.js";
 import { findFastTree, inferFastTree, parseFastaText, type FastTreeRuntime } from "./fasttree.js";
 import { discoverInputs, pairTrees, prepareOutputDirectory, rowsToCsv, safeName, writeJson, writeText, type DiscoveredFile, type TreePairing } from "./io.js";
-import { runFsart, runJemspr, runMosaicSpr, runSelectionMethod, type ProgressEvent } from "./methods.js";
+import { type ProgressEvent } from "./methods.js";
+import { runSelectionMethodIsolated, runSourceMethodIsolated } from "./analysis-worker.js";
+import { allocateCpuBudget, availableCpuCount, mapWithConcurrency, normalizeMaxCpus } from "./cpu.js";
 import {
   compatibleSources,
   methodLabel,
@@ -27,7 +27,8 @@ import {
   type SourceOutputKind,
 } from "./pipeline.js";
 import { fsartTreeSet, jemsprTreeSet, mosaicTreeSet, resultBundle, simulatorBundle, simulatorTreeSet, type RecombinationBundle } from "./recombination.js";
-import { writeComparisonPlots } from "./plots.js";
+import { replotIndex, writeReportOutputs, type ReportRecord } from "./reporting.js";
+import { runSimulatorParallel } from "./simulator-parallel.js";
 
 export interface PipelineRunOptions {
   readonly configPath: string;
@@ -35,6 +36,7 @@ export interface PipelineRunOptions {
   readonly outputDirectory: string;
   readonly overwrite: boolean;
   readonly fastTreePath?: string;
+  readonly maxCpus?: number;
   readonly quiet?: boolean;
 }
 
@@ -89,20 +91,6 @@ function inputStem(name: string): string {
   return name.slice(0, Math.max(0, name.length - extension.length));
 }
 
-function signalCsv(signals: readonly ComparisonSignal[]): string {
-  return rowsToCsv(
-    ["dataset", "source", "method", "metric id", "metric", "unit", "item key", "item label", "ordinal", "value", "threshold", "direction"],
-    signals.flatMap((signal) => signal.values.map((value) => [signal.dataset, signal.sourceLabel, signal.methodLabel, signal.metricId, signal.metricLabel, signal.unit, value.key, value.label, value.ordinal, value.value, signal.threshold, signal.direction])),
-  );
-}
-
-function signalCatalogCsv(signals: readonly ComparisonSignal[]): string {
-  return rowsToCsv(
-    ["signal id", "dataset", "source", "method", "metric id", "metric", "unit", "observations", "default threshold", "call direction"],
-    signals.map((signal) => [signal.id, signal.dataset, signal.sourceLabel, signal.methodLabel, signal.metricId, signal.metricLabel, signal.unit, signal.values.length, signal.threshold, signal.direction]),
-  );
-}
-
 function sourceTreeFilename(node: PipelineNode): string {
   if (node.kind === "fasttree") return "fasttree.nwk";
   if (node.kind === "user-trees") return "user-tree.nwk";
@@ -114,6 +102,7 @@ export async function runPipeline(options: PipelineRunOptions): Promise<Pipeline
   const started = new Date();
   const configPath = resolve(options.configPath);
   const pipeline = parsePipelineDefinition(await readFile(configPath, "utf8"));
+  const maxCpus = normalizeMaxCpus(options.maxCpus ?? pipeline.execution?.maxCpus, availableCpuCount());
   const outputRoot = await prepareOutputDirectory(options.outputDirectory, options.overwrite);
   const artifacts: OutputArtifact[] = [];
   const logs: RunLogEntry[] = [];
@@ -140,7 +129,7 @@ export async function runPipeline(options: PipelineRunOptions): Promise<Pipeline
   if (needsFastTree(pipeline.nodes) && runtime === undefined) {
     throw new Error("This pipeline requires FastTree, but no bundled sibling executable was found. Use the self-contained release archive, pass --fasttree PATH, or set EVO_FASTTREE.");
   }
-  report("Pipeline", "Runtime", "info", runtime === undefined ? "FastTree is not required by this configuration." : `Using ${runtime.label}.`);
+  report("Pipeline", "Runtime", "info", `${runtime === undefined ? "FastTree is not required by this configuration." : `Using ${runtime.label}.`} CPU limit: ${maxCpus}.`);
 
   const discovered = simulatorNode === undefined ? await discoverInputs(options.inputPaths, process.cwd()) : [];
   const alignments = discovered.filter((file) => file.kind === "alignment");
@@ -164,7 +153,7 @@ export async function runPipeline(options: PipelineRunOptions): Promise<Pipeline
   let datasets: DatasetInput[];
   if (simulatorNode !== undefined) {
     report("Pipeline", instanceLabel(simulatorNode, [simulatorNode]), "running", "Generating simulated alignments and exact truth.");
-    simulatorResult = await runSimulator(decodeSimulatorConfig(simulatorNode.parameters.simulatorConfig), { onProgress: (stage, fraction, detail) => progress("Pipeline", "Simulator")({ stage, fraction, ...(detail?.message === undefined ? {} : { message: detail.message }) }) });
+    simulatorResult = await runSimulatorParallel(decodeSimulatorConfig(simulatorNode.parameters.simulatorConfig), maxCpus, (stage, fraction, detail) => progress("Pipeline", "Simulator")({ stage, fraction, ...(detail?.message === undefined ? {} : { message: detail.message }) }));
     const simulatorDirectory = resolve(outputRoot, "simulator");
     artifacts.push(...await exportResult(simulatorDirectory, simulatorResult, { outputRoot, nodeId: simulatorNode.id, methodId: "simulator" }));
     datasets = simulatorResult.datasets.map((dataset, index) => {
@@ -179,9 +168,10 @@ export async function runPipeline(options: PipelineRunOptions): Promise<Pipeline
     }));
   }
 
-  const comparisonRecords: ComparisonRecord[] = [];
-  for (let datasetIndex = 0; datasetIndex < datasets.length; datasetIndex += 1) {
-    const dataset = datasets[datasetIndex]!;
+  const comparisonRecords: ReportRecord[] = [];
+  const datasetBudget = allocateCpuBudget(maxCpus, datasets.length);
+  await mapWithConcurrency(datasets, datasetBudget.parallelism, async (dataset) => {
+    const datasetCpus = datasetBudget.cpusPerTask;
     const parsed = parseFastaText(dataset.fasta);
     const sites = parsed.sequences[0]!.length;
     const datasetDirectory = resolve(outputRoot, "datasets", dataset.id);
@@ -199,17 +189,34 @@ export async function runPipeline(options: PipelineRunOptions): Promise<Pipeline
       artifacts.push(...await exportTreeSet(truthDirectory, truthSet, truthContext));
       artifacts.push(await exportJsonArtifact(resolve(truthDirectory, "recombination-truth.json"), truthBundle, "recombination-bundle", truthContext, true));
       artifacts.push(await exportPlainArtifact(resolve(truthDirectory, "true-tree.nwk"), `${dataset.simulationDataset.tree.newick.trim()}\n`, "tree", "text/x-newick", truthContext, true));
-      comparisonRecords.push({ id: `${dataset.id}:truth`, dataset: dataset.name, sourceId: "simulation-ground-truth", sourceLabel: "Simulation truth", methodId: "simulator", methodLabel: "Truth", parameters: simulatorNode.parameters, result: dataset.simulationDataset, simulationDataset: dataset.simulationDataset });
+      comparisonRecords.push({
+        id: `${dataset.id}:truth`,
+        dataset: dataset.name,
+        datasetId: dataset.id,
+        nodeId: simulatorNode.id,
+        sourceId: "simulation-ground-truth",
+        sourceNodeId: "simulation-ground-truth",
+        sourceLabel: "Simulation truth",
+        methodId: "simulator",
+        methodLabel: "Truth",
+        parameters: simulatorNode.parameters,
+        result: dataset.simulationDataset,
+        simulationDataset: dataset.simulationDataset,
+        simulationTruth: true,
+        outputDirectory: truthDirectory,
+        resultPath: resolve(truthDirectory, "result.json"),
+      });
     }
 
     const products = new Map<string, SourceProduct>();
-    for (const node of sourceNodes) {
+    const sourceBudget = allocateCpuBudget(datasetCpus, sourceNodes.length);
+    await mapWithConcurrency(sourceNodes, sourceBudget.parallelism, async (node) => {
       const label = instanceLabel(node, sourceNodes);
       const outputKind = sourceOutputKind(node);
       report(dataset.name, label, "running", "Source route started directly from the alignment.");
       try {
         if (outputKind === undefined) throw new Error("The component has no declared source output.");
-        const sourceDirectory = resolve(datasetDirectory, "sources", safeName(node.id));
+        const sourceDirectory = resolve(datasetDirectory, "sources", safeName(label));
         const context = { outputRoot, dataset: dataset.name, nodeId: node.id, ...(node.modelId === undefined ? {} : { methodId: node.modelId }), sourceNodeId: node.id };
         let tree: string;
         let treeSet: RecombinationCodonTreeSet | undefined;
@@ -225,7 +232,7 @@ export async function runPipeline(options: PipelineRunOptions): Promise<Pipeline
           tree = normalizeDifFubarTreeText(uploadedTree).newick;
         } else if (node.kind === "fasttree") {
           if (runtime === undefined) throw new Error("FastTree is unavailable.");
-          tree = await inferFastTree(runtime, dataset.fasta, Boolean(node.parameters.fastest ?? false));
+          tree = await inferFastTree(runtime, dataset.fasta, Boolean(node.parameters.fastest ?? false), sourceBudget.cpusPerTask);
         } else if (node.kind === "true-tree") {
           if (dataset.simulationDataset === undefined) throw new Error("True tree requires a Simulator input.");
           treeSet = simulatorTreeSet(dataset.simulationDataset, sites);
@@ -233,19 +240,19 @@ export async function runPipeline(options: PipelineRunOptions): Promise<Pipeline
           bundle = simulatorBundle(dataset.simulationDataset, treeSet, sites, parsed.names.length);
           if (treeSet.segments.length <= 1) treeSet = undefined;
         } else if (node.modelId === "fsart") {
-          const result = await runFsart(dataset.fasta, node.parameters, runtime, progress(dataset.name, label));
+          const result = await runSourceMethodIsolated("fsart", dataset.fasta, node.parameters, runtime, progress(dataset.name, label), sourceBudget.cpusPerTask);
           artifacts.push(...await exportResult(sourceDirectory, result, context));
           treeSet = fsartTreeSet(result, sites);
           tree = treeSet.segments[0]!.tree;
           bundle = resultBundle(result, treeSet, sites, parsed.names.length);
         } else if (node.modelId === "mosaic-spr") {
-          const result = await runMosaicSpr(dataset.fasta, node.parameters, runtime, progress(dataset.name, label));
+          const result = await runSourceMethodIsolated("mosaic-spr", dataset.fasta, node.parameters, runtime, progress(dataset.name, label), sourceBudget.cpusPerTask);
           artifacts.push(...await exportResult(sourceDirectory, result, context));
           treeSet = mosaicTreeSet(result, sites);
           tree = treeSet.segments[0]!.tree;
           bundle = resultBundle(result, treeSet, sites, parsed.names.length);
         } else if (node.modelId === "jemspr") {
-          const result = await runJemspr(dataset.fasta, node.parameters, runtime, progress(dataset.name, label));
+          const result = await runSourceMethodIsolated("jemspr", dataset.fasta, node.parameters, runtime, progress(dataset.name, label), sourceBudget.cpusPerTask);
           artifacts.push(...await exportResult(sourceDirectory, result, context));
           treeSet = jemsprTreeSet(result, sites);
           tree = treeSet.segments[0]!.tree;
@@ -262,66 +269,62 @@ export async function runPipeline(options: PipelineRunOptions): Promise<Pipeline
         failedRoutes += 1;
         report(dataset.name, label, "error", error instanceof Error ? error.message : String(error));
       }
-    }
+    });
 
-    for (const node of selectionNodes) {
-      const targetLabel = instanceLabel(node, selectionNodes);
-      const routes = compatibleSources(node, pipeline.nodes);
-      for (const source of routes) {
+    const routeTasks = selectionNodes.flatMap((node) => compatibleSources(node, pipeline.nodes).map((source) => ({ node, source })));
+    const selectionBudget = allocateCpuBudget(datasetCpus, routeTasks.length);
+    await mapWithConcurrency(routeTasks, selectionBudget.parallelism, async ({ node, source }) => {
+        const targetLabel = instanceLabel(node, selectionNodes);
         const sourceLabel = instanceLabel(source, sourceNodes);
         const routeLabel = `${targetLabel} via ${sourceLabel}`;
         const product = products.get(source.id);
         if (product === undefined) {
           failedRoutes += 1;
           report(dataset.name, routeLabel, "skipped", `${sourceLabel} did not produce its declared output.`);
-          continue;
+          return;
         }
         report(dataset.name, routeLabel, "running", "Selection route started.");
         try {
           if (node.modelId === undefined) throw new Error("Selection component has no method identifier.");
           const plugin = pluginById.get(node.modelId);
           const tree = plugin?.prepareTreeInput === undefined ? product.tree : plugin.prepareTreeInput(product.tree);
-          const result = await runSelectionMethod(node.modelId, dataset.fasta, tree, node.parameters, progress(dataset.name, routeLabel), product.treeSet);
-          const analysisDirectory = resolve(datasetDirectory, "analyses", `${safeName(node.id)}-via-${safeName(source.id)}`);
+          const result = await runSelectionMethodIsolated(node.modelId, dataset.fasta, tree, node.parameters, progress(dataset.name, routeLabel), product.treeSet, selectionBudget.cpusPerTask);
+          const analysisDirectory = resolve(datasetDirectory, "analyses", `${safeName(targetLabel)}-via-${safeName(sourceLabel)}`);
           const context = { outputRoot, dataset: dataset.name, nodeId: node.id, methodId: node.modelId, sourceNodeId: source.id } as const;
           artifacts.push(...await exportResult(analysisDirectory, result, context));
           artifacts.push(await exportPlainArtifact(resolve(analysisDirectory, "input-tree.nwk"), tree.trim().endsWith(";") ? `${tree.trim()}\n` : `${tree.trim()};\n`, "tree", "text/x-newick", context, true));
           if (product.treeSet !== undefined) artifacts.push(...await exportTreeSet(resolve(analysisDirectory, "downstream-input"), product.treeSet, context));
           if (product.bundle !== undefined) artifacts.push(await exportJsonArtifact(resolve(analysisDirectory, "downstream-input", "recombination-tree-bundle.json"), product.bundle, "recombination-bundle", context, true));
-          comparisonRecords.push({ id: `${dataset.id}:${node.id}:${source.id}`, dataset: dataset.name, sourceId: source.id, sourceLabel, methodId: node.modelId, methodLabel: targetLabel, parameters: node.parameters, result });
+          comparisonRecords.push({
+            id: `${dataset.id}:${node.id}:${source.id}`,
+            dataset: dataset.name,
+            datasetId: dataset.id,
+            nodeId: node.id,
+            sourceId: source.id,
+            sourceNodeId: source.id,
+            sourceLabel,
+            methodId: node.modelId,
+            methodLabel: targetLabel,
+            parameters: node.parameters,
+            result,
+            outputDirectory: analysisDirectory,
+            resultPath: resolve(analysisDirectory, "result.json"),
+          });
           completedRoutes += 1;
-          report(dataset.name, routeLabel, "complete", "Detailed JSON, reported tables, generic CSV tables, trees, and downstream inputs exported.");
+          report(dataset.name, routeLabel, "complete", "Detailed JSON, human-readable standard tables, plots, trees, and downstream inputs exported.");
         } catch (error) {
           failedRoutes += 1;
           report(dataset.name, routeLabel, "error", error instanceof Error ? error.message : String(error));
         }
-      }
-    }
-  }
+    });
+  });
 
-  const signals = comparisonRecords.flatMap(extractSignals);
-  const comparisonDirectory = resolve(outputRoot, "comparisons");
-  const comparisonContext = { outputRoot } as const;
-  const longPath = resolve(comparisonDirectory, "signals-long.csv");
-  await writeText(longPath, signalCsv(signals));
-  artifacts.push(describeArtifact(comparisonContext, longPath, "result-table", "text/csv"));
-  const catalogPath = resolve(comparisonDirectory, "signal-catalog.csv");
-  await writeText(catalogPath, signalCatalogCsv(signals));
-  artifacts.push(describeArtifact(comparisonContext, catalogPath, "result-table", "text/csv"));
-  for (const unit of ["site", "branch"] as const) {
-    const path = resolve(comparisonDirectory, unit === "site" ? "mega-table-sites.csv" : "mega-table-branches.csv");
-    await writeText(path, megaTableCsv(signals, unit));
-    artifacts.push(describeArtifact(comparisonContext, path, "result-table", "text/csv"));
-  }
-  for (const dataset of datasets) {
-    const datasetSignals = signals.filter((signal) => signal.dataset === dataset.name);
-    const directory = resolve(comparisonDirectory, "plots", dataset.id);
-    for (const plot of await writeComparisonPlots(directory, datasetSignals)) {
-      const context = { outputRoot, dataset: dataset.name } as const;
-      artifacts.push(describeArtifact(context, plot.path, "plot", "image/svg+xml"));
-      for (const path of plot.companionPaths ?? []) artifacts.push(describeArtifact(context, path, "result-table", "text/csv"));
-    }
-  }
+  const reportOutput = await writeReportOutputs(outputRoot, pipeline, comparisonRecords);
+  artifacts.push(...reportOutput.artifacts);
+  const signals = reportOutput.signals;
+  const replotIndexPath = resolve(outputRoot, "replot-index.json");
+  await writeJson(replotIndexPath, replotIndex(outputRoot, comparisonRecords));
+  artifacts.push(describeArtifact(rootContext, replotIndexPath, "manifest", "application/json", true));
 
   const logCsvPath = resolve(outputRoot, "run-log.csv");
   await writeText(logCsvPath, rowsToCsv(["timestamp", "dataset", "component", "status", "detail"], logs.map((entry) => [entry.timestamp, entry.dataset, entry.component, entry.status, entry.detail])));
@@ -335,7 +338,7 @@ export async function runPipeline(options: PipelineRunOptions): Promise<Pipeline
     pipeline,
     startedAt: started.toISOString(),
     completedAt: new Date().toISOString(),
-    runtime: { node: process.version, platform: process.platform, architecture: process.arch, logicalCpus: cpus().length, fastTree: runtime?.label ?? null },
+    runtime: { node: process.version, platform: process.platform, architecture: process.arch, logicalCpus: availableCpuCount(), maxCpus, fastTree: runtime?.label ?? null },
     inputs: { config: basename(configPath), paths: options.inputPaths, discoveredFiles: discovered.length, treePairings: pairings.map((pairing) => ({ alignment: pairing.alignment.displayPath, status: pairing.status, tree: pairing.tree?.displayPath ?? null, candidates: pairing.candidates.map((candidate) => candidate.displayPath) })) },
     summary: { datasets: datasets.length, completedRoutes, failedRoutes, comparisonRecords: comparisonRecords.length, signals: signals.length },
     artifacts,

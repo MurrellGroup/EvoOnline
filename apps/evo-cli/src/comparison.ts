@@ -5,7 +5,10 @@ import { rowsToCsv } from "./io.js";
 export interface ComparisonRecord {
   readonly id: string;
   readonly dataset: string;
+  readonly datasetId?: string;
+  readonly nodeId?: string;
   readonly sourceId: string;
+  readonly sourceNodeId?: string;
   readonly sourceLabel: string;
   readonly methodId: string;
   readonly methodLabel: string;

@@ -9,7 +9,7 @@ import {
   globalGammaBranchesToCsv,
 } from "@phylo-workbench/model-bame/browser-source";
 import type { BameBackendKind } from "@phylo-workbench/model-bame/browser-source";
-import { getGeneticCode, type ProgressDetail } from "@phylo-workbench/model-diffubar/browser-source";
+import { configureParallelWasmWorkerCount, getGeneticCode, type ProgressDetail } from "@phylo-workbench/model-diffubar/browser-source";
 import type { BameRunResult, BameWorkerResponse, BameWorkerRunRequest, GlobalGammaRunResult } from "../types.js";
 
 const scope = self as DedicatedWorkerGlobalScope;
@@ -21,6 +21,8 @@ scope.onmessage = (event: MessageEvent<BameWorkerRunRequest>): void => {
   void (async () => {
     try {
       const parameters = request.parameters;
+      const maxCpus = Number(parameters.maxCpus);
+      configureParallelWasmWorkerCount(Number.isFinite(maxCpus) ? maxCpus : undefined);
       const backendValue = String(parameters.backend ?? "wasm-parallel");
       const backend: BameBackendKind = backendValue === "wasm" || backendValue === "wasm-parallel" ? backendValue : "auto";
       const threshold = Number(parameters.posteriorThreshold ?? 0.9);

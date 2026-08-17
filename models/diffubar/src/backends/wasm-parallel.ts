@@ -34,7 +34,15 @@ interface WorkerLike {
   unref?: () => void;
 }
 
+let configuredWorkerCount: number | undefined;
+
+/** Applies a process-wide cap to subsequently created parallel WASM backends. */
+export function configureParallelWasmWorkerCount(value: number | undefined): void {
+  configuredWorkerCount = value === undefined ? undefined : Math.max(1, Math.floor(value));
+}
+
 function defaultWorkerCount(): number {
+  if (configuredWorkerCount !== undefined) return configuredWorkerCount;
   const hardware = typeof navigator === "undefined" ? 4 : navigator.hardwareConcurrency;
   return Math.max(1, Math.min(16, hardware || 4));
 }

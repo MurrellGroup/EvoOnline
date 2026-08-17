@@ -71,6 +71,7 @@ const FILE_ACCEPT = ".fa,.fas,.fasta,.fna,.ffn,.aln,.nwk,.newick,.tree,.tre,.nex
 interface PipelineBuilderProps {
   readonly alignmentBridge?: WidgetBridge;
   readonly executorServices: BrowserExecutorServices;
+  readonly maxCpus: number;
   readonly onAnalysesCompleted: (analyses: readonly SavedAnalysis[]) => void;
 }
 
@@ -140,6 +141,10 @@ function normalizeDefinition(definition: PipelineDefinition): PipelineDefinition
   const issues = topologyIssuesForNodes(sortedNodes);
   if (issues.length > 0) throw new Error(issues.join(" "));
   return { ...definition, name: definition.name.trim() || "Untitled pipeline", nodes: sortedNodes };
+}
+
+function normalizeDefinitionForExecution(definition: PipelineDefinition, maxCpus: number): PipelineDefinition {
+  return normalizeDefinition({ ...definition, execution: { ...definition.execution, maxCpus } });
 }
 
 function newNode(kind: PipelineNodeKind, modelId?: string): PipelineNode {
@@ -355,7 +360,7 @@ function safeFilename(value: string): string {
   return normalized || "evoonline-pipeline";
 }
 
-export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesCompleted }: PipelineBuilderProps) {
+export function PipelineBuilder({ alignmentBridge, executorServices, maxCpus, onAnalysesCompleted }: PipelineBuilderProps) {
   const directoryInput = useRef<HTMLInputElement>(null);
   const importInput = useRef<HTMLInputElement>(null);
   const activeExecutor = useRef<BrowserModelExecutor | undefined>(undefined);
@@ -538,7 +543,7 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
 
   const savePipelineLocally = (): void => {
     try {
-      const normalized = normalizeDefinition(definition);
+      const normalized = normalizeDefinitionForExecution(definition, maxCpus);
       const next = [normalized, ...savedDefinitions.filter((saved) => saved.id !== normalized.id)];
       persistPipelines(next);
       setDefinition(normalized);
@@ -563,7 +568,7 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
   };
 
   const exportPipeline = (): void => {
-    const normalized = normalizeDefinition(definition);
+    const normalized = normalizeDefinitionForExecution(definition, maxCpus);
     downloadText(stringifyPipelineDefinition(normalized), `${safeFilename(normalized.name)}.evo-pipeline.json`, "application/json;charset=utf-8");
     setNotice({ tone: "success", text: "Portable pipeline definition downloaded." });
   };
@@ -592,7 +597,7 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
 
   const sharePipeline = async (): Promise<void> => {
     try {
-      const normalized = normalizeDefinition(definition);
+      const normalized = normalizeDefinitionForExecution(definition, maxCpus);
       const url = new URL(window.location.href);
       url.hash = `pipeline=${encodePipelineShare(normalized)}`;
       const value = url.toString();
@@ -615,7 +620,7 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
   const runPipeline = async (): Promise<void> => {
     if (pipelineIssues.length > 0) return;
     const generation = ++runGeneration.current;
-    const normalized = normalizeDefinition(definition);
+    const normalized = normalizeDefinitionForExecution(definition, maxCpus);
     const normalizedSimulator = normalized.nodes.find((node) => pipelineNodeStage(node) === "input");
     const normalizedSources = normalized.nodes.filter((node) => pipelineNodeStage(node) === "source");
     const normalizedSelections = normalized.nodes.filter((node) => pipelineNodeStage(node) === "selection");
@@ -663,7 +668,7 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
       const executor = registration.createExecutor(executorServices);
       activeExecutor.current = executor;
       try {
-        simulatorResult = await executor.run("", "", normalizedSimulator.parameters, (entry) => {
+        simulatorResult = await executor.run("", "", { ...normalizedSimulator.parameters, maxCpus }, (entry) => {
           if (generation !== runGeneration.current) return;
           const fraction = Math.max(0, Math.min(1, entry.fraction));
           setProgress(fraction / totalSteps);
@@ -792,7 +797,7 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
             activeExecutor.current = executor;
             let result: unknown;
             try {
-              result = await executor.run(alignment.text, "", node.parameters, (entry) => {
+              result = await executor.run(alignment.text, "", { ...node.parameters, maxCpus }, (entry) => {
                 if (generation !== runGeneration.current) return;
                 const fraction = Math.max(0, Math.min(1, entry.fraction));
                 setProgress(baseProgress + fraction / totalSteps);
@@ -876,7 +881,7 @@ export function PipelineBuilder({ alignmentBridge, executorServices, onAnalysesC
             activeExecutor.current = executor;
             let result: unknown;
             try {
-              result = await executor.run(alignment.text, methodTree?.text ?? "", node.parameters, (entry) => {
+              result = await executor.run(alignment.text, methodTree?.text ?? "", { ...node.parameters, maxCpus }, (entry) => {
                 if (generation !== runGeneration.current) return;
                 const fraction = Math.max(0, Math.min(1, entry.fraction));
                 setProgress(baseProgress + fraction / totalSteps);

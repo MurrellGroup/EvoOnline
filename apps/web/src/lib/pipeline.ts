@@ -21,6 +21,9 @@ export interface PipelineDefinition {
   readonly id: string;
   readonly name: string;
   readonly nodes: readonly PipelineNode[];
+  readonly execution?: {
+    readonly maxCpus?: number;
+  };
 }
 
 export interface PipelineFileLike {
@@ -152,7 +155,15 @@ export function parsePipelineDefinition(text: string): PipelineDefinition {
       parameters: value.parameters,
     };
   });
-  return { schemaVersion: PIPELINE_SCHEMA_VERSION, id: parsed.id, name: parsed.name, nodes };
+  let execution: PipelineDefinition["execution"];
+  if (parsed.execution !== undefined) {
+    if (!record(parsed.execution)) throw new Error("Pipeline execution settings are invalid.");
+    if (parsed.execution.maxCpus !== undefined && (!Number.isInteger(parsed.execution.maxCpus) || Number(parsed.execution.maxCpus) < 1)) {
+      throw new Error("Pipeline execution.maxCpus must be a positive integer.");
+    }
+    execution = parsed.execution.maxCpus === undefined ? {} : { maxCpus: Number(parsed.execution.maxCpus) };
+  }
+  return { schemaVersion: PIPELINE_SCHEMA_VERSION, id: parsed.id, name: parsed.name, nodes, ...(execution === undefined ? {} : { execution }) };
 }
 
 export function stringifyPipelineDefinition(definition: PipelineDefinition): string {

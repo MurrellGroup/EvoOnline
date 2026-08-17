@@ -81,7 +81,10 @@ export class FsartClient {
   private abort: AbortController | undefined;
   private rejectActive: ((error: Error) => void) | undefined;
 
-  constructor(private readonly getAlignmentBridge: () => WidgetBridge | undefined) {}
+  constructor(
+    private readonly getAlignmentBridge: () => WidgetBridge | undefined,
+    private readonly getMaxCpus: () => number = () => Math.max(1, navigator.hardwareConcurrency || 1),
+  ) {}
 
   private createWorker(): Worker {
     return new Worker(new URL("../workers/fsart.worker.ts", import.meta.url), { type: "module" });
@@ -94,7 +97,7 @@ export class FsartClient {
     const taxa = (alignmentText.match(/(?:^|\n)\s*>/g) ?? []).length;
     if (taxa < 3) throw new Error("FSART requires at least three FASTA sequences.");
     const sampling = planPairCoveredTriplets(taxa, Number(parameters.maximumTriplets ?? 250_000));
-    const hardwareRequested = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 2) - 1));
+    const hardwareRequested = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 2) - 1, this.getMaxCpus()));
     // Every scan worker owns a site-major byte matrix. Keep the speedup for
     // normal alignments while avoiding an N-fold memory explosion for very
     // large uploads on static hosts that cannot enable SharedArrayBuffer.

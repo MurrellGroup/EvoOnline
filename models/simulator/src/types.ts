@@ -196,5 +196,9 @@ export interface SimulatorProgressDetail {
 }
 
 export interface SimulatorOptions {
+  /** Zero-based global replicate indexes; used by the CLI worker sharder. */
+  readonly replicateIndices?: readonly number[];
+  /** Only one shard needs to calculate the shared SCUFF diagnostic. */
+  readonly includeDiagnostic?: boolean;
   readonly onProgress?: (stage: string, fraction: number, detail?: SimulatorProgressDetail) => void;
 }

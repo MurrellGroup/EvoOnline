@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 import { analyzeFubar, fubarResultsToCsv } from "@phylo-workbench/model-fubar/browser-source";
-import { getGeneticCode } from "@phylo-workbench/model-diffubar/browser-source";
+import { configureParallelWasmWorkerCount, getGeneticCode } from "@phylo-workbench/model-diffubar/browser-source";
 import type { FubarWorkerResponse, WorkerRunRequest } from "../types.js";
 
 const scope = self as DedicatedWorkerGlobalScope;
@@ -11,6 +11,8 @@ scope.onmessage = (event: MessageEvent<WorkerRunRequest>): void => {
   void (async () => {
     try {
       const parameters = request.parameters;
+      const maxCpus = Number(parameters.maxCpus);
+      configureParallelWasmWorkerCount(Number.isFinite(maxCpus) ? maxCpus : undefined);
       const backendValue = String(parameters.backend ?? "wasm-parallel");
       const backend = backendValue === "webgpu" || backendValue === "wasm" || backendValue === "wasm-parallel"
         ? backendValue

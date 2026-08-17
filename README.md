@@ -79,10 +79,10 @@ npm run dev:api
 The browser's pipeline JSON can also be executed with `evo-cli`. Tagged releases build ready-to-run Linux, macOS, and Windows archives containing the standalone CLI plus a separate bundled FastTree executable, so FastTree does not need to be installed externally.
 
 ```bash
-evo-cli run --config pipeline.json --input ./data --output ./results
+evo-cli run --config pipeline.json --input ./data --output ./results --cpus 8
 ```
 
-Simulator-first pipelines omit `--input`. Every compatible method × source route runs independently. The output directory receives detailed JSON/CSV results, trees and recombination bundles, simulation truth, mega-tables, FUBAR and cross-method SVG plots, logs, and an artifact manifest. See [`apps/evo-cli/README.md`](apps/evo-cli/README.md) for commands, output layout, build instructions, and the FastTree licensing boundary.
+Simulator-first pipelines omit `--input`. Every compatible method × source route runs independently. The output directory receives readable per-method directories, standard CSV tables, trees and recombination bundles, simulation truth, mega-tables, method and cross-method SVG plots, logs, and an artifact manifest. `--replot` regenerates all threshold-dependent tables and plots from saved structured results without rerunning any analysis. See [`apps/evo-cli/README.md`](apps/evo-cli/README.md) for commands, visualization settings, output layout, build instructions, and the FastTree licensing boundary.
 
 ## Validation
 

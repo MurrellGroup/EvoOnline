@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 import { analyzeBsrel, bsrelResultsToCsv } from "@phylo-workbench/model-bsrel/browser-source";
-import { getGeneticCode } from "@phylo-workbench/model-diffubar/browser-source";
+import { configureParallelWasmWorkerCount, getGeneticCode } from "@phylo-workbench/model-diffubar/browser-source";
 import type { BsrelWorkerResponse, WorkerRunRequest } from "../types.js";
 
 const scope = self as DedicatedWorkerGlobalScope;
@@ -11,6 +11,8 @@ scope.onmessage = (event: MessageEvent<WorkerRunRequest>): void => {
   void (async () => {
     try {
       const parameters = request.parameters;
+      const maxCpus = Number(parameters.maxCpus);
+      configureParallelWasmWorkerCount(Number.isFinite(maxCpus) ? maxCpus : undefined);
       const backend = parameters.backend === "wasm" ? "wasm" : "wasm-parallel";
       const branchScope = parameters.branchScope === "internal" || parameters.branchScope === "terminal"
         ? parameters.branchScope

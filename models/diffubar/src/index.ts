@@ -31,7 +31,7 @@ export {
   normalizeConditionalLikelihoodsInPlace,
 } from "./backends/wasm.js";
 export { WebGPUBackend } from "./backends/webgpu.js";
-export { ParallelWasmBackend } from "./backends/wasm-parallel.js";
+export { ParallelWasmBackend, configureParallelWasmWorkerCount } from "./backends/wasm-parallel.js";
 export { fitGlobalModel, fitPartitionedGlobalModel, type PartitionedFitSegment } from "./fit/global.js";
 export { analyzeDifFUBAR, resultsToCsv } from "./pipeline.js";
 export { collapsePosteriorMarginals } from "./posterior/marginals.js";

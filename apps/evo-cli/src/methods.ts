@@ -44,6 +44,7 @@ import {
   type MosaicSprDraftTree,
 } from "@phylo-workbench/model-mosaicspr";
 import type { ParameterValues } from "@phylo-workbench/model-sdk";
+import { allocateCpuBudget, mapWithConcurrency } from "./cpu.js";
 import {
   createFastTreeEvaluator,
   fitFastTreeSegment,
@@ -71,9 +72,6 @@ const progress = (reporter: ProgressReporter, stage: string, fraction: number, d
   reporter({ stage, fraction: Math.max(0, Math.min(1, fraction)), ...(detail?.message === undefined ? {} : { message: detail.message }) });
 };
 
-/** Node binaries use the same f64 WASM kernel but avoid browser/WebGPU and worker-only runtimes. */
-const cliBackend = "wasm" as const;
-
 export async function runSelectionMethod(
   modelId: string,
   alignment: string,
@@ -81,7 +79,10 @@ export async function runSelectionMethod(
   parameters: ParameterValues,
   reporter: ProgressReporter,
   recombinationTrees?: RecombinationCodonTreeSet,
+  maxCpus = 1,
 ): Promise<unknown> {
+  /** Node routes stay on exact f64 WASM; each isolated route receives only its allocated worker budget. */
+  const cliBackend = maxCpus > 1 ? "wasm-parallel" as const : "wasm" as const;
   const geneticCode = getGeneticCode(String(parameters.geneticCode ?? 1)).id;
   if (modelId === "diffubar") {
     const threshold = numberValue(parameters, "posteriorThreshold", 0.95);
@@ -227,13 +228,15 @@ async function refineFsartProfiles(
   minimumRunLength: number,
   taxa: number,
   reporter: ProgressReporter,
+  maxCpus: number,
 ): Promise<{ readonly profiles: readonly TreeEmissionProfile[]; readonly result: TreeHmmResult; readonly refinement: TreeHmmRefinementResult }> {
   const maximumIterations = Boolean(parameters.refineTreeHmm ?? true) ? Math.max(0, Math.min(8, Math.round(numberValue(parameters, "maximumRefinementIterations", 3)))) : 0;
   const boundaryTolerance = Math.max(0, numberValue(parameters, "refinementBoundaryTolerance", 3));
   const criterion = parameters.criterion === "aic" || parameters.criterion === "bic" ? parameters.criterion : "aicc";
   const history: TreeHmmRefinementIteration[] = [{ iteration: 0, stateCount: initialResult.states.length, breakpoints: initialResult.viterbi?.breakpoints ?? [], maximumBoundaryShift: null, topologyChanged: false, criterionValue: initialResult.criterionValue, logLikelihood: initialResult.logLikelihood, fastTreeMs: 0, elapsedMs: 0 }];
   if (maximumIterations === 0 || initialResult.status !== "complete" || initialResult.viterbi === undefined || initialResult.states.length <= 1) return { profiles: initialProfiles, result: initialResult, refinement: { status: "skipped", converged: initialResult.states.length <= 1, maximumIterations, iterations: history, message: maximumIterations === 0 ? "Viterbi/tree refinement was disabled." : "No multi-tree Viterbi reconstruction was available to refine." } };
-  const evaluator = createFastTreeEvaluator(runtime, alignment, Boolean(parameters.fastTreeFastest ?? true));
+  const stateBudget = allocateCpuBudget(maxCpus, initialResult.states.length);
+  const evaluator = createFastTreeEvaluator(runtime, alignment, Boolean(parameters.fastTreeFastest ?? true), stateBudget.parallelism, stateBudget.cpusPerTask);
   const global = initialProfiles[0]!;
   let currentProfiles = [...initialProfiles];
   let currentResult = initialResult;
@@ -246,13 +249,13 @@ async function refineFsartProfiles(
     for (const run of currentResult.viterbi?.runs ?? []) rangesByTree.set(run.treeId, [...(rangesByTree.get(run.treeId) ?? []), [run.start, run.end]]);
     const fitted: Array<{ readonly ranges: readonly (readonly [number, number])[]; readonly assignedSites: number; readonly score: SegmentLikelihood; readonly signature: string }> = [];
     const states = currentResult.states.filter((state) => (rangesByTree.get(state.id) ?? []).reduce((sum, range) => sum + range[1] - range[0] + 1, 0) >= minimumRunLength);
-    for (let index = 0; index < states.length; index += 1) {
-      const state = states[index]!;
+    const fittedValues = await mapWithConcurrency(states, stateBudget.parallelism, async (state, index) => {
       const ranges = rangesByTree.get(state.id)!;
       progress(reporter, "tree-refinement", (iteration - 1 + 0.4 * index / Math.max(1, states.length)) / maximumIterations, { message: `Refitting state ${index + 1}/${states.length}` });
       const score = await evaluator.evaluateRanges(ranges);
-      if (isFullyResolvedTopology(score.tree)) fitted.push({ ranges, assignedSites: ranges.reduce((sum, range) => sum + range[1] - range[0] + 1, 0), score, signature: canonicalTopologySignature(score.tree) });
-    }
+      return isFullyResolvedTopology(score.tree) ? { ranges, assignedSites: ranges.reduce((sum, range) => sum + range[1] - range[0] + 1, 0), score, signature: canonicalTopologySignature(score.tree) } : undefined;
+    });
+    fitted.push(...fittedValues.filter((value): value is NonNullable<typeof value> => value !== undefined));
     const unique = [...new Map(fitted.sort((a, b) => b.assignedSites - a.assignedSites).map((candidate) => [candidate.signature, candidate])).values()].filter((candidate) => candidate.signature !== global.topologySignature);
     const nextProfiles: TreeEmissionProfile[] = [global];
     for (let index = 0; index < unique.length; index += 1) {
@@ -272,7 +275,7 @@ async function refineFsartProfiles(
   return { profiles: currentProfiles, result: currentResult, refinement: { status: "complete", converged, maximumIterations, iterations: history, message: converged ? "Topology set and Viterbi boundaries stabilized." : `Stopped after ${maximumIterations} configured refinement iterations.` } };
 }
 
-export async function runFsart(alignment: string, parameters: ParameterValues, runtime: FastTreeRuntime | undefined, reporter: ProgressReporter): Promise<FsartAnalysisResult> {
+export async function runFsart(alignment: string, parameters: ParameterValues, runtime: FastTreeRuntime | undefined, reporter: ProgressReporter, maxCpus = 1): Promise<FsartAnalysisResult> {
   const options = fsartOptions(parameters, reporter);
   let result = analyzeFsart(alignment, options);
   if (!options.runFastTree) return result;
@@ -280,13 +283,14 @@ export async function runFsart(alignment: string, parameters: ParameterValues, r
   const parsed = parseFastaText(alignment);
   const minimum = effectiveMinimumTreeSpan(result.diagnostics.taxa, result.diagnostics.sites, result.diagnostics.variableSites, options.minimumSegmentLength);
   const windows = treeFamilyWindows(result.breakpoints.map((breakpoint) => breakpoint.breakpoint), result.diagnostics.sites, minimum);
-  const evaluator = createFastTreeEvaluator(runtime, alignment, options.fastTreeFastest);
-  const familyFits: SegmentLikelihood[] = [];
-  for (let index = 0; index < windows.length; index += 1) {
-    const window = windows[index]!;
+  const windowBudget = allocateCpuBudget(maxCpus, windows.length);
+  const evaluator = createFastTreeEvaluator(runtime, alignment, options.fastTreeFastest, windowBudget.parallelism, windowBudget.cpusPerTask);
+  let completedWindows = 0;
+  const familyFits = await mapWithConcurrency(windows, windowBudget.parallelism, async (window) => {
+    const index = completedWindows++;
     progress(reporter, "tree-family", index / windows.length, { message: `FastTree family ${index + 1}/${windows.length}` });
-    familyFits.push(await evaluator.evaluate(window.start, window.end));
-  }
+    return evaluator.evaluate(window.start, window.end);
+  });
   const globalFit = familyFits.find((fit) => fit.start === 1 && fit.end === result.diagnostics.sites);
   const familyTrees: PartitionSegment[] = familyFits.map((fit, index) => ({ ...fit, id: windows[index]!.id }));
   const atomic = windows.map((window, index) => ({ window, fit: familyTrees[index]! })).filter(({ window }) => window.kind === "segment").map(({ window, fit }, index) => ({ ...fit, id: `S${index + 1}`, variableSites: variableSiteCount(parsed.sequences, window.start, window.end) }));
@@ -297,14 +301,14 @@ export async function runFsart(alignment: string, parameters: ParameterValues, r
   if (!options.runTreeHmm) return replaceTreeHmm(result, skippedTreeHmm("Rapid topology-set HMM search was disabled.", criterion));
   const dictionary = buildTopologyDictionary(familyFits, result.diagnostics.sites, options.maximumTreeHypotheses);
   if (dictionary.length < 2 || globalFit?.gtrFrequencies === undefined || globalFit.gtrRates === undefined) return replaceTreeHmm(result, skippedTreeHmm(dictionary.length < 2 ? "The tree family produced one resolved topology." : "FastTree did not expose a complete shared GTR model.", criterion));
-  const profiles: TreeEmissionProfile[] = [];
-  for (let index = 0; index < dictionary.length; index += 1) {
-    const candidate = dictionary[index]!;
+  const sharedGtr = { gtrFrequencies: globalFit.gtrFrequencies, gtrRates: globalFit.gtrRates };
+  const profileBudget = allocateCpuBudget(maxCpus, dictionary.length);
+  const profiles = await mapWithConcurrency(dictionary, profileBudget.parallelism, async (candidate, index) => {
     progress(reporter, "tree-hmm-emissions", index / dictionary.length, { message: `Fixed topology ${index + 1}/${dictionary.length}` });
-    profiles.push(await scoreFastTreeTopology(runtime, alignment, parsed.names, result.diagnostics.sites, { id: `T${index + 1}`, sourceStart: candidate.segment.start, sourceEnd: candidate.segment.end, tree: candidate.segment.tree, topologySignature: candidate.signature }, { gtrFrequencies: globalFit.gtrFrequencies, gtrRates: globalFit.gtrRates }, options.treeHmmSourceWeight));
-  }
+    return scoreFastTreeTopology(runtime, alignment, parsed.names, result.diagnostics.sites, { id: `T${index + 1}`, sourceStart: candidate.segment.start, sourceEnd: candidate.segment.end, tree: candidate.segment.tree, topologySignature: candidate.signature }, sharedGtr, options.treeHmmSourceWeight, profileBudget.cpusPerTask);
+  });
   const initial = fitTreeHmm(profiles, { taxa: result.diagnostics.taxa, criterion, credibleMass: options.credibleMass, maximumRateSlices: numberValue(parameters, "treeHmmRateSlices", 13), maximumStates: numberValue(parameters, "maximumHmmStates", 8), beamWidth: numberValue(parameters, "treeHmmBeamWidth", 4), minimumRunLength: minimum, searchMode: "rapid", onProgress: (fraction, detail) => progress(reporter, "tree-hmm", fraction, detail) });
-  const refined = await refineFsartProfiles(runtime, alignment, profiles, initial, { gtrFrequencies: globalFit.gtrFrequencies, gtrRates: globalFit.gtrRates }, parameters, minimum, result.diagnostics.taxa, reporter);
+  const refined = await refineFsartProfiles(runtime, alignment, profiles, initial, sharedGtr, parameters, minimum, result.diagnostics.taxa, reporter, maxCpus);
   const treeHmm = { ...refined.result, refinement: refined.refinement };
   const byId = new Map(refined.profiles.map((profile) => [profile.id, profile]));
   const finalSegments: PartitionSegment[] = (treeHmm.viterbi?.runs ?? []).map((run, index) => {
@@ -324,7 +328,7 @@ function optionalPenalty(parameters: ParameterValues, key: string): number | und
   return value > 0 ? value : undefined;
 }
 
-export async function runMosaicSpr(alignmentText: string, parameters: ParameterValues, runtime: FastTreeRuntime | undefined, reporter: ProgressReporter): Promise<MosaicSprAnalysisResult> {
+export async function runMosaicSpr(alignmentText: string, parameters: ParameterValues, runtime: FastTreeRuntime | undefined, reporter: ProgressReporter, maxCpus = 1): Promise<MosaicSprAnalysisResult> {
   if (runtime === undefined) throw new Error("MosaicSPR requires FastTree. Pass --fasttree or set EVO_FASTTREE.");
   const started = performance.now();
   const alignment = parseMosaicSprFasta(alignmentText);
@@ -332,16 +336,15 @@ export async function runMosaicSpr(alignmentText: string, parameters: ParameterV
   const proposal = proposeMosaicSprBreakpoints(alignment, { enabled: Boolean(parameters.useBreakpointProposals ?? true), window: numberValue(parameters, "window", 24), maximumTriplets: numberValue(parameters, "maximumTriplets", 250_000), maximumSignals: numberValue(parameters, "maximumSignals", 1024), maximumReportedSignals: numberValue(parameters, "maximumReportedSignals", 256), maximumBreakpoints: numberValue(parameters, "maximumConsensusBreakpoints", 14), minimumSegmentLength: numberValue(parameters, "minimumSegmentLength", 150), onProgress: (fraction, detail) => progress(reporter, "mosaicspr-proposals", fraction, detail) });
   const proposalMs = performance.now() - proposalStarted;
   const windows = mosaicSprTreeWindows(proposal.proposals, alignment.sites, proposal.diagnostics.minimumTreeSpan, true);
-  const evaluator = createFastTreeEvaluator(runtime, alignmentText, Boolean(parameters.fastTreeFastest ?? true));
-  const draftTrees: MosaicSprDraftTree[] = [];
+  const windowBudget = allocateCpuBudget(maxCpus, windows.length);
+  const evaluator = createFastTreeEvaluator(runtime, alignmentText, Boolean(parameters.fastTreeFastest ?? true), windowBudget.parallelism, windowBudget.cpusPerTask);
   const fitStarted = performance.now();
-  for (let index = 0; index < windows.length; index += 1) {
-    const window = windows[index]!;
+  const draftValues = await mapWithConcurrency(windows, windowBudget.parallelism, async (window, index) => {
     progress(reporter, "mosaicspr-tree-family", index / windows.length, { message: `FastTree seed ${index + 1}/${windows.length}` });
     const score = await evaluator.evaluate(window.start, window.end);
-    if (!isFullyResolvedTopology(score.tree)) continue;
-    draftTrees.push({ id: window.id, kind: window.kind, start: window.start, end: window.end, tree: score.tree, logLikelihood: score.logLikelihood, elapsedMs: score.elapsedMs, topologySignature: canonicalTopologySignature(score.tree) });
-  }
+    return isFullyResolvedTopology(score.tree) ? { id: window.id, kind: window.kind, start: window.start, end: window.end, tree: score.tree, logLikelihood: score.logLikelihood, elapsedMs: score.elapsedMs, topologySignature: canonicalTopologySignature(score.tree) } : undefined;
+  });
+  const draftTrees: MosaicSprDraftTree[] = draftValues.filter((value): value is NonNullable<typeof value> => value !== undefined);
   if (draftTrees.length === 0) throw new Error("FastTree produced no resolved topology for MosaicSPR.");
   const fastTreeMs = performance.now() - fitStarted;
   const searchStarted = performance.now();
@@ -353,12 +356,12 @@ export async function runMosaicSpr(alignmentText: string, parameters: ParameterV
   return { ...base, eventCsv: mosaicSprEventsToCsv(base) };
 }
 
-export async function runJemspr(alignment: string, parameters: ParameterValues, runtime: FastTreeRuntime | undefined, reporter: ProgressReporter): Promise<Awaited<ReturnType<typeof analyzeJemspr>>> {
+export async function runJemspr(alignment: string, parameters: ParameterValues, runtime: FastTreeRuntime | undefined, reporter: ProgressReporter, maxCpus = 1): Promise<Awaited<ReturnType<typeof analyzeJemspr>>> {
   let gtrModel: JemsprFixedGtrModel | undefined;
   if (Boolean(parameters.linkedLikelihood ?? true)) {
     if (runtime === undefined) throw new Error("JEMSPR linked likelihood requires FastTree for its fixed GTR matrix. Pass --fasttree or disable linkedLikelihood.");
     const parsed = parseFastaText(alignment);
-    const score = await fitFastTreeSegment(runtime, segmentAlignment(parsed, 1, parsed.sequences[0]!.length), parsed.names, 1, parsed.sequences[0]!.length, true);
+    const score = await fitFastTreeSegment(runtime, segmentAlignment(parsed, 1, parsed.sequences[0]!.length), parsed.names, 1, parsed.sequences[0]!.length, true, undefined, maxCpus);
     if (score.gtrFrequencies === undefined || score.gtrRates === undefined) throw new Error("FastTree did not report the fixed GTR matrix required by JEMSPR.");
     gtrModel = { frequencies: score.gtrFrequencies, exchangeabilities: score.gtrRates, source: "FastTree-2.1.11-global-fit", version: runtime.label };
   }

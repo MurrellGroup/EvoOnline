@@ -54,6 +54,7 @@ export interface BrowserModelExecutor {
 
 export interface BrowserExecutorServices {
   readonly getAlignmentBridge: () => WidgetBridge | undefined;
+  readonly getMaxCpus: () => number;
 }
 
 interface ResultProps {
@@ -196,7 +197,7 @@ export const modelRegistry: readonly BrowserModelRegistration[] = [
     plugin: fsartPlugin,
     glyph: "⇄",
     runtimeLabel: "Parallel scan · FastTree WASM",
-    createExecutor: (services) => new FsartClient(services.getAlignmentBridge),
+    createExecutor: (services) => new FsartClient(services.getAlignmentBridge, services.getMaxCpus),
     ResultView: FsartResult,
     completionMessage: (result) => {
       const output = result as FsartAnalysisResult;
@@ -232,7 +233,7 @@ export const modelRegistry: readonly BrowserModelRegistration[] = [
     plugin: simulatorPlugin,
     glyph: "Σim",
     runtimeLabel: "Local simulation worker",
-    createExecutor: () => new SimulatorClient(),
+    createExecutor: (services) => new SimulatorClient(services.getMaxCpus),
     SetupView: SimulatorSetup,
     ResultView: SimulatorResult,
     completionMessage: (result) => {

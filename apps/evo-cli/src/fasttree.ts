@@ -18,7 +18,14 @@ export interface FastTreeRuntime {
 export interface FastTreeEvaluator {
   readonly evaluate: SegmentEvaluator;
   readonly evaluateRanges: (ranges: readonly (readonly [number, number])[]) => Promise<SegmentLikelihood>;
-  readonly diagnostics: () => { readonly requests: number; readonly freshFits: number; readonly fastTreeMs: number };
+  readonly diagnostics: () => {
+    readonly requests: number;
+    readonly freshFits: number;
+    readonly fastTreeMs: number;
+    readonly parallelism: number;
+    readonly threadsPerFit: number;
+    readonly peakConcurrentFits: number;
+  };
 }
 
 export function parseFastaText(text: string): ParsedFasta {
@@ -71,9 +78,12 @@ export async function findFastTree(requested?: string): Promise<FastTreeRuntime 
   return undefined;
 }
 
-async function execute(binary: string, args: readonly string[], fasta: string): Promise<{ readonly stdout: string; readonly stderr: string }> {
+async function execute(binary: string, args: readonly string[], fasta: string, threads = 1): Promise<{ readonly stdout: string; readonly stderr: string }> {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(binary, args, { stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(binary, args, {
+      stdio: ["pipe", "pipe", "pipe"],
+      env: { ...process.env, OMP_NUM_THREADS: String(Math.max(1, Math.floor(threads))) },
+    });
     let stdout = "";
     let stderr = "";
     child.stdout.setEncoding("utf8");
@@ -138,11 +148,12 @@ export async function fitFastTreeSegment(
   end: number,
   fastest = true,
   sharedModel?: { readonly gtrFrequencies: readonly number[]; readonly gtrRates: readonly number[] },
+  threads = 1,
 ): Promise<SegmentLikelihood> {
   const modelArgs = sharedModel === undefined ? [] : ["-gtrfreq", ...sharedModel.gtrFrequencies.map(String), "-gtrrates", ...sharedModel.gtrRates.map(String)];
   const args = ["-nt", "-gtr", ...modelArgs, "-nosupport", "-gamma", "-nopr", ...(fastest ? ["-fastest"] : [])];
   const started = performance.now();
-  const result = await execute(runtime.binary, args, fasta);
+  const result = await execute(runtime.binary, args, fasta, threads);
   const gamma = result.stderr.match(/Gamma\(\s*20\s*\)\s+LogLk\s*=\s*([-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)/i);
   const fallback = Array.from(result.stderr.matchAll(/LogLk\s*(?:~?=)?\s*([-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)/gi)).at(-1);
   const logLikelihood = Number(gamma?.[1] ?? fallback?.[1]);
@@ -152,9 +163,9 @@ export async function fitFastTreeSegment(
   return { start, end, logLikelihood, tree: restoreIndexedNames(treeLine.trim(), names), variableSites: 0, elapsedMs: performance.now() - started, ...parseModel(result.stderr) };
 }
 
-export async function inferFastTree(runtime: FastTreeRuntime, alignment: string, fastest: boolean): Promise<string> {
+export async function inferFastTree(runtime: FastTreeRuntime, alignment: string, fastest: boolean, threads = 1): Promise<string> {
   const parsed = parseFastaText(alignment);
-  const score = await fitFastTreeSegment(runtime, segmentFasta(parsed, 1, parsed.sequences[0]!.length), parsed.names, 1, parsed.sequences[0]!.length, fastest);
+  const score = await fitFastTreeSegment(runtime, segmentFasta(parsed, 1, parsed.sequences[0]!.length), parsed.names, 1, parsed.sequences[0]!.length, fastest, undefined, threads);
   return score.tree;
 }
 
@@ -178,6 +189,7 @@ export async function scoreFastTreeTopology(
   candidate: { readonly id: string; readonly tree: string; readonly sourceStart: number; readonly sourceEnd: number; readonly sourceRanges?: readonly (readonly [number, number])[]; readonly topologySignature: string },
   model: { readonly gtrFrequencies: readonly number[]; readonly gtrRates: readonly number[] },
   sourceWeight = 4,
+  threads = 1,
 ): Promise<TreeEmissionProfile> {
   if (model.gtrFrequencies.length !== 4 || model.gtrRates.length !== 6) throw new Error("Shared GTR estimates are incomplete.");
   const directory = await mkdtemp(join(tmpdir(), "evo-cli-fasttree-"));
@@ -195,7 +207,7 @@ export async function scoreFastTreeTopology(
   const args = ["-nt", "-gtr", "-gtrfreq", ...model.gtrFrequencies.map(String), "-gtrrates", ...model.gtrRates.map(String), "-nosupport", "-gamma", "-nopr", "-nome", "-mllen", "-intree", treePath, "-log", logPath];
   const started = performance.now();
   try {
-    const result = await execute(runtime.binary, args, scoringFasta);
+    const result = await execute(runtime.binary, args, scoringFasta, threads);
     const treeLine = result.stdout.split(/\r?\n/).filter((line) => line.includes("(")).at(-1);
     if (treeLine === undefined) throw new Error("FastTree returned no fixed-topology Newick tree.");
     const siteLogLikelihoods = parseSiteLikelihoods(await readFile(logPath, "utf8"), sites);
@@ -213,25 +225,48 @@ export async function scoreFastTreeTopology(
   }
 }
 
-export function createFastTreeEvaluator(runtime: FastTreeRuntime, alignment: string, fastest = true): FastTreeEvaluator {
+export function createFastTreeEvaluator(
+  runtime: FastTreeRuntime,
+  alignment: string,
+  fastest = true,
+  parallelism = 1,
+  threadsPerFit = 1,
+): FastTreeEvaluator {
   const parsed = parseFastaText(alignment);
   const cache = new Map<string, Promise<SegmentLikelihood>>();
-  let queue: Promise<unknown> = Promise.resolve();
+  const maximumActive = Math.max(1, Math.floor(parallelism));
+  const waiting: Array<() => void> = [];
+  let active = 0;
+  let peakConcurrentFits = 0;
   let requests = 0;
   let freshFits = 0;
   let fastTreeMs = 0;
   let sharedModel: { readonly gtrFrequencies: readonly number[]; readonly gtrRates: readonly number[] } | undefined;
+  const acquire = async (): Promise<void> => {
+    if (active >= maximumActive) await new Promise<void>((resolvePromise) => waiting.push(resolvePromise));
+    active += 1;
+    peakConcurrentFits = Math.max(peakConcurrentFits, active);
+  };
+  const release = (): void => {
+    active -= 1;
+    waiting.shift()?.();
+  };
   const enqueue = (key: string, fasta: string, start: number, end: number, ranges?: readonly (readonly [number, number])[]): Promise<SegmentLikelihood> => {
     const existing = cache.get(key);
     if (existing !== undefined) return existing;
     freshFits += 1;
-    const pending = queue.then(() => fitFastTreeSegment(runtime, fasta, parsed.names, start, end, fastest, sharedModel)).then((score) => {
-      fastTreeMs += score.elapsedMs;
-      if (start === 1 && end === parsed.sequences[0]!.length && score.gtrFrequencies !== undefined && score.gtrRates !== undefined) sharedModel = { gtrFrequencies: score.gtrFrequencies, gtrRates: score.gtrRates };
-      const variableSites = ranges === undefined ? variableSiteCount(parsed.sequences, start, end) : ranges.reduce((sum, [low, high]) => sum + variableSiteCount(parsed.sequences, low, high), 0);
-      return { ...score, variableSites };
-    });
-    queue = pending.catch(() => undefined);
+    const pending = (async () => {
+      await acquire();
+      try {
+        const score = await fitFastTreeSegment(runtime, fasta, parsed.names, start, end, fastest, sharedModel, threadsPerFit);
+        fastTreeMs += score.elapsedMs;
+        if (start === 1 && end === parsed.sequences[0]!.length && score.gtrFrequencies !== undefined && score.gtrRates !== undefined) sharedModel = { gtrFrequencies: score.gtrFrequencies, gtrRates: score.gtrRates };
+        const variableSites = ranges === undefined ? variableSiteCount(parsed.sequences, start, end) : ranges.reduce((sum, [low, high]) => sum + variableSiteCount(parsed.sequences, low, high), 0);
+        return { ...score, variableSites };
+      } finally {
+        release();
+      }
+    })();
     cache.set(key, pending);
     return pending;
   };
@@ -245,7 +280,7 @@ export function createFastTreeEvaluator(runtime: FastTreeRuntime, alignment: str
     if (normalized.length === 0) return Promise.reject(new Error("At least one non-empty source range is required."));
     return enqueue(`ranges:${normalized.map((range) => range.join("-")).join(",")}`, rangesFasta(parsed, normalized), normalized[0]![0], normalized.at(-1)![1], normalized);
   };
-  return { evaluate, evaluateRanges, diagnostics: () => ({ requests, freshFits, fastTreeMs }) };
+  return { evaluate, evaluateRanges, diagnostics: () => ({ requests, freshFits, fastTreeMs, parallelism: maximumActive, threadsPerFit: Math.max(1, Math.floor(threadsPerFit)), peakConcurrentFits }) };
 }
 
 export function segmentAlignment(parsed: ParsedFasta, start: number, end: number): string {

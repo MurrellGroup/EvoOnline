@@ -88,6 +88,23 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
   border-right: 1px solid #cfd8d2;
   overflow-y: auto;
 }
+.cpu-budget-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px;
+  align-items: center;
+  gap: 10px;
+  margin: -8px 4px 15px;
+  padding: 8px 10px;
+  color: #d5e2df;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(190, 220, 212, 0.13);
+  border-radius: 8px;
+}
+.cpu-budget-control > span { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; min-width: 0; }
+.cpu-budget-control strong { font-size: 10px; letter-spacing: .05em; text-transform: uppercase; }
+.cpu-budget-control small { color: #a9bfba; font-size: 9px; white-space: nowrap; }
+.cpu-budget-control input { width: 76px; accent-color: #75c8b3; }
+.cpu-budget-control input:disabled { opacity: .45; }
 .sidebar-heading {
   display: flex;
   align-items: center;
@@ -1182,6 +1199,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
   .topbar { position: static; min-height: 64px; padding: 0 16px; }
   .runtime-badges { display: none; }
   .model-sidebar { padding: 10px 14px; }
+  .cpu-budget-control { width: 246px; margin: 0 0 8px; }
   .sidebar-heading, .future-models { display: none; }
   .pipeline-sidebar-tools { margin: 6px 0; padding: 6px 0; }
   .model-card { max-width: 260px; grid-template-columns: 36px 1fr; }

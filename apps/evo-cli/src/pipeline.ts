@@ -21,11 +21,42 @@ export interface PipelineNode {
   readonly parameters: ParameterValues;
 }
 
+export interface PipelineExecution {
+  /** Maximum logical CPUs used by the CLI. Browser exports may omit this. */
+  readonly maxCpus?: number;
+}
+
+export interface MethodVisualizationSettings {
+  /** Generic posterior call threshold used by posterior-based methods. */
+  readonly posteriorThreshold?: number;
+  /** FUBAR positive-selection threshold; falls back to posteriorThreshold. */
+  readonly positivePosteriorThreshold?: number;
+  /** FUBAR purifying-selection threshold; falls back to posteriorThreshold. */
+  readonly purifyingPosteriorThreshold?: number;
+  /** Corrected p-value threshold used by branch tests such as BS-REL. */
+  readonly significanceThreshold?: number;
+  /** Bayes-factor call threshold for evidence-based summaries. */
+  readonly bayesFactorThreshold?: number;
+  /** Metric identifier selected for the method in comparison plots. */
+  readonly siteMetric?: string;
+  /** Maximum detected sites drawn in a posterior-distribution plot. */
+  readonly maxSitesPerPlot?: number;
+}
+
+export interface PipelineVisualization {
+  /** Defaults applied to every instance of a method, keyed by method id. */
+  readonly methods?: Readonly<Record<string, MethodVisualizationSettings>>;
+  /** Per-component overrides, keyed by the pipeline component id. */
+  readonly nodes?: Readonly<Record<string, MethodVisualizationSettings>>;
+}
+
 export interface PipelineDefinition {
   readonly schemaVersion: typeof PIPELINE_SCHEMA_VERSION;
   readonly id: string;
   readonly name: string;
   readonly nodes: readonly PipelineNode[];
+  readonly execution?: PipelineExecution;
+  readonly visualization?: PipelineVisualization;
 }
 
 const plugins = [
@@ -63,6 +94,63 @@ function parameterValues(value: unknown): value is ParameterValues {
     typeof entry === "string" || typeof entry === "number" || typeof entry === "boolean");
 }
 
+const VISUALIZATION_NUMBER_KEYS = new Set([
+  "posteriorThreshold",
+  "positivePosteriorThreshold",
+  "purifyingPosteriorThreshold",
+  "significanceThreshold",
+  "bayesFactorThreshold",
+  "maxSitesPerPlot",
+]);
+
+function visualizationSettings(value: unknown, label: string): MethodVisualizationSettings {
+  if (!record(value)) throw new Error(`${label} must be an object.`);
+  const output: Record<string, number | string> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (VISUALIZATION_NUMBER_KEYS.has(key)) {
+      if (typeof entry !== "number" || !Number.isFinite(entry)) throw new Error(`${label}.${key} must be a finite number.`);
+      if (key === "maxSitesPerPlot") {
+        if (!Number.isInteger(entry) || entry < 1) throw new Error(`${label}.${key} must be a positive integer.`);
+      } else if (key === "bayesFactorThreshold") {
+        if (!(entry > 0)) throw new Error(`${label}.${key} must be greater than zero.`);
+      } else if (!(entry >= 0 && entry <= 1)) throw new Error(`${label}.${key} must be between zero and one.`);
+      output[key] = entry;
+      continue;
+    }
+    if (key === "siteMetric") {
+      if (typeof entry !== "string" || entry.trim().length === 0) throw new Error(`${label}.siteMetric must be a non-empty metric identifier.`);
+      output[key] = entry;
+      continue;
+    }
+    throw new Error(`${label} contains unknown visualization setting '${key}'.`);
+  }
+  return output;
+}
+
+function visualizationMap(value: unknown, label: string): Readonly<Record<string, MethodVisualizationSettings>> | undefined {
+  if (value === undefined) return undefined;
+  if (!record(value)) throw new Error(`${label} must be an object keyed by method or component id.`);
+  return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, visualizationSettings(entry, `${label}.${key}`)]));
+}
+
+function parseVisualization(value: unknown): PipelineVisualization | undefined {
+  if (value === undefined) return undefined;
+  if (!record(value)) throw new Error("Pipeline visualization must be an object.");
+  for (const key of Object.keys(value)) if (key !== "methods" && key !== "nodes") throw new Error(`Pipeline visualization contains unknown section '${key}'.`);
+  const methods = visualizationMap(value.methods, "visualization.methods");
+  const nodes = visualizationMap(value.nodes, "visualization.nodes");
+  return { ...(methods === undefined ? {} : { methods }), ...(nodes === undefined ? {} : { nodes }) };
+}
+
+function parseExecution(value: unknown): PipelineExecution | undefined {
+  if (value === undefined) return undefined;
+  if (!record(value)) throw new Error("Pipeline execution must be an object.");
+  for (const key of Object.keys(value)) if (key !== "maxCpus") throw new Error(`Pipeline execution contains unknown setting '${key}'.`);
+  if (value.maxCpus === undefined) return {};
+  if (typeof value.maxCpus !== "number" || !Number.isInteger(value.maxCpus) || value.maxCpus < 1) throw new Error("execution.maxCpus must be a positive integer.");
+  return { maxCpus: value.maxCpus };
+}
+
 export function parsePipelineDefinition(text: string): PipelineDefinition {
   let parsed: unknown;
   try { parsed = JSON.parse(text); }
@@ -82,7 +170,16 @@ export function parsePipelineDefinition(text: string): PipelineDefinition {
       parameters: value.parameters,
     };
   });
-  return normalizePipeline({ schemaVersion: PIPELINE_SCHEMA_VERSION, id: parsed.id, name: parsed.name, nodes });
+  const execution = parseExecution(parsed.execution);
+  const visualization = parseVisualization(parsed.visualization);
+  return normalizePipeline({
+    schemaVersion: PIPELINE_SCHEMA_VERSION,
+    id: parsed.id,
+    name: parsed.name,
+    nodes,
+    ...(execution === undefined ? {} : { execution }),
+    ...(visualization === undefined ? {} : { visualization }),
+  });
 }
 
 export function nodeStage(node: PipelineNode): PipelineStage | undefined {

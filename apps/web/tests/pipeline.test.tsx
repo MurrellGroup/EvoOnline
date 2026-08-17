@@ -51,6 +51,7 @@ test("pipeline JSON and share links preserve method order and parameter values",
     schemaVersion: 1,
     id: "pipeline-test",
     name: "Recombination then selection",
+    execution: { maxCpus: 6 },
     nodes: [
       { id: "fasttree", kind: "fasttree", parameters: { model: "gtr", fastest: false } },
       { id: "fsart", kind: "model", modelId: "fsart", parameters: { window: 24 } },
@@ -59,6 +60,16 @@ test("pipeline JSON and share links preserve method order and parameter values",
   };
   assert.deepEqual(parsePipelineDefinition(stringifyPipelineDefinition(definition)), definition);
   assert.deepEqual(decodePipelineShare(encodePipelineShare(definition)), definition);
+});
+
+test("pipeline parser rejects invalid CPU budgets", () => {
+  assert.throws(() => parsePipelineDefinition(JSON.stringify({
+    schemaVersion: 1,
+    id: "invalid-cpus",
+    name: "Invalid CPU budget",
+    execution: { maxCpus: 0 },
+    nodes: [],
+  })), /positive integer/u);
 });
 
 test("pipeline parser rejects a model component without a model id", () => {

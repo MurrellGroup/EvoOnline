@@ -36,19 +36,24 @@ export async function runSimulator(configInput: SimulatorConfig | unknown, optio
   const started = typeof performance === "undefined" ? Date.now() : performance.now();
   const config = normalizeSimulatorConfig(configInput);
   const datasets: SimulatedDataset[] = [];
+  const replicateIndices = options?.replicateIndices ?? Array.from({ length: config.tree.replicates }, (_unused, replicate) => replicate);
+  if (replicateIndices.some((replicate) => !Number.isInteger(replicate) || replicate < 0 || replicate >= config.tree.replicates)) {
+    throw new RangeError("Simulator replicate indexes must refer to configured zero-based replicates.");
+  }
   const carrierTips = config.recombination.enabled
     ? Math.max(config.tree.observedTips, Math.ceil(config.tree.observedTips * config.recombination.carrierOversample))
     : config.tree.observedTips;
-  for (let replicate = 0; replicate < config.tree.replicates; replicate += 1) {
+  for (let shardIndex = 0; shardIndex < replicateIndices.length; shardIndex += 1) {
+    const replicate = replicateIndices[shardIndex]!;
     const ordinal = replicate + 1;
     const rng = new Random(replicateSeed(config.seed, replicate));
-    emit(options, "tree-simulation", replicate / config.tree.replicates, `Sampling genealogy ${ordinal} of ${config.tree.replicates}`, ordinal, config.tree.replicates);
+    emit(options, "tree-simulation", shardIndex / Math.max(1, replicateIndices.length), `Sampling genealogy ${ordinal} of ${config.tree.replicates}`, shardIndex + 1, replicateIndices.length);
     const carrierTree = simulateCoalescentTree(carrierTreeConfig(config, carrierTips), rng, carrierTips);
     const observed = carrierTips === config.tree.observedTips
       ? { tree: carrierTree, carrierTipIds: carrierTree.tips }
       : sampleObservedTips(carrierTree, config.tree.observedTips, rng);
     const observedNames = new Set(observed.carrierTipIds.map((tip) => carrierTree.nodes[tip]!.name!));
-    emit(options, "recombination-simulation", replicate / config.tree.replicates, config.recombination.enabled
+    emit(options, "recombination-simulation", shardIndex / Math.max(1, replicateIndices.length), config.recombination.enabled
       ? `Placing branch-interior recombination events for dataset ${ordinal}`
       : `Preparing local genealogy for dataset ${ordinal}`, ordinal, config.tree.replicates);
     const recombination = simulateRecombination(carrierTree, observedNames, config.codon.sites, config.recombination, rng);
@@ -57,7 +62,7 @@ export async function runSimulator(configInput: SimulatorConfig | unknown, optio
       const reportEvery = Math.max(1, Math.ceil(config.codon.sites / 200));
       alignment = simulateCodonAlignment(recombination.localTrees, config.codon, rng, (site, total) => {
         if (site !== total && site % reportEvery !== 0) return;
-        const overall = (replicate + site / total) / config.tree.replicates;
+        const overall = (shardIndex + site / total) / Math.max(1, replicateIndices.length);
         emit(options, "sequence-simulation", overall, `${config.codon.engine === "scuff" ? "SCUFF" : "MG94"} codon ${site.toLocaleString()} of ${total.toLocaleString()} · dataset ${ordinal} of ${config.tree.replicates}`, site, total);
       });
     }
@@ -89,7 +94,7 @@ export async function runSimulator(configInput: SimulatorConfig | unknown, optio
     // Give the worker event loop a chance to publish progress between datasets.
     await Promise.resolve();
   }
-  const diagnostic = config.codon.engine === "scuff"
+  const diagnostic = config.codon.engine === "scuff" && options?.includeDiagnostic !== false
     ? (() => {
         emit(options, "scuff-diagnostics", 0.01, "Propagating SCUFF codon frequencies and expected dN/dS");
         return scuffDiagnostic(config.codon, new Random(replicateSeed(config.seed, config.tree.replicates + 1)), (completed, total) => emit(options, "scuff-diagnostics", completed / total, `SCUFF diagnostic time slice ${completed} of ${total}`, completed, total));

@@ -1,9 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { methodLabel, nodeStage, parsePipelineDefinition, pluginById, compatibleSources } from "./pipeline.js";
+import { replotPipeline } from "./replot.js";
 import { runPipeline } from "./runner.js";
 
-const VERSION = "0.1.6";
+const VERSION = "0.1.7";
 
 export function installBrokenPipeHandler(): void {
   const handler = (error: NodeJS.ErrnoException): void => {
@@ -18,6 +19,7 @@ const HELP = `evo-cli ${VERSION} — run EvoOnline browser pipeline configuratio
 
 Usage:
   evo-cli run --config PIPELINE.json --input PATH [--input PATH ...] --output DIRECTORY [options]
+  evo-cli run --config PIPELINE.json --output EXISTING_DIRECTORY --replot
   evo-cli validate --config PIPELINE.json
   evo-cli methods
   evo-cli version
@@ -27,7 +29,9 @@ Run options:
   -i, --input PATH        FASTA/tree file or directory; repeat for multiple inputs
   -o, --output DIRECTORY  Required output directory for all detailed artifacts
       --fasttree PATH     Override the bundled sibling FastTree executable
+      --cpus N            Maximum logical CPUs (default: config value or available CPUs)
       --overwrite         Allow writing into a non-empty output directory
+      --replot            Regenerate tables and plots from saved results; run no analyses
       --quiet             Suppress progress lines; fatal errors still print
   -h, --help              Show this help
 
@@ -36,8 +40,11 @@ case-insensitive after removing the final filename extension. The complete
 match list is printed and written before any analysis begins.
 
 Every compatible method × source route runs independently. Detailed JSON and
-CSV results, trees, regional-tree bundles, truth, mega-tables, SVG plots, logs,
-and a machine-readable artifact manifest are written below --output.
+human-readable CSV results, trees, regional-tree bundles, truth, mega-tables,
+SVG plots, logs, and a machine-readable artifact manifest are written below
+--output. With --replot, only visualization settings may differ from the saved
+pipeline; no model fitting, simulation, recombination detection, or tree
+inference is rerun.
 `;
 
 interface ParsedArguments {
@@ -51,8 +58,8 @@ function parseArguments(args: readonly string[]): ParsedArguments {
   const flags = new Set<string>();
   const positionals: string[] = [];
   const aliases: Readonly<Record<string, string>> = { "-c": "--config", "-i": "--input", "-o": "--output", "-h": "--help" };
-  const valueOptions = new Set(["--config", "--input", "--output", "--fasttree"]);
-  const flagOptions = new Set(["--overwrite", "--quiet", "--help"]);
+  const valueOptions = new Set(["--config", "--input", "--output", "--fasttree", "--cpus"]);
+  const flagOptions = new Set(["--overwrite", "--replot", "--quiet", "--help"]);
   for (let index = 0; index < args.length; index += 1) {
     const raw = args[index]!;
     const equals = raw.startsWith("--") ? raw.indexOf("=") : -1;
@@ -112,12 +119,25 @@ export async function runCli(argv: readonly string[]): Promise<number> {
   const config = one(parsed, "--config", true)!;
   const output = one(parsed, "--output", true)!;
   const fastTree = one(parsed, "--fasttree");
+  const cpusText = one(parsed, "--cpus");
+  const maxCpus = cpusText === undefined ? undefined : Number(cpusText);
+  if (maxCpus !== undefined && (!Number.isInteger(maxCpus) || maxCpus < 1)) throw new Error("--cpus requires a positive integer.");
+  if (parsed.flags.has("--replot")) {
+    if ((parsed.values.get("--input") ?? []).length > 0) throw new Error("--replot does not accept --input because it never reruns an analysis.");
+    if (fastTree !== undefined) throw new Error("--replot does not accept --fasttree because it never reruns tree inference.");
+    if (maxCpus !== undefined) throw new Error("--replot does not accept --cpus because it never reruns an analysis.");
+    if (parsed.flags.has("--overwrite")) throw new Error("--replot writes only regenerated tables and plots in the existing output directory; do not pass --overwrite.");
+    const summary = await replotPipeline({ configPath: config, outputDirectory: output, quiet: parsed.flags.has("--quiet") });
+    process.stdout.write(`${summary.manifestPath}\n`);
+    return 0;
+  }
   const summary = await runPipeline({
     configPath: config,
     inputPaths: parsed.values.get("--input") ?? [],
     outputDirectory: output,
     overwrite: parsed.flags.has("--overwrite"),
     quiet: parsed.flags.has("--quiet"),
+    ...(maxCpus === undefined ? {} : { maxCpus }),
     ...(fastTree === undefined ? {} : { fastTreePath: fastTree }),
   });
   process.stdout.write(`${summary.manifestPath}\n`);

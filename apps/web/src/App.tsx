@@ -23,6 +23,7 @@ import {
   type EvoOnlineRecombinationTreeBundle,
 } from "./lib/recombination-bundle.js";
 import { PIPELINE_ADD_EVENT, PIPELINE_DRAG_TYPE } from "./lib/pipeline.js";
+import { clampMaxCpus, detectedLogicalCpus, loadMaxCpus, storeMaxCpus } from "./lib/cpu-budget.js";
 
 interface WidgetSnapshot {
   readonly alignment?: string;
@@ -158,6 +159,7 @@ function ParameterControl({
 }
 
 export function App() {
+  const logicalCpus = detectedLogicalCpus();
   const alignmentFrame = useRef<HTMLIFrameElement>(null);
   const treeFrame = useRef<HTMLIFrameElement>(null);
   const sidebarDragging = useRef(false);
@@ -168,7 +170,13 @@ export function App() {
   const [bridges, setBridges] = useState<{ alignment: WidgetBridge; tree: WidgetBridge }>();
   const bridgesRef = useRef<typeof bridges>(undefined);
   bridgesRef.current = bridges;
-  const executorServices = useRef<BrowserExecutorServices>({ getAlignmentBridge: () => bridgesRef.current?.alignment });
+  const [maxCpus, setMaxCpus] = useState(() => loadMaxCpus(logicalCpus));
+  const maxCpusRef = useRef(maxCpus);
+  maxCpusRef.current = maxCpus;
+  const executorServices = useRef<BrowserExecutorServices>({
+    getAlignmentBridge: () => bridgesRef.current?.alignment,
+    getMaxCpus: () => maxCpusRef.current,
+  });
   const executor = useRef<BrowserModelExecutor>(selectedModel.createExecutor(executorServices.current));
   const auxiliaryExecutor = useRef<BrowserModelExecutor | undefined>(undefined);
   const restoredParameters = useRef<ParameterValues | undefined>(undefined);
@@ -408,7 +416,7 @@ export function App() {
     setRunFailure(undefined);
     setNotice(undefined);
     try {
-      const next = await activeExecutor.run(alignment?.text ?? "", tree?.text ?? "", parameters, (nextProgress) => {
+      const next = await activeExecutor.run(alignment?.text ?? "", tree?.text ?? "", { ...parameters, maxCpus }, (nextProgress) => {
         if (runGeneration.current !== generation) return;
         progressRef.current = nextProgress;
         setProgress(nextProgress);
@@ -616,7 +624,7 @@ export function App() {
         const regionalTrees = simulatorTreeSet(dataset);
         const regionalBundle = regionalTrees === undefined ? undefined : createProjectedRecombinationBundle(regionalTrees, nextAlignment.sites, nextAlignment.taxa);
         const targetParameters = target.plugin.defaultParameters();
-        const output = await batchExecutor.run(nextAlignment.text, nextTree.text, targetParameters, (entry) => {
+        const output = await batchExecutor.run(nextAlignment.text, nextTree.text, { ...targetParameters, maxCpus }, (entry) => {
           if (generation !== runGeneration.current) return;
           const aggregate = (index + Math.max(0, Math.min(1, entry.fraction))) / datasets.length;
           const nextProgress = { ...entry, fraction: aggregate, message: `Dataset ${index + 1}/${datasets.length} · ${entry.message ?? stageLabels[entry.stage] ?? entry.stage}` };
@@ -657,11 +665,28 @@ export function App() {
           <span className={webGpuAvailable ? "status-dot is-online" : "status-dot"} />
           {webGpuAvailable ? "WebGPU available" : "WASM fallback"}
           <span className="runtime-divider" />
-          {navigator.hardwareConcurrency || 1} logical cores
+          {logicalCpus} logical cores
         </div>
       </header>
 
       <aside className="model-sidebar">
+        <label className="cpu-budget-control" title="Maximum logical CPUs used by local analyses">
+          <span><strong>CPU limit</strong><small>{maxCpus} / {logicalCpus}</small></span>
+          <input
+            type="range"
+            min={1}
+            max={logicalCpus}
+            step={1}
+            value={maxCpus}
+            disabled={runState === "running"}
+            aria-label="Maximum CPUs"
+            onChange={(event) => {
+              const next = clampMaxCpus(event.target.value, logicalCpus);
+              setMaxCpus(next);
+              storeMaxCpus(next);
+            }}
+          />
+        </label>
         <div className="sidebar-heading">
           <span>Modes and methods</span>
           <strong>{modelRegistry.length + 1}</strong>
@@ -715,6 +740,7 @@ export function App() {
           <PipelineBuilder
             {...(bridges?.alignment === undefined ? {} : { alignmentBridge: bridges.alignment })}
             executorServices={executorServices.current}
+            maxCpus={maxCpus}
             onAnalysesCompleted={registerPipelineAnalyses}
           />
         ) : <>
