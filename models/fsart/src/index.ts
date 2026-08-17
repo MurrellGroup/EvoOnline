@@ -1,4 +1,5 @@
 export * from "./alignment.js";
+export * from "./fixed-tree-likelihood.js";
 export * from "./hmm.js";
 export * from "./merge.js";
 export * from "./pipeline.js";

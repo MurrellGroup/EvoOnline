@@ -170,7 +170,7 @@ export interface StepwisePartitionResult {
   readonly criterion: InformationCriterion;
   readonly criterionValue: number | null;
   readonly segments: readonly PartitionSegment[];
-  /** Successful global/segment/pair/triplet tree-family fits before topology deduplication. */
+  /** Successful global/segment/pair/triplet full-tree fits before the safety cap. */
   readonly candidateTrees: readonly PartitionSegment[];
   readonly steps: readonly PartitionStep[];
   readonly acceptedBreakpoints: readonly number[];
@@ -241,33 +241,6 @@ export interface TreeHmmSubsetSearchStep {
   readonly deltaCriterion: number;
 }
 
-/** One topology subset whose rapid, scaled-forward score was actually
- * computed during the beam/floating search. Exact values are populated only
- * for the bounded shortlist that is subsequently refit by full
- * forward/backward rate marginalization. */
-export interface TreeHmmSubsetHypothesis {
-  readonly key: string;
-  readonly treeIds: readonly string[];
-  readonly profileIndexes: readonly number[];
-  readonly stateCount: number;
-  readonly logLikelihood: number;
-  readonly criterionValue: number;
-  readonly deltaFromBest: number | null;
-  readonly parameterCount: number;
-  readonly expectedResets: number;
-  readonly exactLogLikelihood?: number;
-  readonly exactCriterionValue?: number;
-}
-
-/** A search move that caused the child subset to be inspected. Cached child
- * scores can therefore have more than one incoming edge. */
-export interface TreeHmmSubsetTransition {
-  readonly fromKey: string;
-  readonly toKey: string;
-  readonly move: "add" | "drop" | "swap";
-  readonly phase: "beam" | "floating";
-}
-
 export interface TreeHmmSubsetSearchSummary {
   readonly algorithm: "beam-forward-floating";
   readonly evaluatedSubsets: number;
@@ -279,12 +252,6 @@ export interface TreeHmmSubsetSearchSummary {
   readonly nullCriterionValue: number;
   readonly converged: boolean;
   readonly steps: readonly TreeHmmSubsetSearchStep[];
-  readonly hypotheses: readonly TreeHmmSubsetHypothesis[];
-  readonly transitions: readonly TreeHmmSubsetTransition[];
-  readonly nullKey: string;
-  readonly selectedKey: string;
-  readonly exactVerifiedKeys: readonly string[];
-  readonly exactSelectedKey?: string;
   readonly elapsedMs: number;
 }
 
@@ -348,14 +315,6 @@ export interface TreeHmmResult {
   readonly expectedSwitches: number;
   readonly searchSteps: readonly TreeHmmSearchStep[];
   readonly subsetSearch?: TreeHmmSubsetSearchSummary;
-  /** The full-bank search before Viterbi-assigned tree re-estimation. Later
-   * refinement searches use newly named profiles, so this audit is retained
-   * separately for the original cached topology bank shown in the UI. */
-  readonly initialSubsetSearch?: TreeHmmSubsetSearchSummary;
-  readonly manualPolish?: {
-    readonly requestedTreeIds: readonly string[];
-    readonly finalTreeIds: readonly string[];
-  };
   readonly viterbi?: TreeHmmViterbiResult;
   readonly refinement?: TreeHmmRefinementResult;
   readonly fastTreeMs: number;
@@ -448,17 +407,6 @@ export interface FsartAnalysisResult {
    * without rerunning FastTree.
    */
   readonly treeHmmProfiles: readonly TreeEmissionProfile[];
-  readonly topologyBankAudit?: {
-    readonly familyFits: number;
-    readonly resolvedFits: number;
-    readonly unresolvedFits: number;
-    readonly uniqueResolvedTopologies: number;
-    readonly retainedTopologies: number;
-    readonly truncatedTopologies: number;
-    readonly failedProfileScores: number;
-    readonly maximumAiccStates: number;
-    readonly fastTreeParallelism: number;
-  };
   readonly discordantClades: readonly DiscordantClade[];
   readonly diagnostics: FsartDiagnostics;
   readonly timings: Readonly<Record<string, number>>;
@@ -480,7 +428,6 @@ export interface FsartAnalysisOptions extends FsartScanOptions, FsartRefinementO
   readonly maximumTreeHypotheses?: number;
   readonly maximumTreeBankCandidates?: number;
   readonly maximumConsensusBreakpoints?: number;
-  readonly treeHmmSourceWeight?: number;
   readonly onStage?: (stage: string, fraction: number, detail: FsartProgressDetail) => void;
 }
 

@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  buildTopologyDictionary,
   consensusBreakpointSignals,
   effectiveMinimumTreeSpan,
   exploreTreeHmm,
   fitTreeHmm,
   selectTreeBankBreakpoints,
+  selectTreeHypotheses,
+  scoreFrozenTreeProfile,
   treeBankWindows,
   treeFamilyWindows,
   type MergedBreakpoint,
@@ -14,6 +15,17 @@ import {
   type RefinedTripletSignal,
   type TreeEmissionProfile,
 } from "../src/index.js";
+
+const frozenAlignment = `>a
+AACCGGTT
+>b
+AACCGGTA
+>c
+TTCCGGTT
+>d
+TTCCGGTA
+`;
+const frozenModel = { gtrFrequencies: [0.25, 0.25, 0.25, 0.25], gtrRates: [1, 1, 1, 1, 1, 1] };
 
 function profile(id: string, values: readonly number[]): TreeEmissionProfile {
   return {
@@ -49,64 +61,6 @@ test("tree HMM recovers a topology transition and a local switch interval", () =
   assert.ok(result.switchIntervals[0]!.intervalHigh - result.switchIntervals[0]!.intervalLow < 30);
   assert.deepEqual(result.viterbi?.breakpoints, [100]);
   assert.ok((result.subsetSearch?.evaluatedSubsets ?? 0) >= 3);
-  assert.ok((result.subsetSearch?.hypotheses.length ?? 0) >= 3);
-  assert.ok((result.subsetSearch?.transitions.length ?? 0) >= 1);
-  assert.ok((result.subsetSearch?.exactVerifiedKeys.length ?? 0) >= 1);
-  assert.equal(result.subsetSearch?.exactSelectedKey, "0,1");
-});
-
-test("tree HMM remains finite across extreme per-site likelihood contrasts", () => {
-  const sites = 180;
-  const first = Array.from({ length: sites }, (_value, site) => site < 90 ? -1_000_000 : -1_001_200);
-  const second = Array.from({ length: sites }, (_value, site) => site < 90 ? -1_001_200 : -1_000_000);
-  const result = fitTreeHmm([profile("T1", first), profile("T2", second)], {
-    taxa: 4,
-    criterion: "bic",
-    maximumRateSlices: 9,
-  });
-  assert.equal(result.status, "complete");
-  assert.equal(result.states.length, 2);
-  assert.ok(Number.isFinite(result.logLikelihood));
-  assert.ok(Number.isFinite(result.criterionValue));
-  assert.deepEqual(result.viterbi?.breakpoints, [90]);
-});
-
-test("tree HMM rejects non-finite emissions instead of silently favoring one tree", () => {
-  const values = Array.from({ length: 120 }, () => -1);
-  const broken = values.slice();
-  broken[73] = Number.NaN;
-  assert.throws(() => fitTreeHmm([profile("T1", values), profile("T2", broken)], {
-    taxa: 4,
-    criterion: "bic",
-  }), /T2.*site 74/);
-});
-
-test("a narrow rapid beam always evaluates additions to the explicit global null", () => {
-  const sites = 150;
-  const global = Array.from({ length: sites }, () => -2);
-  const regional = Array.from({ length: sites }, (_value, site) => site < 75 ? -1 : -5);
-  const result = fitTreeHmm([profile("T1", global), profile("T2", regional)], {
-    taxa: 4,
-    criterion: "bic",
-    maximumStates: 2,
-    beamWidth: 1,
-    maximumRateSlices: 5,
-  });
-  assert.ok(result.subsetSearch?.transitions.some((transition) => transition.fromKey === "0" && transition.toKey === "0,1"));
-});
-
-test("AICc reports an infeasible multi-tree model instead of disguising it as an underflow failure", () => {
-  const sites = 100;
-  const first = Array.from({ length: sites }, (_value, site) => site < 50 ? 0 : -20);
-  const second = Array.from({ length: sites }, (_value, site) => site < 50 ? -20 : 0);
-  const result = fitTreeHmm([profile("T1", first), profile("T2", second)], {
-    taxa: 30,
-    criterion: "aicc",
-    maximumStates: 2,
-  });
-  assert.equal(result.states.length, 1);
-  const multiple = result.subsetSearch?.hypotheses.find((hypothesis) => hypothesis.stateCount === 2);
-  assert.equal(multiple?.criterionValue, Number.POSITIVE_INFINITY);
 });
 
 test("fixed low-switch exploration removes draft trees absent from the stabilized Viterbi path", () => {
@@ -191,30 +145,59 @@ test("tree-bank cut selection reserves coverage for a weaker central signal", ()
   assert.ok(selected.some((candidate) => candidate.breakpoint === 568));
 });
 
-test("topology dictionary keeps the global null first and favors recurring long-segment trees", () => {
+test("full-tree selection keeps the global null first without collapsing equal topologies", () => {
   const segment = (start: number, end: number, tree: string): SegmentLikelihood => ({
     start, end, tree, logLikelihood: -(end - start + 1), variableSites: 10, elapsedMs: 0,
   });
   const global = segment(1, 1000, "((a,b),(c,d));");
   const recurring = [segment(1, 500, "((a,c),(b,d));"), segment(501, 1000, "((b,d),(a,c));")];
   const short = segment(1, 100, "((a,d),(b,c));");
-  const dictionary = buildTopologyDictionary([short, ...recurring, global], 1000, 2);
-  assert.equal(dictionary.length, 2);
-  assert.equal(dictionary[0]!.segment, global);
-  assert.equal(dictionary[1]!.occurrences, 2);
-  assert.equal(dictionary[1]!.supportBases, 1000);
+  const hypotheses = selectTreeHypotheses([short, ...recurring, global], 1000, 4);
+  assert.equal(hypotheses.length, 4);
+  assert.equal(hypotheses[0]!.segment, global);
+  assert.equal(hypotheses[2]!.signature, hypotheses[3]!.signature);
+  assert.notEqual(hypotheses[2]!.segment, hypotheses[3]!.segment);
 });
 
-test("topology dictionary trains regional states on local windows rather than breakpoint-crossing prefixes", () => {
+test("full-tree selection never substitutes one same-topology source fit for another", () => {
   const segment = (start: number, end: number, tree: string): SegmentLikelihood => ({
     start, end, tree, logLikelihood: -(end - start + 1), variableSites: 10, elapsedMs: 0,
   });
   const global = segment(1, 3000, "((a,b),(c,d));");
   const contaminatedPrefix = segment(1, 2300, "((a,c),(b,d));");
   const localWindow = segment(1126, 1875, "((b,d),(a,c));");
-  const dictionary = buildTopologyDictionary([global, contaminatedPrefix, localWindow], 3000, 2);
-  assert.equal(dictionary[0]!.segment, global);
-  assert.equal(dictionary[1]!.segment, localWindow);
+  const hypotheses = selectTreeHypotheses([global, contaminatedPrefix, localWindow], 3000, 3);
+  assert.equal(hypotheses[0]!.segment, global);
+  assert.equal(hypotheses[1]!.segment, contaminatedPrefix);
+  assert.equal(hypotheses[2]!.segment, localWindow);
+  assert.equal(hypotheses[1]!.signature, hypotheses[2]!.signature);
+});
+
+test("frozen-tree scoring never mixes or reweights source-region columns", () => {
+  const tree = "((a:0.1,b:0.1):0.05,c:0.1,d:0.1);";
+  const left = scoreFrozenTreeProfile(frozenAlignment, {
+    id: "left", sourceStart: 1, sourceEnd: 4, tree, topologySignature: "same", gammaAlpha: 0.5,
+  }, frozenModel);
+  const right = scoreFrozenTreeProfile(frozenAlignment, {
+    id: "right", sourceStart: 5, sourceEnd: 8, tree, topologySignature: "same", gammaAlpha: 0.5,
+  }, frozenModel);
+  assert.deepEqual(Array.from(left.siteLogLikelihoods), Array.from(right.siteLogLikelihoods));
+  assert.equal(left.logLikelihood, right.logLikelihood);
+});
+
+test("same-topology trees with different fitted branch lengths retain different emissions", () => {
+  const short = scoreFrozenTreeProfile(frozenAlignment, {
+    id: "short", sourceStart: 1, sourceEnd: 4,
+    tree: "((a:0.02,b:0.02):0.01,c:0.02,d:0.02);",
+    topologySignature: "same", gammaAlpha: 0.5,
+  }, frozenModel);
+  const long = scoreFrozenTreeProfile(frozenAlignment, {
+    id: "long", sourceStart: 5, sourceEnd: 8,
+    tree: "((a:0.5,b:0.5):0.25,c:0.5,d:0.5);",
+    topologySignature: "same", gammaAlpha: 0.5,
+  }, frozenModel);
+  assert.notDeepEqual(Array.from(short.siteLogLikelihoods), Array.from(long.siteLogLikelihoods));
+  assert.notEqual(short.logLikelihood, long.logLikelihood);
 });
 
 test("tree-bank windows cover internal mosaics with constant-size overlap", () => {

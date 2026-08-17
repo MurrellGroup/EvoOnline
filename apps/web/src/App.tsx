@@ -487,15 +487,6 @@ export function App() {
     setActiveAnalysisId(completed.at(-1)?.id);
   };
 
-  const replaceSavedAnalysisResult = async (id: string, result: unknown): Promise<void> => {
-    const saved = analyses.find((analysis) => analysis.id === id);
-    if (saved === undefined) throw new Error("The saved analysis is no longer available.");
-    const updated: SavedAnalysis = { ...saved, result };
-    setAnalyses((current) => current.map((analysis) => analysis.id === id ? updated : analysis));
-    await saveAnalysis(updated);
-    setNotice({ tone: "success", text: "The selected FSART topology hypothesis was re-estimated, breakpoint-polished, and saved." });
-  };
-
   const removeSavedAnalysis = (saved: SavedAnalysis): void => {
     if (!window.confirm(`Delete the saved result “${saved.title}”? This cannot be undone.`)) return;
     setAnalyses((current) => current.filter((analysis) => analysis.id !== saved.id));
@@ -922,7 +913,7 @@ export function App() {
           )}
         </section>
 
-        {activeAnalysis !== undefined && (() => { const resultModel = getRegisteredModel(activeAnalysis.modelId); const ResultView = resultModel.ResultView; const simulationInferenceAnalyses = activeAnalysis.modelId === "simulator" ? analyses.filter((analysis) => analysis.simulationSource?.simulationAnalysisId === activeAnalysis.id) : undefined; return <div ref={resultsRef} className="results-anchor"><div className="saved-result-banner"><span>Viewing saved result</span><strong>{activeAnalysis.title}</strong><small>{new Date(activeAnalysis.createdAt).toLocaleString()}</small></div><ResultView result={activeAnalysis.result} parameters={activeAnalysis.parameters} alignment={activeAnalysis.alignment?.text ?? ""} executorServices={executorServices.current} onReplaceResult={(result) => replaceSavedAnalysisResult(activeAnalysis.id, result)} onLoadRecombinationTrees={(method, treeSet, bundle) => void loadRecombinationTrees(method, treeSet, bundle)} onLoadSimulatedDataset={(dataset) => loadSimulatedDataset(dataset)} onBatchSimulatedDatasets={(method, datasets, result) => batchSimulatedDatasets(method, datasets, result)} {...(simulationInferenceAnalyses === undefined ? {} : { simulationInferenceAnalyses })} /></div>; })()}
+        {activeAnalysis !== undefined && (() => { const resultModel = getRegisteredModel(activeAnalysis.modelId); const ResultView = resultModel.ResultView; const simulationInferenceAnalyses = activeAnalysis.modelId === "simulator" ? analyses.filter((analysis) => analysis.simulationSource?.simulationAnalysisId === activeAnalysis.id) : undefined; return <div ref={resultsRef} className="results-anchor"><div className="saved-result-banner"><span>Viewing saved result</span><strong>{activeAnalysis.title}</strong><small>{new Date(activeAnalysis.createdAt).toLocaleString()}</small></div><ResultView result={activeAnalysis.result} parameters={activeAnalysis.parameters} alignment={activeAnalysis.alignment?.text ?? ""} onLoadRecombinationTrees={(method, treeSet, bundle) => void loadRecombinationTrees(method, treeSet, bundle)} onLoadSimulatedDataset={(dataset) => loadSimulatedDataset(dataset)} onBatchSimulatedDatasets={(method, datasets, result) => batchSimulatedDatasets(method, datasets, result)} {...(simulationInferenceAnalyses === undefined ? {} : { simulationInferenceAnalyses })} /></div>; })()}
         </>}
       </main>
 

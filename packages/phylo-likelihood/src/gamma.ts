@@ -56,7 +56,7 @@ function gammaQuantile(shape: number, probability: number): number {
 
 /** Equal-probability Gamma categories represented by exact conditional means. */
 export function discreteGammaRates(shape: number, count = 4): { readonly rates: Float64Array; readonly weights: Float64Array } {
-  if (!(shape > 0) || !Number.isFinite(shape) || !Number.isInteger(count) || count < 1 || count > 16) throw new RangeError("Discrete-Gamma shape/count is invalid.");
+  if (!(shape > 0) || !Number.isFinite(shape) || !Number.isInteger(count) || count < 1 || count > 64) throw new RangeError("Discrete-Gamma shape/count is invalid.");
   if (count === 1) return { rates: Float64Array.of(1), weights: Float64Array.of(1) };
   const rates = new Float64Array(count);
   const weights = new Float64Array(count).fill(1 / count);

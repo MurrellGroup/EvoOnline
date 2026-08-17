@@ -1,4 +1,4 @@
-import { informationCriterion, treeHmmParameterCount } from "./stepwise.js";
+import { informationCriterion } from "./stepwise.js";
 import { searchTreeHmmSubsets } from "./tree-hmm-search.js";
 import { decodeTreeHmmViterbi } from "./tree-hmm-viterbi.js";
 import type {
@@ -50,12 +50,10 @@ function logSumExp(values: readonly number[]): number {
 
 export function normalizedEmissions(profiles: readonly TreeEmissionProfile[], sites: number): {
   readonly values: Float64Array;
-  readonly logValues: Float64Array;
   readonly offsets: Float64Array;
 } {
   const states = profiles.length;
   const values = new Float64Array(states * sites);
-  const logValues = new Float64Array(states * sites);
   const offsets = new Float64Array(sites);
   for (let site = 0; site < sites; site += 1) {
     let maximum = -Infinity;
@@ -67,35 +65,10 @@ export function normalizedEmissions(profiles: readonly TreeEmissionProfile[], si
     offsets[site] = maximum;
     for (let state = 0; state < states; state += 1) {
       const value = Number(profiles[state]!.siteLogLikelihoods[site]);
-      const difference = Number.isFinite(value) ? value - maximum : -Infinity;
-      logValues[state * sites + site] = difference;
-      values[state * sites + site] = Number.isFinite(difference) ? Math.exp(Math.max(-700, difference)) : 0;
+      values[state * sites + site] = Number.isFinite(value) ? Math.exp(Math.max(-745, value - maximum)) : 0;
     }
   }
-  return { values, logValues, offsets };
-}
-
-function noSwitchForwardBackward(
-  logEmissions: Float64Array,
-  offsets: Float64Array,
-  sites: number,
-  states: number,
-  weights: Float64Array,
-): ForwardBackwardResult {
-  const stateScores = Array.from({ length: states }, (_value, state) => {
-    let score = Math.log(Math.max(Number.MIN_VALUE, weights[state]!));
-    for (let site = 0; site < sites; site += 1) score += offsets[site]! + logEmissions[state * sites + site]!;
-    return score;
-  });
-  const logLikelihood = logSumExp(stateScores);
-  const posterior = new Float32Array(states * sites);
-  const resetCounts = new Float64Array(states);
-  for (let state = 0; state < states; state += 1) {
-    const mass = Math.exp(stateScores[state]! - logLikelihood);
-    resetCounts[state] = mass;
-    for (let site = 0; site < sites; site += 1) posterior[state * sites + site] = mass;
-  }
-  return { logLikelihood, posterior, switchPosterior: new Float32Array(Math.max(0, sites - 1)), resetCounts };
+  return { values, offsets };
 }
 
 /**
@@ -110,11 +83,7 @@ export function forwardBackward(
   states: number,
   transitionProbability: number,
   weights: Float64Array,
-  logEmissions?: Float64Array,
 ): ForwardBackwardResult {
-  if (transitionProbability <= 0 && logEmissions !== undefined) {
-    return noSwitchForwardBackward(logEmissions, offsets, sites, states, weights);
-  }
   const alpha = new Float64Array(states * sites);
   const scales = new Float64Array(sites);
   let scale = 0;
@@ -189,7 +158,6 @@ export function forwardBackward(
 
 function optimizeWeights(
   emissions: Float64Array,
-  logEmissions: Float64Array,
   offsets: Float64Array,
   sites: number,
   states: number,
@@ -197,7 +165,7 @@ function optimizeWeights(
   maximumIterations: number,
 ): { readonly weights: Float64Array; readonly result: ForwardBackwardResult } {
   let weights = new Float64Array(states).fill(1 / states);
-  let result = forwardBackward(emissions, offsets, sites, states, transitionProbability, weights, logEmissions);
+  let result = forwardBackward(emissions, offsets, sites, states, transitionProbability, weights);
   const pseudoCount = 0.05;
   for (let iteration = 0; iteration < maximumIterations; iteration += 1) {
     const total = result.resetCounts.reduce((sum, value) => sum + value, 0) + pseudoCount * states;
@@ -208,7 +176,7 @@ function optimizeWeights(
       maximumChange = Math.max(maximumChange, Math.abs(updated[state]! - weights[state]!));
     }
     weights = updated;
-    result = forwardBackward(emissions, offsets, sites, states, transitionProbability, weights, logEmissions);
+    result = forwardBackward(emissions, offsets, sites, states, transitionProbability, weights);
     if (maximumChange < 1e-5) break;
   }
   return { weights, result };
@@ -226,6 +194,13 @@ function rateGrid(sites: number, states: number, maximumSlices: number): number[
   return Array.from(new Set(values.map((value) => Number(value.toPrecision(8))))).sort((a, b) => a - b);
 }
 
+function treeHmmParameterCount(taxa: number, states: number): number {
+  if (states <= 1) return 2 * taxa + 6;
+  // Shared: 5 GTR rates + 3 frequencies. Per tree: 2n-3 branch lengths
+  // and one Gamma shape. HMM: K-1 stationary weights and one switch rate.
+  return 8 + states * (2 * taxa - 2) + (states - 1) + 1;
+}
+
 function fitSubset(
   allProfiles: readonly TreeEmissionProfile[],
   indexes: readonly number[],
@@ -235,14 +210,13 @@ function fitSubset(
   const profiles = indexes.map((index) => allProfiles[index]!);
   const sites = profiles[0]!.siteLogLikelihoods.length;
   const states = profiles.length;
-  const { values: emissions, logValues: logEmissions, offsets } = normalizedEmissions(profiles, sites);
+  const { values: emissions, offsets } = normalizedEmissions(profiles, sites);
   const grid = rateGrid(sites, states, options.maximumRateSlices ?? 13);
   const fits: RateFit[] = grid.map((expectedResets, rateIndex) => {
     options.signal?.throwIfAborted();
     const transitionProbability = sites <= 1 ? 0 : 1 - Math.exp(-expectedResets / (sites - 1));
     const optimized = optimizeWeights(
       emissions,
-      logEmissions,
       offsets,
       sites,
       states,
@@ -261,7 +235,6 @@ function fitSubset(
   });
   const logLikelihoods = fits.map((fit) => fit.logLikelihood);
   const normalizer = logSumExp(logLikelihoods);
-  if (!Number.isFinite(normalizer)) throw new Error(`Tree-HMM rate integration produced a non-finite normalizer for ${states} topology state${states === 1 ? "" : "s"}.`);
   const integratedLogEvidence = normalizer - Math.log(fits.length);
   const ratePosterior = logLikelihoods.map((value) => Math.exp(value - normalizer));
   const posterior = new Float32Array(states * sites);
@@ -273,9 +246,6 @@ function fitSubset(
     for (let index = 0; index < posterior.length; index += 1) posterior[index] = posterior[index]! + mass * fit.forwardBackward.posterior[index]!;
     for (let index = 0; index < switchPosterior.length; index += 1) switchPosterior[index] = switchPosterior[index]! + mass * fit.forwardBackward.switchPosterior[index]!;
     for (let state = 0; state < states; state += 1) weights[state] = weights[state]! + mass * fit.weights[state]!;
-  }
-  if (Array.from(weights).some((value) => !Number.isFinite(value))) {
-    throw new Error(`Tree-HMM stationary-weight integration produced a non-finite value for ${states} topology state${states === 1 ? "" : "s"}.`);
   }
   const parameterCount = treeHmmParameterCount(options.taxa, states);
   const maximumLogLikelihood = Math.max(...logLikelihoods);
@@ -442,10 +412,6 @@ export function fitTreeHmm(profiles: readonly TreeEmissionProfile[], options: Tr
   if (sites < 2 || profiles.some((profile) => profile.siteLogLikelihoods.length !== sites)) {
     throw new Error("Tree-HMM emission profiles must have the same alignment length (at least two sites).\n");
   }
-  for (const profile of profiles) {
-    const invalid = Array.from(profile.siteLogLikelihoods).findIndex((value) => !Number.isFinite(Number(value)));
-    if (invalid >= 0) throw new Error(`Tree emission profile '${profile.id}' has a non-finite log likelihood at aligned site ${invalid + 1}.`);
-  }
   const started = performance.now();
   const criterion = options.criterion ?? "aicc";
   const searchMode = options.searchMode ?? "rapid";
@@ -471,37 +437,17 @@ export function fitTreeHmm(profiles: readonly TreeEmissionProfile[], options: Tr
     })
     : undefined;
   const initialIndexes = subsetSearch?.selectedProfileIndexes ?? (requestedIndexes.length > 0 ? requestedIndexes : [0]);
-  const verificationLimit = Math.max(1, Math.min(12, Math.max(4, Math.round(options.beamWidth ?? 4))));
-  const verificationIndexes = subsetSearch === undefined
-    ? [initialIndexes]
-    : Array.from(new Map([
-      subsetSearch.hypotheses.find((hypothesis) => hypothesis.key === subsetSearch.selectedKey),
-      ...subsetSearch.hypotheses.filter((hypothesis) => hypothesis.stateCount > 1),
-      ...subsetSearch.hypotheses,
-    ].filter((hypothesis): hypothesis is NonNullable<typeof hypothesis> => hypothesis !== undefined)
-      .map((hypothesis) => [hypothesis.key, hypothesis.profileIndexes])).values()).slice(0, verificationLimit);
-  options.onProgress?.(0.38, { message: `Exact forward/backward verification of ${verificationIndexes.length} rapid-search finalist${verificationIndexes.length === 1 ? "" : "s"}`, current: 0, total: verificationIndexes.length });
-  const exactFits = verificationIndexes.map((indexes, verificationIndex) => fitSubset(profiles, indexes, options, (completed, total, fit) => options.onProgress?.(
-    0.38 + 0.30 * (verificationIndex + completed / total) / verificationIndexes.length,
+  options.onProgress?.(0.38, { message: `Exact forward/backward fit for ${initialIndexes.length} selected topologies`, current: 0, total: initialIndexes.length });
+  let current = fitSubset(profiles, initialIndexes, options, (completed, total, fit) => options.onProgress?.(
+    0.38 + 0.24 * completed / total,
     {
-      message: `Exact finalist ${verificationIndex + 1}/${verificationIndexes.length} · ${indexes.length} states · rate ${completed}/${total}`,
-      current: verificationIndex,
-      total: verificationIndexes.length,
+      message: `Exact ${initialIndexes.length}-state model · switching-rate slice ${completed}/${total}`,
+      current: completed,
+      total,
       metricLabel: "log L",
       metricValue: fit.logLikelihood,
     },
-  )));
-  let current = exactFits.slice().sort((first, second) => first.criterionValue - second.criterionValue || first.indexes.length - second.indexes.length)[0]!;
-  const exactByKey = new Map(exactFits.map((fit) => [fit.indexes.join(","), fit]));
-  const auditedSubsetSearch = subsetSearch === undefined ? undefined : {
-    ...subsetSearch,
-    hypotheses: subsetSearch.hypotheses.map((hypothesis) => {
-      const exact = exactByKey.get(hypothesis.key);
-      return exact === undefined ? hypothesis : { ...hypothesis, exactLogLikelihood: exact.logLikelihood, exactCriterionValue: exact.criterionValue };
-    }),
-    exactVerifiedKeys: Array.from(exactByKey.keys()),
-    exactSelectedKey: current.indexes.join(","),
-  };
+  ));
   const searchSteps: TreeHmmSearchStep[] = [];
   let searchRound = 0;
   while (searchMode !== "fixed" && current.indexes.length > 1) {
@@ -522,7 +468,7 @@ export function fitTreeHmm(profiles: readonly TreeEmissionProfile[], options: Tr
       const fit = fitSubset(profiles, subset, options, (completed, total, rateFit) => {
         const searchFraction = (searchRound + (index + completed / total) / removals.length)
           / Math.max(1, initialIndexes.length - 1);
-        options.onProgress?.(Math.min(0.985, 0.68 + 0.30 * searchFraction), {
+        options.onProgress?.(Math.min(0.985, 0.62 + 0.36 * searchFraction), {
           message: `Exact floating cleanup · ${current.indexes.length} states · removal ${index + 1}/${removals.length} · rate ${completed}/${total}`,
           current: initialIndexes.length - current.indexes.length,
           total: Math.max(1, initialIndexes.length - 1),
@@ -600,7 +546,7 @@ export function fitTreeHmm(profiles: readonly TreeEmissionProfile[], options: Tr
     switchingRates: current.rates,
     expectedSwitches: current.switchPosterior.reduce((sum, value) => sum + value, 0),
     searchSteps,
-    ...(auditedSubsetSearch === undefined ? {} : { subsetSearch: auditedSubsetSearch }),
+    ...(subsetSearch === undefined ? {} : { subsetSearch }),
     fastTreeMs: profiles.reduce((sum, profile) => sum + profile.elapsedMs, 0),
     hmmMs,
   };

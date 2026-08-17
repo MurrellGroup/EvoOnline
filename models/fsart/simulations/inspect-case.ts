@@ -1,5 +1,5 @@
-import { assembleScanResult, buildTopologyDictionary, fitTreeHmm, parseFsartFasta, scanTripletShard, selectStepwisePartition, selectTreeBankBreakpoints, treeBankWindows } from "../src/index.js";
-import { createFastTreeEvaluator, runFastTreeTopology } from "./fasttree.js";
+import { assembleScanResult, fitTreeHmm, parseFsartFasta, scanTripletShard, scoreFrozenTreeProfile, selectStepwisePartition, selectTreeBankBreakpoints, selectTreeHypotheses, treeBankWindows } from "../src/index.js";
+import { createFastTreeEvaluator } from "./fasttree.js";
 import { normalizedRobinsonFoulds } from "./metrics.js";
 import { DEFAULT_SCENARIOS, simulateAlignment } from "./simulator.js";
 
@@ -15,17 +15,18 @@ const jobs = [...cuts.flatMap((candidate) => [{ start: 1, end: candidate.breakpo
 const independent = (await Promise.all(jobs.map((job) => evaluator.evaluate(job.start, job.end))));
 const prioritized = [...partition.candidateTrees.filter((x) => x.start === 1 && x.end === 3000), ...independent, ...partition.segments, ...partition.candidateTrees];
 const global = prioritized[0]!;
-const unique = buildTopologyDictionary(prioritized, 3000, 8);
-console.log("unscored trees", unique.map((item) => [item.segment.start, item.segment.end, item.segment.tree]));
+const hypotheses = selectTreeHypotheses(prioritized, 3000, 8);
+console.log("unscored trees", hypotheses.map((item) => [item.segment.start, item.segment.end, item.segment.tree]));
 const profiles = [];
-for (let index = 0; index < unique.length; index += 1) {
-  const item = unique[index]!;
-  profiles.push(await runFastTreeTopology(binary, simulation.fasta, simulation.names, 3000, { id: `T${index + 1}`, tree: item.segment.tree, sourceStart: item.segment.start, sourceEnd: item.segment.end, topologySignature: item.signature }, { gtrFrequencies: global.gtrFrequencies!, gtrRates: global.gtrRates! }, 4));
+for (let index = 0; index < hypotheses.length; index += 1) {
+  const item = hypotheses[index]!;
+  if (item.segment.gammaAlpha === undefined) continue;
+  profiles.push(scoreFrozenTreeProfile(simulation.fasta, { id: `T${index + 1}`, tree: item.segment.tree, sourceStart: item.segment.start, sourceEnd: item.segment.end, topologySignature: item.signature, gammaAlpha: item.segment.gammaAlpha }, { gtrFrequencies: global.gtrFrequencies!, gtrRates: global.gtrRates! }));
 }
-console.log("truth", simulation.trueBreakpoints, "partition", partition.acceptedBreakpoints, "trees", unique.map((x) => [x.segment.start, x.segment.end]));
+console.log("truth", simulation.trueBreakpoints, "partition", partition.acceptedBreakpoints, "trees", hypotheses.map((x) => [x.segment.start, x.segment.end]));
 console.log("partition steps", partition.steps.map((step) => [step.breakpoint, step.deltaCriterion, step.accepted]));
 console.log("tree-bank cuts", cuts.map((x) => [x.rank, x.breakpoint]));
-console.log("tree RFs", unique.map((x) => simulation.trueSegments.map((truth) => normalizedRobinsonFoulds(x.segment.tree, truth.tree))));
+console.log("tree RFs", hypotheses.map((x) => simulation.trueSegments.map((truth) => normalizedRobinsonFoulds(x.segment.tree, truth.tree))));
 console.log("ranked candidates", result.breakpoints.slice(0, 24).map((x) => [x.rank, x.breakpoint, x.intervalLow, x.intervalHigh, x.supportLow, x.supportHigh, x.evidence]));
 for (const profile of profiles) {
   const segmentLogLs = simulation.trueSegments.map((segment) => Array.from(profile.siteLogLikelihoods).slice(segment.start - 1, segment.end).reduce((a, b) => a + b, 0));

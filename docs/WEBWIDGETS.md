@@ -20,7 +20,6 @@ Host requests:
 - `run-fasttree`
 - `score-fasttree-segment` (private FSART service action)
 - `score-fasttree-ranges` (private FSART refit action)
-- `score-fasttree-topology` (private FSART all-site emission action)
 
 Widget events:
 
@@ -31,9 +30,9 @@ Widget events:
 
 The direct FastTree button uses `run-fasttree`; it therefore invokes the same bioWASM FastTree installation that alivibe uses internally, without requiring the user to open the editor.
 
-FSART uses `score-fasttree-segment` with `{ alignment, start, end, fastest, maxParallel }` to fit its global/segment/pair/triplet tree family. It does not mutate alivibe's displayed alignment: it mounts a numeric-name slice, runs FastTree GTR+Gamma, captures the likelihood from separated stderr, restores original Newick tip labels, and returns the fit plus the fitted GTR parameters when requested.
+FSART uses `score-fasttree-segment` with `{ alignment, start, end, fastest, maxParallel }` to fit its global/segment/pair/triplet tree family. It does not mutate alivibe's displayed alignment: it mounts a numeric-name slice, runs FastTree GTR+Gamma, captures the likelihood from separated stderr, restores original Newick tip labels, and returns the fit plus the fitted GTR parameters when requested. The global fit runs first to establish the shared GTR matrix; independent regional fits are then dispatched across a bounded pool of isolated bioWASM FastTree runtimes.
 
-`score-fasttree-topology` fixes one candidate Newick topology, applies the shared global GTR rates/frequencies, and returns its Gamma20 likelihood for every original alignment site. An optional `sourceRanges` field concatenates the sites assigned to that state when fitting its branch lengths while still reporting emissions over the complete alignment. `score-fasttree-ranges` performs the corresponding de novo topology refit on one or more inclusive, possibly discontiguous ranges. Independent requests are dispatched to a lazy pool of FastTree-only Aioli workers, capped by `maxParallel`, the browser CPU limit, the detected hardware concurrency, and an eight-runtime safety ceiling. Each slot owns its own virtual filesystem; the same runtime is never entered concurrently.
+`score-fasttree-ranges` performs a de novo full-tree refit on one or more inclusive, possibly discontiguous Viterbi-assigned ranges. All-site FSART emissions are computed outside the widget by the frozen-tree likelihood engine: it keeps each source-fitted tree's branch lengths and Gamma shape unchanged and does not duplicate or mix alignment columns during parameter fitting.
 
 ## phylotagger messages
 

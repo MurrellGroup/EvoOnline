@@ -5,6 +5,7 @@ import {
   exploreTreeHmm,
   fitTreeHmm,
   parseFsartFasta,
+  scoreFrozenTreeProfile,
   scanTripletShard,
   type FsartAnalysisOptions,
   type FsartAnalysisResult,
@@ -15,6 +16,8 @@ import {
   type TreeHmmExplorationOptions,
   type TreeHmmExplorationResult,
   type InformationCriterion,
+  type FixedTreeGtrModel,
+  type FrozenTreeCandidate,
 } from "@phylo-workbench/model-fsart/browser-source";
 import type { ParameterValues } from "@phylo-workbench/model-sdk";
 
@@ -50,8 +53,14 @@ interface TreeHmmRequest {
   readonly beamWidth: number;
   readonly minimumRunLength: number;
   readonly stage?: string;
-  readonly searchMode?: "rapid" | "fixed";
-  readonly selectedIndexes?: readonly number[];
+}
+
+interface FrozenTreeProfileRequest {
+  readonly type: "fixed-tree-profile";
+  readonly id: string;
+  readonly alignment: string;
+  readonly candidate: FrozenTreeCandidate;
+  readonly model: FixedTreeGtrModel;
 }
 
 interface TreeHmmExploreInitRequest {
@@ -66,12 +75,13 @@ interface TreeHmmExploreRequest {
   readonly options: TreeHmmExplorationOptions;
 }
 
-type Request = ScanRequest | RefineRequest | TreeHmmRequest | TreeHmmExploreInitRequest | TreeHmmExploreRequest;
+type Request = ScanRequest | RefineRequest | TreeHmmRequest | FrozenTreeProfileRequest | TreeHmmExploreInitRequest | TreeHmmExploreRequest;
 type Response =
   | { readonly type: "progress"; readonly id: string; readonly stage: string; readonly fraction: number; readonly detail: { readonly message: string; readonly current?: number; readonly total?: number; readonly metricLabel?: string; readonly metricValue?: number; readonly indeterminate?: boolean } }
   | { readonly type: "shard"; readonly id: string; readonly shard: ScanShardResult }
   | { readonly type: "result"; readonly id: string; readonly result: FsartAnalysisResult }
   | { readonly type: "tree-hmm-result"; readonly id: string; readonly result: TreeHmmResult }
+  | { readonly type: "tree-profile"; readonly id: string; readonly profile: TreeEmissionProfile }
   | { readonly type: "tree-hmm-explore-ready"; readonly id: string; readonly profileCount: number }
   | { readonly type: "tree-hmm-explore-result"; readonly id: string; readonly result: TreeHmmExplorationResult }
   | { readonly type: "error"; readonly id: string; readonly error: string };
@@ -107,9 +117,8 @@ function options(parameters: ParameterValues, taxa: number, sites: number, varia
     maximumPartitionCandidates: Number(parameters.maximumPartitionCandidates ?? 24),
     fastTreeFastest: Boolean(parameters.fastTreeFastest ?? true),
     runTreeHmm: Boolean(parameters.runTreeHmm ?? true),
-    maximumTreeHypotheses: Number(parameters.maximumTreeHypotheses ?? 8),
+    maximumTreeHypotheses: Number(parameters.maximumTreeHypotheses ?? 48),
     maximumTreeBankCandidates: Number(parameters.maximumTreeBankCandidates ?? 12),
-    treeHmmSourceWeight: Number(parameters.treeHmmSourceWeight ?? 4),
   };
 }
 
@@ -120,6 +129,12 @@ scope.onmessage = (event: MessageEvent<Request>): void => {
       if (request.type === "tree-hmm-explore-init") {
         cachedExploreProfiles = request.profiles;
         const response: Response = { type: "tree-hmm-explore-ready", id: request.id, profileCount: cachedExploreProfiles.length };
+        scope.postMessage(response);
+        return;
+      }
+      if (request.type === "fixed-tree-profile") {
+        const profile = scoreFrozenTreeProfile(request.alignment, request.candidate, request.model);
+        const response: Response = { type: "tree-profile", id: request.id, profile };
         scope.postMessage(response);
         return;
       }
@@ -138,8 +153,7 @@ scope.onmessage = (event: MessageEvent<Request>): void => {
           maximumStates: request.maximumStates,
           beamWidth: request.beamWidth,
           minimumRunLength: request.minimumRunLength,
-          searchMode: request.searchMode ?? "rapid",
-          ...(request.selectedIndexes === undefined ? {} : { selectedIndexes: request.selectedIndexes }),
+          searchMode: "rapid",
           onProgress: (fraction, detail) => {
             const message: Response = { type: "progress", id: request.id, stage: request.stage ?? "tree-hmm", fraction, detail };
             scope.postMessage(message);

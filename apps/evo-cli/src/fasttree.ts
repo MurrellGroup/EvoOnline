@@ -1,8 +1,6 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
-import type { SegmentEvaluator, SegmentLikelihood, TreeEmissionProfile } from "@phylo-workbench/model-fsart";
+import type { SegmentEvaluator, SegmentLikelihood } from "@phylo-workbench/model-fsart";
 import { readableExecutable } from "./io.js";
 
 export interface ParsedFasta {
@@ -167,62 +165,6 @@ export async function inferFastTree(runtime: FastTreeRuntime, alignment: string,
   const parsed = parseFastaText(alignment);
   const score = await fitFastTreeSegment(runtime, segmentFasta(parsed, 1, parsed.sequences[0]!.length), parsed.names, 1, parsed.sequences[0]!.length, fastest, undefined, threads);
   return score.tree;
-}
-
-function parseSiteLikelihoods(text: string, sites: number): Float64Array {
-  const output = new Float64Array(sites).fill(Number.NaN);
-  const pattern = /^Gamma20\s+(\d+)\s+([-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)/gm;
-  for (const match of text.matchAll(pattern)) {
-    const site = Number(match[1]);
-    if (site >= 0 && site < sites) output[site] = Number(match[2]);
-  }
-  const missing = output.findIndex((value) => !Number.isFinite(value));
-  if (missing >= 0) throw new Error(`FastTree site-likelihood log is missing site ${missing + 1}.`);
-  return output;
-}
-
-export async function scoreFastTreeTopology(
-  runtime: FastTreeRuntime,
-  fasta: string,
-  names: readonly string[],
-  sites: number,
-  candidate: { readonly id: string; readonly tree: string; readonly sourceStart: number; readonly sourceEnd: number; readonly sourceRanges?: readonly (readonly [number, number])[]; readonly topologySignature: string },
-  model: { readonly gtrFrequencies: readonly number[]; readonly gtrRates: readonly number[] },
-  sourceWeight = 4,
-  threads = 1,
-): Promise<TreeEmissionProfile> {
-  if (model.gtrFrequencies.length !== 4 || model.gtrRates.length !== 6) throw new Error("Shared GTR estimates are incomplete.");
-  const directory = await mkdtemp(join(tmpdir(), "evo-cli-fasttree-"));
-  const treePath = join(directory, "candidate.nwk");
-  const logPath = join(directory, "sites.log");
-  await writeFile(treePath, candidate.tree.endsWith(";") ? candidate.tree : `${candidate.tree};`);
-  const parsed = parseFastaText(fasta);
-  const sourceRanges = candidate.sourceRanges ?? [[candidate.sourceStart, candidate.sourceEnd] as const];
-  const weight = sourceRanges.length === 1 && candidate.sourceStart === 1 && candidate.sourceEnd === sites ? 1 : Math.max(1, Math.min(8, Math.round(sourceWeight)));
-  const scoringFasta = parsed.names.map((name, index) => {
-    const sequence = parsed.sequences[index]!;
-    const source = sourceRanges.map(([start, end]) => sequence.slice(start - 1, end)).join("");
-    return `>${name}\n${sequence}${source.repeat(weight - 1)}`;
-  }).join("\n");
-  const args = ["-nt", "-gtr", "-gtrfreq", ...model.gtrFrequencies.map(String), "-gtrrates", ...model.gtrRates.map(String), "-nosupport", "-gamma", "-nopr", "-nome", "-mllen", "-intree", treePath, "-log", logPath];
-  const started = performance.now();
-  try {
-    const result = await execute(runtime.binary, args, scoringFasta, threads);
-    const treeLine = result.stdout.split(/\r?\n/).filter((line) => line.includes("(")).at(-1);
-    if (treeLine === undefined) throw new Error("FastTree returned no fixed-topology Newick tree.");
-    const siteLogLikelihoods = parseSiteLikelihoods(await readFile(logPath, "utf8"), sites);
-    return {
-      ...candidate,
-      sourceRanges,
-      tree: treeLine.trim(),
-      logLikelihood: siteLogLikelihoods.reduce((sum, value) => sum + value, 0),
-      siteLogLikelihoods,
-      elapsedMs: performance.now() - started,
-      ...parseModel(result.stderr),
-    };
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
 }
 
 export function createFastTreeEvaluator(

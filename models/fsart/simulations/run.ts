@@ -4,13 +4,14 @@ import { cpus, platform, release } from "node:os";
 import { resolve } from "node:path";
 import {
   assembleScanResult,
-  buildTopologyDictionary,
   canonicalTopologySignature,
   effectiveMinimumTreeSpan,
   fitTreeHmm,
   isFullyResolvedTopology,
   parseFsartFasta,
   scanTripletShard,
+  scoreFrozenTreeProfile,
+  selectTreeHypotheses,
   selectStepwisePartition,
   treeFamilyWindows,
   type MergedBreakpoint,
@@ -21,7 +22,7 @@ import {
 } from "../src/index.js";
 import { breakpointAccuracy, normalizedRobinsonFoulds, partitionTopologyRf, type BreakpointInterval } from "./metrics.js";
 import { summarizeDiversity } from "./diversity.js";
-import { createFastTreeEvaluator, runFastTreeTopology, type FastTreeEvaluator } from "./fasttree.js";
+import { createFastTreeEvaluator, type FastTreeEvaluator } from "./fasttree.js";
 import { benchmarkSvg, markdownReport, replicateCsv, summaryCsv } from "./report.js";
 import { summarizeResults, type ApproachResult, type BenchmarkResult, type ReplicateResult } from "./results.js";
 import { DEFAULT_DIVERSITIES, DEFAULT_SCENARIOS, simulateAlignment, type DiversityRegime, type TrueSegment } from "./simulator.js";
@@ -208,30 +209,30 @@ async function fitTreeHmmBenchmark(
   if (global?.gtrFrequencies === undefined || global.gtrRates === undefined) {
     return { breakpoints: [], topologyRf: null, wallMs: performance.now() - started, fastTreeFits: evaluator.diagnostics().freshFits - fitsBefore, status: "No shared GTR fit." };
   }
-  const unique = buildTopologyDictionary(topologySources, sites, 48);
-  const hasGlobalNull = unique[0]?.segment.start === 1 && unique[0]?.segment.end === sites;
-  if (unique.length < 2 || !hasGlobalNull) {
-    return { breakpoints: [], topologyRf: partitionTopologyRf([global], truth), wallMs: performance.now() - started, fastTreeFits: evaluator.diagnostics().freshFits - fitsBefore, status: `Only one unique topology from ${jobs.length} family fits.` };
+  const hypotheses = selectTreeHypotheses(topologySources, sites, 48);
+  const hasGlobalNull = hypotheses[0]?.segment.start === 1 && hypotheses[0]?.segment.end === sites;
+  if (hypotheses.length < 2 || !hasGlobalNull) {
+    return { breakpoints: [], topologyRf: partitionTopologyRf([global], truth), wallMs: performance.now() - started, fastTreeFits: evaluator.diagnostics().freshFits - fitsBefore, status: `Only one resolved full-tree fit from ${jobs.length} family fits.` };
   }
   let profiles: TreeEmissionProfile[] = [];
-  let siteProfileFits = 0;
-  for (let index = 0; index < unique.length; index += 1) {
-    const candidate = unique[index]!;
+  for (let index = 0; index < hypotheses.length; index += 1) {
+    const candidate = hypotheses[index]!;
     try {
-      profiles.push(await runFastTreeTopology(fastTree, fasta, names, sites, {
+      if (candidate.segment.gammaAlpha === undefined) throw new Error("Source fit has no Gamma shape.");
+      profiles.push(scoreFrozenTreeProfile(fasta, {
         id: `T${profiles.length + 1}`,
         tree: candidate.segment.tree,
         sourceStart: candidate.segment.start,
         sourceEnd: candidate.segment.end,
         topologySignature: candidate.signature,
+        gammaAlpha: candidate.segment.gammaAlpha,
       }, { gtrFrequencies: global.gtrFrequencies, gtrRates: global.gtrRates }));
-      siteProfileFits += 1;
     } catch (error) {
       if (index === 0) throw error;
-      process.stderr.write(`\n  skipped unusable topology ${index + 1}: ${error instanceof Error ? error.message.split("\n", 1)[0] : String(error)}\n  `);
+      process.stderr.write(`\n  skipped unusable full-tree fit ${index + 1}: ${error instanceof Error ? error.message.split("\n", 1)[0] : String(error)}\n  `);
     }
   }
-  if (profiles.length < 2) return { breakpoints: [], topologyRf: partitionTopologyRf([global], truth), wallMs: performance.now() - started, fastTreeFits: evaluator.diagnostics().freshFits - fitsBefore + siteProfileFits, status: "Fewer than two fixed topologies could be scored." };
+  if (profiles.length < 2) return { breakpoints: [], topologyRf: partitionTopologyRf([global], truth), wallMs: performance.now() - started, fastTreeFits: evaluator.diagnostics().freshFits - fitsBefore, status: "Fewer than two frozen full trees could be scored." };
   const globalProfile = profiles[0]!;
   let result = fitTreeHmm(profiles, {
     taxa,
@@ -247,7 +248,7 @@ async function fitTreeHmmBenchmark(
   let refinementIterations = 0;
   for (let iteration = 1; iteration <= 3 && result.states.length > 1 && result.viterbi !== undefined; iteration += 1) {
     const previousBreakpoints = result.viterbi.breakpoints;
-    const previousTopologies = result.states.map((state) => state.topologySignature).sort();
+    const previousTrees = result.states.map((state) => state.tree).sort();
     const rangesByTree = new Map<string, [number, number][]>();
     for (const run of result.viterbi.runs) {
       const ranges = rangesByTree.get(run.treeId);
@@ -263,22 +264,18 @@ async function fitTreeHmmBenchmark(
       if (!isFullyResolvedTopology(score.tree)) continue;
       refitted.push({ ranges, assignedSites, score, signature: canonicalTopologySignature(score.tree) });
     }
-    const uniqueRefits = new Map<string, typeof refitted[number]>();
-    for (const value of refitted) {
-      const current = uniqueRefits.get(value.signature);
-      if (current === undefined || value.assignedSites > current.assignedSites) uniqueRefits.set(value.signature, value);
-    }
     const nextProfiles: TreeEmissionProfile[] = [globalProfile];
-    for (const value of Array.from(uniqueRefits.values()).filter((candidate) => candidate.signature !== globalProfile.topologySignature)) {
-      nextProfiles.push(await runFastTreeTopology(fastTree, fasta, names, sites, {
+    for (const value of refitted) {
+      if (value.score.gammaAlpha === undefined) continue;
+      nextProfiles.push(scoreFrozenTreeProfile(fasta, {
         id: `R${iteration}T${nextProfiles.length}`,
         tree: value.score.tree,
         sourceStart: value.score.start,
         sourceEnd: value.score.end,
         sourceRanges: value.ranges,
         topologySignature: value.signature,
+        gammaAlpha: value.score.gammaAlpha,
       }, { gtrFrequencies: global.gtrFrequencies, gtrRates: global.gtrRates }));
-      siteProfileFits += 1;
     }
     const next = fitTreeHmm(nextProfiles, {
       taxa,
@@ -291,9 +288,9 @@ async function fitTreeHmmBenchmark(
       searchMode: "rapid",
     });
     const nextBreakpoints = next.viterbi?.breakpoints ?? [];
-    const nextTopologies = next.states.map((state) => state.topologySignature).sort();
-    const topologyChanged = previousTopologies.length !== nextTopologies.length
-      || previousTopologies.some((value, index) => value !== nextTopologies[index]);
+    const nextTrees = next.states.map((state) => state.tree).sort();
+    const topologyChanged = previousTrees.length !== nextTrees.length
+      || previousTrees.some((value, index) => value !== nextTrees[index]);
     const maximumShift = previousBreakpoints.length === nextBreakpoints.length
       ? previousBreakpoints.reduce((maximum, value, index) => Math.max(maximum, Math.abs(value - nextBreakpoints[index]!)), 0)
       : Infinity;
@@ -316,9 +313,9 @@ async function fitTreeHmmBenchmark(
     breakpoints: breakpointIntervals,
     topologyRf: expectedTreeHmmRf(result.statePosterior, result.states, result.sites, truth),
     wallMs: performance.now() - started,
-    fastTreeFits: evaluator.diagnostics().freshFits - fitsBefore + siteProfileFits,
+    fastTreeFits: evaluator.diagnostics().freshFits - fitsBefore,
     status: result.status === "complete"
-      ? `${jobs.length} family trees; ${unique.length} unique topologies; ${result.subsetSearch?.evaluatedSubsets ?? 0} cached subset tests; ${result.states.length} states; ${refinementIterations} refinements (${converged ? "converged" : "not required"}); delta AICc ${result.deltaCriterion?.toFixed(3)}; logL ${result.logLikelihood?.toFixed(3)} vs null ${result.nullLogLikelihood?.toFixed(3)}`
+      ? `${jobs.length} family trees; ${hypotheses.length} frozen full-tree hypotheses; ${result.subsetSearch?.evaluatedSubsets ?? 0} cached subset tests; ${result.states.length} states; ${refinementIterations} refinements (${converged ? "converged" : "not required"}); delta AICc ${result.deltaCriterion?.toFixed(3)}; logL ${result.logLikelihood?.toFixed(3)} vs null ${result.nullLogLikelihood?.toFixed(3)}`
       : result.message ?? result.status,
   };
 }

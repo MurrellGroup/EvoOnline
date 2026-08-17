@@ -24,7 +24,8 @@
   },
   "dependencies": {
     "@phylo-workbench/domain": "*",
-    "@phylo-workbench/model-sdk": "*"
+    "@phylo-workbench/model-sdk": "*",
+    "@phylo-workbench/phylo-likelihood": "*"
   },
   "devDependencies": {
     "@types/node": "^24.2.1",

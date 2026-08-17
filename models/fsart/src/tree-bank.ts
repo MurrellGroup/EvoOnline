@@ -1,11 +1,11 @@
 import { canonicalTopologySignature, isFullyResolvedTopology } from "./tree-discordance.js";
 import type { MergedBreakpoint, SegmentLikelihood } from "./types.js";
 
-export interface TopologyDictionaryEntry {
+export interface TreeHypothesisEntry {
   readonly segment: SegmentLikelihood;
   readonly signature: string;
-  readonly occurrences: number;
-  readonly supportBases: number;
+  /** Zero-based position of this independently fitted full tree in the source family. */
+  readonly sourceIndex: number;
 }
 
 export interface TreeBankWindow {
@@ -87,35 +87,6 @@ export function treeFamilyWindows(
   return output;
 }
 
-function overlapLength(first: SegmentLikelihood, second: SegmentLikelihood): number {
-  return Math.max(0, Math.min(first.end, second.end) - Math.max(first.start, second.start) + 1);
-}
-
-/**
- * Prefix/suffix fits are excellent topology finders but poor branch-length
- * training sources when they cross a real breakpoint. Prefer the fixed-size
- * overlapping local windows whenever they recovered the same topology. A
- * local medoid makes the choice stable when several windows agree.
- */
-function regionalRepresentative(sources: readonly SegmentLikelihood[], sites: number): SegmentLikelihood {
-  const target = Math.max(1, sites / 4);
-  const local = sources.filter((source) => {
-    const length = source.end - source.start + 1;
-    return length >= target * 0.5 && length <= target * 1.5;
-  });
-  const eligible = local.length > 0 ? local : sources;
-  return eligible.slice().sort((first, second) => {
-    const firstLength = first.end - first.start + 1;
-    const secondLength = second.end - second.start + 1;
-    const firstCorroboration = local.reduce((sum, source) => sum + overlapLength(first, source) / Math.max(1, Math.min(firstLength, source.end - source.start + 1)), 0);
-    const secondCorroboration = local.reduce((sum, source) => sum + overlapLength(second, source) / Math.max(1, Math.min(secondLength, source.end - source.start + 1)), 0);
-    return secondCorroboration - firstCorroboration
-      || Math.abs(firstLength - target) - Math.abs(secondLength - target)
-      || secondLength - firstLength
-      || first.start - second.start;
-  })[0]!;
-}
-
 /** Seven half-overlapping quarter-alignment windows in the common case. This
  * constant-size supplement is what allows an internal mosaic genealogy to
  * enter the dictionary without enumerating O(candidates²) breakpoint pairs. */
@@ -173,56 +144,24 @@ export function selectTreeBankBreakpoints(
 }
 
 /**
- * Collapse segment fits by unrooted topology and rank recurring hypotheses by
- * the total number of source-alignment bases supporting them. The global tree
- * is retained first as the explicit one-tree null.
+ * Retain independently fitted full trees without topology deduplication. Two
+ * trees with the same unrooted splits can have different branch lengths and
+ * Gamma shapes, and therefore define different likelihood profiles. The
+ * whole-alignment fit is ordered first so index zero remains the explicit
+ * one-tree null; every other resolved fit keeps source-family order.
  */
-export function buildTopologyDictionary(
+export function selectTreeHypotheses(
   segments: readonly SegmentLikelihood[],
   sites: number,
   maximumTrees = 8,
-): TopologyDictionaryEntry[] {
+): TreeHypothesisEntry[] {
   const limit = Math.max(1, Math.min(64, Math.round(maximumTrees)));
-  const groups = new Map<string, {
-    sources: SegmentLikelihood[];
-    occurrences: number;
-    supportBases: number;
-  }>();
-  const seenSources = new Set<string>();
-  for (const segment of segments) {
-    // Low-information windows can make FastTree emit a genuine polytomy. Its
-    // later -intree/-mllen path requires bifurcation and may assert in native
-    // or WASM builds, so unresolved exploratory states are not admissible.
-    if (!isFullyResolvedTopology(segment.tree)) continue;
-    const signature = canonicalTopologySignature(segment.tree);
-    const sourceKey = `${segment.start}:${segment.end}:${signature}`;
-    if (seenSources.has(sourceKey)) continue;
-    seenSources.add(sourceKey);
-    const length = Math.max(0, segment.end - segment.start + 1);
-    const current = groups.get(signature);
-    if (current === undefined) {
-      groups.set(signature, { sources: [segment], occurrences: 1, supportBases: length });
-      continue;
-    }
-    current.sources.push(segment);
-    current.occurrences += 1;
-    current.supportBases += length;
-  }
-  const entries = Array.from(groups, ([signature, group]): TopologyDictionaryEntry => ({
-    // Preserve the whole-alignment fit as the explicit null. Other topology
-    // states use a locally coherent source for branch-length optimization.
-    segment: group.sources.find((source) => source.start === 1 && source.end === sites)
-      ?? regionalRepresentative(group.sources, sites),
-    signature,
-    occurrences: group.occurrences,
-    supportBases: group.supportBases,
-  }));
-  const global = entries.find((entry) => entry.segment.start === 1 && entry.segment.end === sites);
-  const remaining = entries
-    .filter((entry) => entry !== global)
-    .sort((first, second) => second.supportBases - first.supportBases
-      || second.occurrences - first.occurrences
-      || (second.segment.end - second.segment.start) - (first.segment.end - first.segment.start)
-      || first.signature.localeCompare(second.signature));
-  return [...(global === undefined ? [] : [global]), ...remaining].slice(0, limit);
+  const resolved = segments.flatMap((segment, sourceIndex): TreeHypothesisEntry[] => (
+    isFullyResolvedTopology(segment.tree)
+      ? [{ segment, signature: canonicalTopologySignature(segment.tree), sourceIndex }]
+      : []
+  ));
+  const global = resolved.filter((entry) => entry.segment.start === 1 && entry.segment.end === sites);
+  const regional = resolved.filter((entry) => entry.segment.start !== 1 || entry.segment.end !== sites);
+  return [...global, ...regional].slice(0, limit);
 }
