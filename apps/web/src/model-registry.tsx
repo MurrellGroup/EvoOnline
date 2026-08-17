@@ -65,6 +65,8 @@ interface ResultProps {
   readonly onLoadSimulatedDataset?: (dataset: SimulatedDataset) => void | Promise<void>;
   readonly onBatchSimulatedDatasets?: (method: SimulatorBatchMethod, datasets: readonly SimulatedDataset[], result: SimulatorAnalysisResult) => void | Promise<void>;
   readonly simulationInferenceAnalyses?: readonly SavedAnalysis[];
+  readonly executorServices?: BrowserExecutorServices;
+  readonly onReplaceResult?: (result: unknown) => void | Promise<void>;
 }
 
 export interface BrowserModelRegistration {
@@ -101,8 +103,18 @@ function CladeShiftResult({ result, parameters, alignment }: ResultProps) {
   return <CladeShiftResultsView result={result as CladeShiftRunResult} threshold={Number(parameters.posteriorThreshold ?? 0.9)} alignment={alignment} />;
 }
 
-function FsartResult({ result, onLoadRecombinationTrees }: ResultProps) {
-  return <FsartResultsView result={result as FsartAnalysisResult} onLoadRecombinationTrees={onLoadRecombinationTrees} />;
+function FsartResult({ result, parameters, alignment, onLoadRecombinationTrees, executorServices, onReplaceResult }: ResultProps) {
+  const fsart = result as FsartAnalysisResult;
+  const onPolishHypothesis = executorServices === undefined || onReplaceResult === undefined || alignment.length === 0
+    ? undefined
+    : async (treeIds: readonly string[], onProgress: (progress: RunProgress) => void): Promise<void> => {
+      const client = new FsartClient(executorServices.getAlignmentBridge, executorServices.getMaxCpus);
+      try {
+        const polished = await client.polishHypothesis(fsart, alignment, parameters, treeIds, onProgress);
+        await onReplaceResult(polished);
+      } finally { client.dispose(); }
+    };
+  return <FsartResultsView result={fsart} onLoadRecombinationTrees={onLoadRecombinationTrees} onPolishHypothesis={onPolishHypothesis} />;
 }
 
 function MosaicSprResult({ result, onLoadRecombinationTrees }: ResultProps) {
@@ -209,7 +221,7 @@ export const modelRegistry: readonly BrowserModelRegistration[] = [
     plugin: mosaicSprPlugin,
     glyph: "SPR",
     runtimeLabel: "FastTree WASM · SPR worker",
-    createExecutor: (services) => new MosaicSprClient(services.getAlignmentBridge),
+    createExecutor: (services) => new MosaicSprClient(services.getAlignmentBridge, services.getMaxCpus),
     ResultView: MosaicSprResult,
     completionMessage: (result) => {
       const output = result as MosaicSprAnalysisResult;

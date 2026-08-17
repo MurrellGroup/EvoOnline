@@ -1874,6 +1874,8 @@ async function fastTreeRuntime(slot) {
         if (!state.aioliCLI) return Promise.reject(new Error('FastTree (bioWASM) is not initialized.'));
         return Promise.resolve(state.aioliCLI);
     }
+    // Each Aioli instance owns an independent worker and virtual filesystem;
+    // one runtime is never entered by two FastTree commands at once.
     if (!state.fastTreeRuntimePromises[slot]) {
         state.fastTreeRuntimePromises[slot] = Promise.resolve(new Aioli(["fasttree/2.1.11"], { printInterleaved: false }));
     }

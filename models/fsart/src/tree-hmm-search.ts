@@ -1,9 +1,11 @@
-import { informationCriterion } from "./stepwise.js";
+import { informationCriterion, treeHmmParameterCount } from "./stepwise.js";
 import type {
   TreeEmissionProfile,
   TreeHmmOptions,
+  TreeHmmSubsetHypothesis,
   TreeHmmSubsetSearchStep,
   TreeHmmSubsetSearchSummary,
+  TreeHmmSubsetTransition,
 } from "./types.js";
 
 interface RapidScore {
@@ -11,11 +13,7 @@ interface RapidScore {
   readonly logLikelihood: number;
   readonly criterionValue: number;
   readonly expectedResets: number;
-}
-
-function parameterCount(taxa: number, states: number): number {
-  if (states <= 1) return 2 * taxa + 6;
-  return 8 + states * (2 * taxa - 2) + (states - 1) + 1;
+  readonly parameterCount: number;
 }
 
 function resetGrid(sites: number, states: number): number[] {
@@ -70,6 +68,15 @@ function rapidForward(
 ): number {
   const sites = profiles[0]!.siteLogLikelihoods.length;
   const states = indexes.length;
+  if (expectedResets <= 0) {
+    const stateScores = indexes.map((profileIndex, state) => {
+      let total = Math.log(Math.max(Number.MIN_VALUE, weights[state]!));
+      for (let site = 0; site < sites; site += 1) total += Number(profiles[profileIndex]!.siteLogLikelihoods[site]);
+      return total;
+    });
+    const maximum = Math.max(...stateScores);
+    return maximum + Math.log(stateScores.reduce((sum, value) => sum + Math.exp(value - maximum), 0));
+  }
   const transition = states <= 1 || sites <= 1 ? 0 : 1 - Math.exp(-expectedResets / (sites - 1));
   const stay = 1 - transition;
   let alpha = new Float64Array(states);
@@ -123,7 +130,12 @@ export function searchTreeHmmSubsets(
   const criterion = options.criterion ?? "aicc";
   const beamWidth = Math.max(1, Math.min(12, Math.round(options.beamWidth ?? 4)));
   const maximumStates = Math.max(1, Math.min(profiles.length, Math.round(options.maximumStates ?? 8)));
+  for (const profile of profiles) {
+    const invalid = Array.from(profile.siteLogLikelihoods).findIndex((value) => !Number.isFinite(Number(value)));
+    if (invalid >= 0) throw new Error(`Tree emission profile '${profile.id}' has a non-finite log likelihood at aligned site ${invalid + 1}.`);
+  }
   const cache = new Map<string, RapidScore>();
+  const transitions = new Map<string, TreeHmmSubsetTransition>();
   const estimatedEvaluations = Math.max(profiles.length, profiles.length + beamWidth * profiles.length * Math.max(1, maximumStates - 1));
   let evaluations = 0;
   const score = (rawIndexes: readonly number[]): RapidScore => {
@@ -142,11 +154,13 @@ export function searchTreeHmmSubsets(
         bestExpectedResets = expectedResets;
       }
     }
+    const parameters = treeHmmParameterCount(options.taxa, indexes.length);
     const result = {
       indexes,
       logLikelihood: bestLogLikelihood,
-      criterionValue: informationCriterion(criterion, bestLogLikelihood, parameterCount(options.taxa, indexes.length), sites),
+      criterionValue: informationCriterion(criterion, bestLogLikelihood, parameters, sites),
       expectedResets: bestExpectedResets,
+      parameterCount: parameters,
     };
     cache.set(signature, result);
     evaluations += 1;
@@ -162,9 +176,21 @@ export function searchTreeHmmSubsets(
     return result;
   };
 
+  const connect = (from: RapidScore, to: RapidScore, phase: TreeHmmSubsetTransition["phase"]): void => {
+    const removed = setDifference(from.indexes, to.indexes);
+    const added = setDifference(to.indexes, from.indexes);
+    const move = removed.length > 0 && added.length > 0 ? "swap" as const : removed.length > 0 ? "drop" as const : "add" as const;
+    const transition = { fromKey: key(from.indexes), toKey: key(to.indexes), move, phase };
+    transitions.set(`${transition.fromKey}>${transition.toKey}:${phase}`, transition);
+  };
+
   const singletonScores = profiles.map((_profile, index) => score([index])).sort(compare);
   const nullScore = score([0]);
-  let beam = singletonScores.slice(0, beamWidth);
+  // Index zero is the whole-alignment null. Keep it as a beam seed even when
+  // a regional singleton scores better, so a narrow beam still evaluates the
+  // null's neighbors. It is not forced into any child or final hypothesis.
+  const beamSeeds = [nullScore, ...singletonScores.filter((candidate) => key(candidate.indexes) !== key(nullScore.indexes))];
+  let beam = Array.from(new Map(beamSeeds.map((candidate) => [key(candidate.indexes), candidate])).values()).slice(0, beamWidth);
   let best = singletonScores[0]!;
   const steps: TreeHmmSubsetSearchStep[] = [{
     round: 0,
@@ -180,6 +206,7 @@ export function searchTreeHmmSubsets(
       for (let index = 0; index < profiles.length; index += 1) {
         if (parent.indexes.includes(index)) continue;
         const candidate = score([...parent.indexes, index]);
+        connect(parent, candidate, "beam");
         expanded.set(key(candidate.indexes), candidate);
       }
     }
@@ -205,6 +232,7 @@ export function searchTreeHmmSubsets(
     if (best.indexes.length > 1) {
       for (const removed of best.indexes) {
         const candidate = score(best.indexes.filter((value) => value !== removed));
+        connect(best, candidate, "floating");
         neighbors.set(key(candidate.indexes), candidate);
       }
     }
@@ -212,6 +240,7 @@ export function searchTreeHmmSubsets(
       for (let added = 0; added < profiles.length; added += 1) {
         if (best.indexes.includes(added)) continue;
         const candidate = score([...best.indexes, added]);
+        connect(best, candidate, "floating");
         neighbors.set(key(candidate.indexes), candidate);
       }
     }
@@ -219,6 +248,7 @@ export function searchTreeHmmSubsets(
       for (let added = 0; added < profiles.length; added += 1) {
         if (best.indexes.includes(added)) continue;
         const candidate = score([...best.indexes.filter((value) => value !== removed), added]);
+        connect(best, candidate, "floating");
         neighbors.set(key(candidate.indexes), candidate);
       }
     }
@@ -248,6 +278,19 @@ export function searchTreeHmmSubsets(
     metricLabel: criterion.toUpperCase(),
     metricValue: best.criterionValue,
   });
+  const ordered = Array.from(cache.values()).sort(compare);
+  const bestCriterion = ordered.find((candidate) => Number.isFinite(candidate.criterionValue))?.criterionValue;
+  const hypotheses: TreeHmmSubsetHypothesis[] = ordered.map((candidate) => ({
+    key: key(candidate.indexes),
+    treeIds: candidate.indexes.map((index) => profiles[index]!.id),
+    profileIndexes: candidate.indexes,
+    stateCount: candidate.indexes.length,
+    logLikelihood: candidate.logLikelihood,
+    criterionValue: candidate.criterionValue,
+    deltaFromBest: bestCriterion === undefined || !Number.isFinite(candidate.criterionValue) ? null : candidate.criterionValue - bestCriterion,
+    parameterCount: candidate.parameterCount,
+    expectedResets: candidate.expectedResets,
+  }));
   return {
     algorithm: "beam-forward-floating",
     evaluatedSubsets: cache.size,
@@ -259,6 +302,11 @@ export function searchTreeHmmSubsets(
     nullCriterionValue: nullScore.criterionValue,
     converged: locallyConverged,
     steps,
+    hypotheses,
+    transitions: Array.from(transitions.values()),
+    nullKey: key(nullScore.indexes),
+    selectedKey: key(best.indexes),
+    exactVerifiedKeys: [],
     elapsedMs: performance.now() - started,
   };
 }

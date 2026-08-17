@@ -112,14 +112,15 @@ export function FsartInferenceExplorer({ result }: { readonly result: FsartAnaly
     : exploration?.mode === mode ? exploration : undefined;
   const priorSpacing = expectedResets > 0 ? Math.max(1, (result.diagnostics.sites - 1) / expectedResets) : Number.POSITIVE_INFINITY;
   const profileCount = result.treeHmmProfiles.length;
+  const manuallyPolished = result.treeHmm.manualPolish !== undefined;
   const setExpectedFromLog = (value: number): void => setExpectedResets(Number((10 ** value).toPrecision(6)));
-  const modeTitle = mode === "conservative" ? "Conservative IC search"
+  const modeTitle = mode === "conservative" ? manuallyPolished ? "Polished selected hypothesis" : "Conservative IC search"
     : mode === "fixed-low-switch" ? "Fixed low-switch prior"
       : "Sparse Dirichlet variational EM";
 
   return <>
     <div className="fsart-inference-mode" role="radiogroup" aria-label="Topology HMM inference mode">
-      <button type="button" role="radio" aria-checked={mode === "conservative"} className={mode === "conservative" ? "is-active" : undefined} onClick={() => setMode("conservative")}><strong>Conservative IC search</strong><small>Existing beam + add/drop/swap + AICc/BIC result</small></button>
+      <button type="button" role="radio" aria-checked={mode === "conservative"} className={mode === "conservative" ? "is-active" : undefined} onClick={() => setMode("conservative")}><strong>{manuallyPolished ? "Polished selected hypothesis" : "Conservative IC search"}</strong><small>{manuallyPolished ? `${result.treeHmm.manualPolish!.requestedTreeIds.join(" + ")} · exact fit + independent tree/breakpoint polish` : "Beam + add/drop/swap + exact-finalist IC result"}</small></button>
       <button type="button" role="radio" aria-checked={mode === "fixed-low-switch"} disabled={profileCount === 0} className={mode === "fixed-low-switch" ? "is-active" : undefined} onClick={() => setMode("fixed-low-switch")}><strong>Low-switch Viterbi retention</strong><small>Full draft family; retain only trees on the stabilized path</small></button>
       <button type="button" role="radio" aria-checked={mode === "sparse-dirichlet"} disabled={profileCount === 0} className={mode === "sparse-dirichlet" ? "is-active" : undefined} onClick={() => setMode("sparse-dirichlet")}><strong>Sparse Dirichlet-EM</strong><small>Full draft family; variational tree weights collapse toward zero</small></button>
     </div>
@@ -129,7 +130,7 @@ export function FsartInferenceExplorer({ result }: { readonly result: FsartAnaly
       <label><span>Minimum Viterbi run</span><CommittedNumberInput value={minimumRunLength} onCommit={(value) => setMinimumRunLength(Math.round(value))} min={1} max={Math.max(1, Math.floor(result.diagnostics.sites / 2))} /></label>
       {mode === "sparse-dirichlet" && <label><span>Dirichlet α per tree</span><CommittedNumberInput value={dirichletConcentration} onCommit={setDirichletConcentration} min={0.0001} max={10} step={0.01} integer={false} /><small>α ≪ 1 strongly favors a few post-reset destinations</small></label>}
     </div>}
-    {mode === "conservative" && <p className="figure-note"><strong>Original reconstruction retained unchanged.</strong> This is the information-criterion subset search followed by exact rate marginalization and bounded Viterbi/tree refitting.</p>}
+    {mode === "conservative" && <p className="figure-note"><strong>{manuallyPolished ? "Saved manual alternative." : "Original reconstruction retained unchanged."}</strong> {manuallyPolished ? "The requested independently fitted full-tree subset was fit exactly, then alternated with Viterbi-assigned tree re-estimation and breakpoint polishing. The initial automatic search remains available in the hypothesis audit above." : "This is rapid subset screening, bounded exact-finalist verification, exact rate marginalization, and bounded Viterbi/tree refitting."}</p>}
     {mode === "fixed-low-switch" && <p className="figure-note"><strong>No subset search:</strong> equal post-reset frequencies are applied to all {profileCount} cached draft trees, forward/backward and Viterbi are run, trees absent from the path are removed, and this is repeated to stability. Moving the switching slider reruns only this O(L × K) calculation.</p>}
     {mode === "sparse-dirichlet" && <p className="figure-note"><strong>Variational sparse weights:</strong> starting from equal frequencies, reset-destination counts update a symmetric Dirichlet posterior and the HMM uses <em>exp(E log w)</em>. Unsupported trees acquire tiny weights and are pruned. This avoids the unbounded boundary MAP objective produced by a literal α&lt;1 Dirichlet mode.</p>}
     {pending && <div className="fsart-live-status" role="status"><i /><span>Updating {modeTitle} over {profileCount} cached site-likelihood profiles…</span></div>}

@@ -241,6 +241,33 @@ export interface TreeHmmSubsetSearchStep {
   readonly deltaCriterion: number;
 }
 
+/** One independently fitted full-tree subset whose rapid, scaled-forward
+ * score was actually computed during the beam/floating search. Exact values
+ * are populated for candidates subsequently evaluated by full
+ * forward/backward rate marginalization. */
+export interface TreeHmmSubsetHypothesis {
+  readonly key: string;
+  readonly treeIds: readonly string[];
+  readonly profileIndexes: readonly number[];
+  readonly stateCount: number;
+  readonly logLikelihood: number;
+  readonly criterionValue: number;
+  readonly deltaFromBest: number | null;
+  readonly parameterCount: number;
+  readonly expectedResets: number;
+  readonly exactLogLikelihood?: number;
+  readonly exactCriterionValue?: number;
+}
+
+/** A search move that caused the child subset to be inspected. Cached child
+ * scores can therefore have more than one incoming edge. */
+export interface TreeHmmSubsetTransition {
+  readonly fromKey: string;
+  readonly toKey: string;
+  readonly move: "add" | "drop" | "swap";
+  readonly phase: "beam" | "floating";
+}
+
 export interface TreeHmmSubsetSearchSummary {
   readonly algorithm: "beam-forward-floating";
   readonly evaluatedSubsets: number;
@@ -252,6 +279,16 @@ export interface TreeHmmSubsetSearchSummary {
   readonly nullCriterionValue: number;
   readonly converged: boolean;
   readonly steps: readonly TreeHmmSubsetSearchStep[];
+  readonly hypotheses: readonly TreeHmmSubsetHypothesis[];
+  readonly transitions: readonly TreeHmmSubsetTransition[];
+  readonly nullKey: string;
+  /** Winner of the rapid approximation. */
+  readonly selectedKey: string;
+  readonly exactVerifiedKeys: readonly string[];
+  /** Best member of the bounded exact-verification shortlist. */
+  readonly exactSelectedKey?: string;
+  /** Final automatic subset after exact floating removal cleanup. */
+  readonly finalSelectedKey?: string;
   readonly elapsedMs: number;
 }
 
@@ -315,6 +352,13 @@ export interface TreeHmmResult {
   readonly expectedSwitches: number;
   readonly searchSteps: readonly TreeHmmSearchStep[];
   readonly subsetSearch?: TreeHmmSubsetSearchSummary;
+  /** Full-bank search before Viterbi-assigned tree re-estimation. Later
+   * refinement fits have new IDs, so the original searchable audit is kept. */
+  readonly initialSubsetSearch?: TreeHmmSubsetSearchSummary;
+  readonly manualPolish?: {
+    readonly requestedTreeIds: readonly string[];
+    readonly finalTreeIds: readonly string[];
+  };
   readonly viterbi?: TreeHmmViterbiResult;
   readonly refinement?: TreeHmmRefinementResult;
   readonly fastTreeMs: number;
@@ -407,6 +451,19 @@ export interface FsartAnalysisResult {
    * without rerunning FastTree.
    */
   readonly treeHmmProfiles: readonly TreeEmissionProfile[];
+  readonly topologyBankAudit?: {
+    readonly familyFits: number;
+    readonly resolvedFits: number;
+    readonly unresolvedFits: number;
+    /** Distinct unrooted signatures are reported only as an audit statistic;
+     * same-topology fits are never collapsed. */
+    readonly distinctResolvedTopologies: number;
+    readonly retainedFullTreeFits: number;
+    readonly truncatedFullTreeFits: number;
+    readonly failedProfileScores: number;
+    readonly maximumAiccStates: number;
+    readonly fastTreeParallelism: number;
+  };
   readonly discordantClades: readonly DiscordantClade[];
   readonly diagnostics: FsartDiagnostics;
   readonly timings: Readonly<Record<string, number>>;

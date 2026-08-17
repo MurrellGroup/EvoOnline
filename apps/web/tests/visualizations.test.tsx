@@ -135,12 +135,26 @@ test("FSART renders consensus proposals, triplet topology evidence, topology HMM
       switchPosterior: Float32Array.from([...Array(11).fill(0.01), 0.92, ...Array(11).fill(0.01)]),
       switchIntervals: [{ rank: 1, breakpoint: 12, intervalLow: 11, intervalHigh: 14, peakProbability: 0.92, expectedSwitchMass: 1.02 }],
       switchingRates: [{ expectedResets: 1, transitionProbability: 0.04, logLikelihood: -70, posterior: 1 }],
-      expectedSwitches: 1.02, searchSteps: [], fastTreeMs: 10, hmmMs: 2,
+      expectedSwitches: 1.02, searchSteps: [],
+      subsetSearch: {
+        algorithm: "beam-forward-floating", evaluatedSubsets: 3, beamWidth: 4, maximumStates: 2,
+        selectedTreeIds: ["T1", "T2"], selectedProfileIndexes: [0, 1], criterionValue: 192, nullCriterionValue: 230,
+        converged: true, steps: [{ round: 0, move: "seed", treeIds: ["T1", "T2"], criterionValue: 192, deltaCriterion: 38 }],
+        hypotheses: [
+          { key: "0,1", treeIds: ["T1", "T2"], profileIndexes: [0, 1], stateCount: 2, logLikelihood: -72, criterionValue: 192, deltaFromBest: 0, parameterCount: 20, expectedResets: 1, exactLogLikelihood: -70, exactCriterionValue: 190 },
+          { key: "0", treeIds: ["T1"], profileIndexes: [0], stateCount: 1, logLikelihood: -100, criterionValue: 230, deltaFromBest: 38, parameterCount: 12, expectedResets: 0, exactLogLikelihood: -100, exactCriterionValue: 230 },
+          { key: "1", treeIds: ["T2"], profileIndexes: [1], stateCount: 1, logLikelihood: -105, criterionValue: 240, deltaFromBest: 48, parameterCount: 12, expectedResets: 0 },
+        ],
+        transitions: [{ fromKey: "0", toKey: "0,1", move: "add", phase: "beam" }],
+        nullKey: "0", selectedKey: "0,1", exactVerifiedKeys: ["0", "0,1"], exactSelectedKey: "0,1", finalSelectedKey: "0,1", elapsedMs: 2,
+      },
+      fastTreeMs: 10, hmmMs: 2,
     },
     treeHmmProfiles: [
       { id: "T1", sourceStart: 1, sourceEnd: 13, tree: "((a:0.1,b:0.1):0.1,c:0.2);", topologySignature: "t1", logLikelihood: -70, siteLogLikelihoods: Float64Array.from([...Array(12).fill(-1), ...Array(12).fill(-5)]), elapsedMs: 2 },
       { id: "T2", sourceStart: 14, sourceEnd: 24, tree: "((a:0.1,c:0.1):0.1,b:0.2);", topologySignature: "t2", logLikelihood: -70, siteLogLikelihoods: Float64Array.from([...Array(12).fill(-5), ...Array(12).fill(-1)]), elapsedMs: 2 },
     ],
+    topologyBankAudit: { familyFits: 3, resolvedFits: 3, unresolvedFits: 0, distinctResolvedTopologies: 2, retainedFullTreeFits: 2, truncatedFullTreeFits: 0, failedProfileScores: 0, maximumAiccStates: 1, fastTreeParallelism: 2 },
     discordantClades: [{ betweenSegments: ["segment-1-13", "segment-14-24"], direction: "lost", taxa: ["a", "b"], size: 2 }],
     diagnostics: { taxa: 3, sites: 24, variableSites: 18, totalTriplets: 1, scannedTriplets: 1, tripletSampling: "exhaustive", pairCoverageGuaranteed: true, totalTaxonPairs: 3, informativeTriplets: 1, testedBoundaries: 10, scanWindow: 4, minimumTreeSpan: 12, expectedVariableSitesPerMinimumSpan: 9, parallelWorkers: 1, multipleTesting: "none-ranked-candidate-generation", breakpointUncertainty: "three-state-burt-style-hmm-rate-marginalization", intervalConditioning: "candidate-window-local-posterior-basin", exactBurtParity: false, baumWelch: false, scanner: "bitset-informative-event-g-test", pairEqualityCache: true, bitsetWords: 1 },
     timings: { totalMs: 120 }, breakpointCsv: "Rank\n1\n", partitionCsv: "Breakpoint\n13\n", treeHmmCsv: "Site\n1\n",
@@ -152,6 +166,10 @@ test("FSART renders consensus proposals, triplet topology evidence, topology HMM
   assert.match(markup, /Approximate GARD competitor/);
   assert.match(markup, /Conservative IC search: topology posterior and switching path/);
   assert.match(markup, /Low-switch Viterbi retention/);
+  assert.match(markup, /Searched topology-subset landscape/);
+  assert.match(markup, /Re-estimate trees \+ polish breakpoints/);
+  assert.match(markup, /AICc feasibility warning/);
+  assert.match(markup, /final automatic/);
   assert.match(markup, /linked topology comparison/);
   assert.match(markup, /Triplet topology trace/);
   assert.match(markup, /Refined Viterbi tree reconstruction/);

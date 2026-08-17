@@ -17,6 +17,25 @@ export function fastTreeParameterCount(taxa: number, segments: number): number {
   return 8 + Math.max(1, segments) * (2 * taxa - 2);
 }
 
+export function treeHmmParameterCount(taxa: number, states: number): number {
+  if (states <= 1) return 2 * taxa + 6;
+  // Shared: five relative GTR rates and three free base frequencies. Each
+  // full tree contributes 2n-3 branch lengths and one Gamma shape; the HMM
+  // contributes K-1 stationary weights and one switching-rate parameter.
+  return 8 + states * (2 * taxa - 2) + (states - 1) + 1;
+}
+
+/** Largest state count for which the finite-sample AICc correction is
+ * mathematically defined (n - k - 1 > 0). */
+export function maximumAiccTreeStates(taxa: number, observations: number, limit = 64): number {
+  let maximum = 0;
+  for (let states = 1; states <= Math.max(1, Math.floor(limit)); states += 1) {
+    if (observations - treeHmmParameterCount(taxa, states) - 1 <= 0) break;
+    maximum = states;
+  }
+  return maximum;
+}
+
 export function informationCriterion(
   criterion: InformationCriterion,
   logLikelihood: number,
