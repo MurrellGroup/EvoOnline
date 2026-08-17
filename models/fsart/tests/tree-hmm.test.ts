@@ -5,6 +5,7 @@ import {
   effectiveMinimumTreeSpan,
   exploreTreeHmm,
   fitTreeHmm,
+  searchTreeHmmSubsets,
   selectTreeBankBreakpoints,
   selectTreeHypotheses,
   scoreFrozenTreeProfile,
@@ -125,6 +126,13 @@ test("floating additions can grow beyond the configured beam depth", () => {
   assert.ok(result.subsetSearch?.hypotheses.some((hypothesis) => hypothesis.stateCount === 3));
   assert.equal(result.subsetSearch?.selectedProfileIndexes.length, 3);
   assert.equal(result.subsetSearch?.converged, true);
+});
+
+test("rapid subset search defaults to twelve beam-expansion layers", () => {
+  const values = Array.from({ length: 20 }, () => -1);
+  const profiles = Array.from({ length: 13 }, (_value, index) => profile(`T${index + 1}`, values));
+  const result = searchTreeHmmSubsets(profiles, { taxa: 4, criterion: "bic", beamWidth: 1 });
+  assert.equal(result.maximumStates, 12);
 });
 
 test("AICc reports an infeasible multi-tree model instead of disguising it as an underflow failure", () => {

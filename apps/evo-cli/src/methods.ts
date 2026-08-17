@@ -270,7 +270,7 @@ async function refineFsartProfiles(
         gammaAlpha: candidate.score.gammaAlpha,
       }, model));
     }
-    const nextResult = fitTreeHmm(nextProfiles, { taxa, criterion, credibleMass: numberValue(parameters, "credibleMass", 0.95), maximumRateSlices: numberValue(parameters, "treeHmmRateSlices", 13), maximumStates: numberValue(parameters, "maximumHmmStates", 8), beamWidth: numberValue(parameters, "treeHmmBeamWidth", 4), minimumRunLength, searchMode: "rapid", onProgress: (fraction, detail) => progress(reporter, "tree-refinement-hmm", fraction, detail) });
+    const nextResult = fitTreeHmm(nextProfiles, { taxa, criterion, credibleMass: numberValue(parameters, "credibleMass", 0.95), maximumRateSlices: numberValue(parameters, "treeHmmRateSlices", 13), maximumStates: numberValue(parameters, "maximumHmmStates", 12), beamWidth: numberValue(parameters, "treeHmmBeamWidth", 4), minimumRunLength, searchMode: "rapid", onProgress: (fraction, detail) => progress(reporter, "tree-refinement-hmm", fraction, detail) });
     const nextBreakpoints = nextResult.viterbi?.breakpoints ?? [];
     const maximumBoundaryShift = previousBreakpoints.length === nextBreakpoints.length ? previousBreakpoints.reduce((maximum, breakpoint, index) => Math.max(maximum, Math.abs(breakpoint - nextBreakpoints[index]!)), 0) : null;
     const nextTrees = nextResult.states.map((state) => state.tree).sort();
@@ -335,7 +335,7 @@ export async function runFsart(alignment: string, parameters: ParameterValues, r
     };
     profiles.push(scoreFrozenTreeProfile(alignment, frozen, sharedGtr));
   }
-  const initial = fitTreeHmm(profiles, { taxa: result.diagnostics.taxa, criterion, credibleMass: options.credibleMass, maximumRateSlices: numberValue(parameters, "treeHmmRateSlices", 13), maximumStates: numberValue(parameters, "maximumHmmStates", 8), beamWidth: numberValue(parameters, "treeHmmBeamWidth", 4), minimumRunLength: minimum, searchMode: "rapid", onProgress: (fraction, detail) => progress(reporter, "tree-hmm", fraction, detail) });
+  const initial = fitTreeHmm(profiles, { taxa: result.diagnostics.taxa, criterion, credibleMass: options.credibleMass, maximumRateSlices: numberValue(parameters, "treeHmmRateSlices", 13), maximumStates: numberValue(parameters, "maximumHmmStates", 12), beamWidth: numberValue(parameters, "treeHmmBeamWidth", 4), minimumRunLength: minimum, searchMode: "rapid", onProgress: (fraction, detail) => progress(reporter, "tree-hmm", fraction, detail) });
   const refined = await refineFsartProfiles(runtime, alignment, profiles, initial, sharedGtr, parameters, minimum, result.diagnostics.taxa, reporter, maxCpus);
   const treeHmm = { ...refined.result, refinement: refined.refinement };
   const byId = new Map(refined.profiles.map((profile) => [profile.id, profile]));

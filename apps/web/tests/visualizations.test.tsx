@@ -22,7 +22,7 @@ import type { GlobalGammaRunResult } from "../src/types.js";
 import { CladeShiftResultsView } from "../src/components/CladeShiftResultsView.js";
 import type { CladeShiftRunResult } from "../src/types.js";
 import { FsartResultsView } from "../src/components/FsartResultsView.js";
-import { fsartHypothesisDeltaY, selectRankedSourceBandHypotheses } from "../src/components/FsartHypothesisSpace.js";
+import { fsartHypothesisDeltaTicks, fsartHypothesisDeltaY, selectRankedSourceBandHypotheses } from "../src/components/FsartHypothesisSpace.js";
 import { MosaicSprResultsView } from "../src/components/MosaicSprResultsView.js";
 import { JemsprResultsView } from "../src/components/JemsprResultsView.js";
 import { alignComparisonTrees, countOrderCrossings } from "../src/lib/tree-comparison.js";
@@ -61,7 +61,9 @@ test("FSART and MosaicSPR are separately registered methods with non-overlapping
   const fullTreeLimit = fsart.plugin.manifest.parameters.find((parameter) => parameter.id === "maximumTreeHypotheses");
   assert.equal(fullTreeLimit?.default, 1000);
   assert.equal(fullTreeLimit?.maximum, 1000);
-  assert.equal(fsart.plugin.manifest.parameters.find((parameter) => parameter.id === "maximumHmmStates")?.label, "Beam expansion depth");
+  const beamDepth = fsart.plugin.manifest.parameters.find((parameter) => parameter.id === "maximumHmmStates");
+  assert.equal(beamDepth?.label, "Beam expansion depth");
+  assert.equal(beamDepth?.default, 12);
 });
 
 test("JEMSPR is a third independent alignment-only method with no proposal/FastTree-topology controls and an explicit linked-ML stage", () => {
@@ -94,12 +96,18 @@ test("linked FSART trees are rerooted and flipped to eliminate avoidable taxon c
   assert.throws(() => alignComparisonTrees(["((a,b),c);", "((a,b),d);"]), /same uniquely named taxa/);
 });
 
-test("FSART hypothesis plots put smaller deltas lower and rank source bands with the null retained", () => {
+test("FSART hypothesis plots use a direct linear delta scale and rapid-only source-band ranking", () => {
   assert.ok(fsartHypothesisDeltaY(0, 100, 30, 340) > fsartHypothesisDeltaY(100, 100, 30, 340));
+  assert.equal(fsartHypothesisDeltaY(50, 100, 30, 340), (fsartHypothesisDeltaY(0, 100, 30, 340) + fsartHypothesisDeltaY(100, 100, 30, 340)) / 2);
+  const ticks = fsartHypothesisDeltaTicks(88);
+  assert.ok(ticks.length >= 6);
+  assert.equal(ticks[0], 0);
+  assert.ok(ticks.at(-1)! >= 88);
   const hypotheses = Array.from({ length: 25 }, (_value, index) => ({
     key: String(index), treeIds: [`T${index + 1}`], profileIndexes: [index], stateCount: 1,
     logLikelihood: -index, criterionValue: index, deltaFromBest: index,
     parameterCount: 1, expectedResets: 0,
+    ...(index === 24 ? { exactCriterionValue: -1_000 } : {}),
   }));
   const selected = selectRankedSourceBandHypotheses(hypotheses, "24", 20);
   assert.equal(selected.length, 21);
@@ -188,6 +196,8 @@ test("FSART renders consensus proposals, triplet topology evidence, topology HMM
   assert.match(markup, /Low-switch Viterbi retention/);
   assert.match(markup, /Searched topology-subset landscape/);
   assert.match(markup, /larger values higher/);
+  assert.match(markup, /neither AICc nor ΔAICc is exponentiated or log-transformed/);
+  assert.ok((markup.match(/data-axis="rapid-criterion"/g) ?? []).length >= 6);
   assert.match(markup, /button button--quiet is-active">200<\/button>/);
   assert.match(markup, /Ranked hypotheses and tree-estimation sources/);
   assert.match(markup, /data-tree-id="T1"/);

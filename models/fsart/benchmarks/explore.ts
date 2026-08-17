@@ -123,7 +123,7 @@ async function main(): Promise<void> {
       taxa: 9,
       criterion: "aicc",
       maximumRateSlices: 13,
-      maximumStates: 8,
+      maximumStates: 12,
       beamWidth: 4,
       minimumRunLength: 45,
       searchMode: "rapid",

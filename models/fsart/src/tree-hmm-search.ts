@@ -129,7 +129,7 @@ export function searchTreeHmmSubsets(
   const sites = profiles[0]!.siteLogLikelihoods.length;
   const criterion = options.criterion ?? "aicc";
   const beamWidth = Math.max(1, Math.min(12, Math.round(options.beamWidth ?? 4)));
-  const beamDepth = Math.max(1, Math.min(profiles.length, Math.round(options.maximumStates ?? 8)));
+  const beamDepth = Math.max(1, Math.min(profiles.length, Math.round(options.maximumStates ?? 12)));
   for (const profile of profiles) {
     const invalid = Array.from(profile.siteLogLikelihoods).findIndex((value) => !Number.isFinite(Number(value)));
     if (invalid >= 0) throw new Error(`Tree emission profile '${profile.id}' has a non-finite log likelihood at aligned site ${invalid + 1}.`);
