@@ -22,6 +22,7 @@ import type { GlobalGammaRunResult } from "../src/types.js";
 import { CladeShiftResultsView } from "../src/components/CladeShiftResultsView.js";
 import type { CladeShiftRunResult } from "../src/types.js";
 import { FsartResultsView } from "../src/components/FsartResultsView.js";
+import { fsartHypothesisDeltaY, selectRankedSourceBandHypotheses } from "../src/components/FsartHypothesisSpace.js";
 import { MosaicSprResultsView } from "../src/components/MosaicSprResultsView.js";
 import { JemsprResultsView } from "../src/components/JemsprResultsView.js";
 import { alignComparisonTrees, countOrderCrossings } from "../src/lib/tree-comparison.js";
@@ -57,6 +58,10 @@ test("FSART and MosaicSPR are separately registered methods with non-overlapping
   assert.notEqual(fsart.plugin, mosaic.plugin);
   assert.equal(fsart.plugin.manifest.parameters.some((parameter) => parameter.id === "maximumSprStates"), false);
   assert.equal(mosaic.plugin.manifest.parameters.some((parameter) => parameter.id === "maximumSprStates"), true);
+  const fullTreeLimit = fsart.plugin.manifest.parameters.find((parameter) => parameter.id === "maximumTreeHypotheses");
+  assert.equal(fullTreeLimit?.default, 1000);
+  assert.equal(fullTreeLimit?.maximum, 1000);
+  assert.equal(fsart.plugin.manifest.parameters.find((parameter) => parameter.id === "maximumHmmStates")?.label, "Beam expansion depth");
 });
 
 test("JEMSPR is a third independent alignment-only method with no proposal/FastTree-topology controls and an explicit linked-ML stage", () => {
@@ -87,6 +92,19 @@ test("linked FSART trees are rerooted and flipped to eliminate avoidable taxon c
   assert.deepEqual(aligned[0]!.tipOrder.slice().sort(), ["a", "b", "c", "d", "e"]);
   assert.ok(aligned.every((layout) => layout.rerootedOn.length === 2));
   assert.throws(() => alignComparisonTrees(["((a,b),c);", "((a,b),d);"]), /same uniquely named taxa/);
+});
+
+test("FSART hypothesis plots put smaller deltas lower and rank source bands with the null retained", () => {
+  assert.ok(fsartHypothesisDeltaY(0, 100, 30, 340) > fsartHypothesisDeltaY(100, 100, 30, 340));
+  const hypotheses = Array.from({ length: 25 }, (_value, index) => ({
+    key: String(index), treeIds: [`T${index + 1}`], profileIndexes: [index], stateCount: 1,
+    logLikelihood: -index, criterionValue: index, deltaFromBest: index,
+    parameterCount: 1, expectedResets: 0,
+  }));
+  const selected = selectRankedSourceBandHypotheses(hypotheses, "24", 20);
+  assert.equal(selected.length, 21);
+  assert.deepEqual(selected.slice(0, 3).map((hypothesis) => hypothesis.key), ["0", "1", "2"]);
+  assert.equal(selected.at(-1)?.key, "24");
 });
 
 test("FSART renders consensus proposals, triplet topology evidence, topology HMM, and Viterbi trees as SVG", () => {
@@ -137,15 +155,16 @@ test("FSART renders consensus proposals, triplet topology evidence, topology HMM
       switchingRates: [{ expectedResets: 1, transitionProbability: 0.04, logLikelihood: -70, posterior: 1 }],
       expectedSwitches: 1.02, searchSteps: [],
       subsetSearch: {
-        algorithm: "beam-forward-floating", evaluatedSubsets: 3, beamWidth: 4, maximumStates: 2,
+        algorithm: "beam-forward-floating", evaluatedSubsets: 4, beamWidth: 4, maximumStates: 2,
         selectedTreeIds: ["T1", "T2"], selectedProfileIndexes: [0, 1], criterionValue: 192, nullCriterionValue: 230,
-        converged: true, steps: [{ round: 0, move: "seed", treeIds: ["T1", "T2"], criterionValue: 192, deltaCriterion: 38 }],
+        converged: true, floatingIterations: 0, floatingIterationLimit: 12, steps: [{ round: 0, move: "seed", treeIds: ["T1", "T2"], criterionValue: 192, deltaCriterion: 38 }],
         hypotheses: [
           { key: "0,1", treeIds: ["T1", "T2"], profileIndexes: [0, 1], stateCount: 2, logLikelihood: -72, criterionValue: 192, deltaFromBest: 0, parameterCount: 20, expectedResets: 1, exactLogLikelihood: -70, exactCriterionValue: 190 },
           { key: "0", treeIds: ["T1"], profileIndexes: [0], stateCount: 1, logLikelihood: -100, criterionValue: 230, deltaFromBest: 38, parameterCount: 12, expectedResets: 0, exactLogLikelihood: -100, exactCriterionValue: 230 },
           { key: "1", treeIds: ["T2"], profileIndexes: [1], stateCount: 1, logLikelihood: -105, criterionValue: 240, deltaFromBest: 48, parameterCount: 12, expectedResets: 0 },
+          { key: "0,1,2", treeIds: ["T1", "T2", "T3"], profileIndexes: [0, 1, 2], stateCount: 3, logLikelihood: -110, criterionValue: 280, deltaFromBest: 88, parameterCount: 28, expectedResets: 1 },
         ],
-        transitions: [{ fromKey: "0", toKey: "0,1", move: "add", phase: "beam" }],
+        transitions: [{ fromKey: "0", toKey: "0,1", move: "add", phase: "beam" }, { fromKey: "0,1", toKey: "0,1,2", move: "add", phase: "floating" }],
         nullKey: "0", selectedKey: "0,1", exactVerifiedKeys: ["0", "0,1"], exactSelectedKey: "0,1", finalSelectedKey: "0,1", elapsedMs: 2,
       },
       fastTreeMs: 10, hmmMs: 2,
@@ -153,8 +172,9 @@ test("FSART renders consensus proposals, triplet topology evidence, topology HMM
     treeHmmProfiles: [
       { id: "T1", sourceStart: 1, sourceEnd: 13, tree: "((a:0.1,b:0.1):0.1,c:0.2);", topologySignature: "t1", logLikelihood: -70, siteLogLikelihoods: Float64Array.from([...Array(12).fill(-1), ...Array(12).fill(-5)]), elapsedMs: 2 },
       { id: "T2", sourceStart: 14, sourceEnd: 24, tree: "((a:0.1,c:0.1):0.1,b:0.2);", topologySignature: "t2", logLikelihood: -70, siteLogLikelihoods: Float64Array.from([...Array(12).fill(-5), ...Array(12).fill(-1)]), elapsedMs: 2 },
+      { id: "T3", sourceStart: 5, sourceEnd: 19, tree: "((a:0.1,b:0.1):0.2,c:0.2);", topologySignature: "t1", logLikelihood: -75, siteLogLikelihoods: Float64Array.from(Array(24).fill(-2)), elapsedMs: 2 },
     ],
-    topologyBankAudit: { familyFits: 3, resolvedFits: 3, unresolvedFits: 0, distinctResolvedTopologies: 2, retainedFullTreeFits: 2, truncatedFullTreeFits: 0, failedProfileScores: 0, maximumAiccStates: 1, fastTreeParallelism: 2 },
+    topologyBankAudit: { familyFits: 4, resolvedFits: 4, unresolvedFits: 0, distinctResolvedTopologies: 2, retainedFullTreeFits: 3, truncatedFullTreeFits: 1, failedProfileScores: 0, maximumAiccStates: 1, fastTreeParallelism: 2 },
     discordantClades: [{ betweenSegments: ["segment-1-13", "segment-14-24"], direction: "lost", taxa: ["a", "b"], size: 2 }],
     diagnostics: { taxa: 3, sites: 24, variableSites: 18, totalTriplets: 1, scannedTriplets: 1, tripletSampling: "exhaustive", pairCoverageGuaranteed: true, totalTaxonPairs: 3, informativeTriplets: 1, testedBoundaries: 10, scanWindow: 4, minimumTreeSpan: 12, expectedVariableSitesPerMinimumSpan: 9, parallelWorkers: 1, multipleTesting: "none-ranked-candidate-generation", breakpointUncertainty: "three-state-burt-style-hmm-rate-marginalization", intervalConditioning: "candidate-window-local-posterior-basin", exactBurtParity: false, baumWelch: false, scanner: "bitset-informative-event-g-test", pairEqualityCache: true, bitsetWords: 1 },
     timings: { totalMs: 120 }, breakpointCsv: "Rank\n1\n", partitionCsv: "Breakpoint\n13\n", treeHmmCsv: "Site\n1\n",
@@ -167,6 +187,16 @@ test("FSART renders consensus proposals, triplet topology evidence, topology HMM
   assert.match(markup, /Conservative IC search: topology posterior and switching path/);
   assert.match(markup, /Low-switch Viterbi retention/);
   assert.match(markup, /Searched topology-subset landscape/);
+  assert.match(markup, /larger values higher/);
+  assert.match(markup, /button button--quiet is-active">200<\/button>/);
+  assert.match(markup, /Ranked hypotheses and tree-estimation sources/);
+  assert.match(markup, /data-tree-id="T1"/);
+  assert.match(markup, /Fit-to-search accounting/);
+  assert.match(markup, /Beam expansion depth/);
+  assert.match(markup, /Largest subset evaluated/);
+  assert.match(markup, /FULL-TREE CANDIDATE TRUNCATION/);
+  assert.match(markup, /Show top/);
+  assert.match(markup, /button button--quiet is-active">20<\/button>/);
   assert.match(markup, /Re-estimate trees \+ polish breakpoints/);
   assert.match(markup, /AICc feasibility warning/);
   assert.match(markup, /final automatic/);

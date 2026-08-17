@@ -272,12 +272,18 @@ export interface TreeHmmSubsetSearchSummary {
   readonly algorithm: "beam-forward-floating";
   readonly evaluatedSubsets: number;
   readonly beamWidth: number;
+  /** Beam-layer depth used to initialize forward floating search. Despite the
+   * legacy field name, this is not a hard limit on the final subset size. */
   readonly maximumStates: number;
   readonly selectedTreeIds: readonly string[];
   readonly selectedProfileIndexes: readonly number[];
   readonly criterionValue: number;
   readonly nullCriterionValue: number;
   readonly converged: boolean;
+  /** Improving add/drop/swap moves accepted after beam initialization. */
+  readonly floatingIterations?: number;
+  /** Emergency guard; exhaustion means one-move local convergence was not established. */
+  readonly floatingIterationLimit?: number;
   readonly steps: readonly TreeHmmSubsetSearchStep[];
   readonly hypotheses: readonly TreeHmmSubsetHypothesis[];
   readonly transitions: readonly TreeHmmSubsetTransition[];

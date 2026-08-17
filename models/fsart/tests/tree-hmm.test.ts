@@ -110,6 +110,23 @@ test("a narrow rapid beam evaluates additions to the explicit global null withou
   assert.ok(result.subsetSearch?.hypotheses.some((hypothesis) => hypothesis.key === "1"));
 });
 
+test("floating additions can grow beyond the configured beam depth", () => {
+  const sites = 300;
+  const first = Array.from({ length: sites }, (_value, site) => site < 100 ? 0 : -20);
+  const second = Array.from({ length: sites }, (_value, site) => site >= 100 && site < 200 ? 0 : -20);
+  const third = Array.from({ length: sites }, (_value, site) => site >= 200 ? 0 : -20);
+  const result = fitTreeHmm([profile("T1", first), profile("T2", second), profile("T3", third)], {
+    taxa: 4,
+    criterion: "bic",
+    maximumStates: 2,
+    beamWidth: 2,
+    maximumRateSlices: 5,
+  });
+  assert.ok(result.subsetSearch?.hypotheses.some((hypothesis) => hypothesis.stateCount === 3));
+  assert.equal(result.subsetSearch?.selectedProfileIndexes.length, 3);
+  assert.equal(result.subsetSearch?.converged, true);
+});
+
 test("AICc reports an infeasible multi-tree model instead of disguising it as an underflow failure", () => {
   const sites = 100;
   const first = Array.from({ length: sites }, (_value, site) => site < 50 ? 0 : -20);
@@ -218,6 +235,23 @@ test("full-tree selection keeps the global null first without collapsing equal t
   assert.equal(hypotheses[0]!.segment, global);
   assert.equal(hypotheses[2]!.signature, hypotheses[3]!.signature);
   assert.notEqual(hypotheses[2]!.segment, hypotheses[3]!.segment);
+});
+
+test("full-tree selection retains more than the old 64-tree ceiling and enforces only the 1000-tree emergency limit", () => {
+  const tree = "((a,b),(c,d));";
+  const segments = Array.from({ length: 1005 }, (_value, index): SegmentLikelihood => ({
+    start: index === 0 ? 1 : index,
+    end: index === 0 ? 10000 : index + 100,
+    tree,
+    logLikelihood: -100,
+    variableSites: 10,
+    elapsedMs: 0,
+  }));
+  const defaultSelection = selectTreeHypotheses(segments.slice(0, 80), 10000);
+  assert.equal(defaultSelection.length, 80);
+  const emergencyLimited = selectTreeHypotheses(segments, 10000, 2000);
+  assert.equal(emergencyLimited.length, 1000);
+  assert.equal(emergencyLimited[0]!.segment, segments[0]);
 });
 
 test("full-tree selection never substitutes one same-topology source fit for another", () => {

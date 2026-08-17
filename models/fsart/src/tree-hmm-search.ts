@@ -129,14 +129,14 @@ export function searchTreeHmmSubsets(
   const sites = profiles[0]!.siteLogLikelihoods.length;
   const criterion = options.criterion ?? "aicc";
   const beamWidth = Math.max(1, Math.min(12, Math.round(options.beamWidth ?? 4)));
-  const maximumStates = Math.max(1, Math.min(profiles.length, Math.round(options.maximumStates ?? 8)));
+  const beamDepth = Math.max(1, Math.min(profiles.length, Math.round(options.maximumStates ?? 8)));
   for (const profile of profiles) {
     const invalid = Array.from(profile.siteLogLikelihoods).findIndex((value) => !Number.isFinite(Number(value)));
     if (invalid >= 0) throw new Error(`Tree emission profile '${profile.id}' has a non-finite log likelihood at aligned site ${invalid + 1}.`);
   }
   const cache = new Map<string, RapidScore>();
   const transitions = new Map<string, TreeHmmSubsetTransition>();
-  const estimatedEvaluations = Math.max(profiles.length, profiles.length + beamWidth * profiles.length * Math.max(1, maximumStates - 1));
+  const estimatedEvaluations = Math.max(profiles.length, profiles.length + beamWidth * profiles.length * Math.max(1, beamDepth - 1));
   let evaluations = 0;
   const score = (rawIndexes: readonly number[]): RapidScore => {
     options.signal?.throwIfAborted();
@@ -200,7 +200,7 @@ export function searchTreeHmmSubsets(
     deltaCriterion: nullScore.criterionValue - best.criterionValue,
   }];
   let round = 1;
-  for (let size = 2; size <= maximumStates; size += 1) {
+  for (let size = 2; size <= beamDepth; size += 1) {
     const expanded = new Map<string, RapidScore>();
     for (const parent of beam) {
       for (let index = 0; index < profiles.length; index += 1) {
@@ -227,7 +227,9 @@ export function searchTreeHmmSubsets(
 
   let locallyConverged = false;
   const seen = new Set<string>([key(best.indexes)]);
-  for (let iteration = 0; iteration < 6; iteration += 1) {
+  const floatingIterationLimit = Math.max(12, Math.min(512, 4 * profiles.length));
+  let floatingIterations = 0;
+  for (; floatingIterations < floatingIterationLimit; floatingIterations += 1) {
     const neighbors = new Map<string, RapidScore>();
     if (best.indexes.length > 1) {
       for (const removed of best.indexes) {
@@ -236,7 +238,11 @@ export function searchTreeHmmSubsets(
         neighbors.set(key(candidate.indexes), candidate);
       }
     }
-    if (best.indexes.length < maximumStates) {
+    // The beam depth is only an initializer. Forward floating additions are
+    // deliberately allowed to grow all the way to the available candidate
+    // set, so a winner at the beam boundary is never mistaken for a local
+    // optimum without evaluating every one-tree addition.
+    if (best.indexes.length < profiles.length) {
       for (let added = 0; added < profiles.length; added += 1) {
         if (best.indexes.includes(added)) continue;
         const candidate = score([...best.indexes, added]);
@@ -295,12 +301,14 @@ export function searchTreeHmmSubsets(
     algorithm: "beam-forward-floating",
     evaluatedSubsets: cache.size,
     beamWidth,
-    maximumStates,
+    maximumStates: beamDepth,
     selectedTreeIds: best.indexes.map((index) => profiles[index]!.id),
     selectedProfileIndexes: best.indexes,
     criterionValue: best.criterionValue,
     nullCriterionValue: nullScore.criterionValue,
     converged: locallyConverged,
+    floatingIterations,
+    floatingIterationLimit,
     steps,
     hypotheses,
     transitions: Array.from(transitions.values()),

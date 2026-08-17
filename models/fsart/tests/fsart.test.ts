@@ -203,5 +203,6 @@ test("adjacent segment trees expose small split-difference subtree candidates", 
 
 test("fixed-topology scoring rejects unresolved internal polytomies but permits the unrooted root trifurcation", () => {
   assert.equal(isFullyResolvedTopology("(a,(b,c),(d,e));"), true);
+  assert.equal(isFullyResolvedTopology("(a:0,(b:0,c:0):0,(d:0,e:0):0);"), true);
   assert.equal(isFullyResolvedTopology("(a,b,(c,d,e));"), false);
 });

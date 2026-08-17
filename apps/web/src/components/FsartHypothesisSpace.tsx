@@ -16,6 +16,33 @@ function criterionValue(hypothesis: TreeHmmSubsetHypothesis): number {
   return hypothesis.exactCriterionValue ?? hypothesis.criterionValue;
 }
 
+function compareHypotheses(first: TreeHmmSubsetHypothesis, second: TreeHmmSubsetHypothesis): number {
+  const firstValue = criterionValue(first);
+  const secondValue = criterionValue(second);
+  if (Number.isFinite(firstValue) !== Number.isFinite(secondValue)) return Number.isFinite(firstValue) ? -1 : 1;
+  return firstValue - secondValue
+    || first.stateCount - second.stateCount
+    || first.key.localeCompare(second.key);
+}
+
+export function fsartHypothesisDeltaY(delta: number, maximumDelta: number, top: number, height: number): number {
+  if (!Number.isFinite(delta)) return top + 10;
+  return top + height - 10 - Math.log1p(Math.max(0, delta)) / Math.log1p(Math.max(1, maximumDelta)) * (height - 20);
+}
+
+export function selectRankedSourceBandHypotheses(
+  hypotheses: readonly TreeHmmSubsetHypothesis[],
+  nullKey: string,
+  limit: number | "all",
+): TreeHmmSubsetHypothesis[] {
+  const ranked = hypotheses.slice().sort(compareHypotheses);
+  const selected = limit === "all" ? ranked : ranked.slice(0, Math.max(0, limit));
+  const nullHypothesis = ranked.find((hypothesis) => hypothesis.key === nullKey);
+  return nullHypothesis === undefined || selected.some((hypothesis) => hypothesis.key === nullKey)
+    ? selected
+    : [...selected, nullHypothesis];
+}
+
 function numberLabel(value: number | undefined): string {
   if (value === undefined) return "not exact-checked";
   return Number.isFinite(value) ? value.toFixed(3) : "infeasible";
@@ -40,6 +67,20 @@ function sameTreeIds(first: readonly string[], second: readonly string[]): boole
   if (first.length !== second.length) return false;
   const right = new Set(second);
   return first.every((value) => right.has(value));
+}
+
+function profileRanges(profile: FsartAnalysisResult["treeHmmProfiles"][number]): readonly (readonly [number, number])[] {
+  return profile.sourceRanges ?? [[profile.sourceStart, profile.sourceEnd]];
+}
+
+function sourceColorIndex(treeId: string): number {
+  let hash = 0;
+  for (let index = 0; index < treeId.length; index += 1) hash = Math.imul(hash, 31) + treeId.charCodeAt(index);
+  return Math.abs(hash) % 8;
+}
+
+function compactTreeIds(treeIds: readonly string[]): string {
+  return treeIds.length <= 8 ? treeIds.join(" + ") : `${treeIds.slice(0, 8).join(" + ")} + ${treeIds.length - 8} more`;
 }
 
 function downloadHypotheses(hypotheses: readonly TreeHmmSubsetHypothesis[]): void {
@@ -81,11 +122,13 @@ export function FsartHypothesisSpace({ result, onPolish }: Props) {
   const [selectedKey, setSelectedKey] = useState(initialKey);
   const [selectedTreeIds, setSelectedTreeIds] = useState<readonly string[]>(() =>
     manualTreeIds ?? automaticTreeIds ?? search?.hypotheses?.find((hypothesis) => hypothesis.key === initialKey)?.treeIds ?? result.treeHmm.states.map((state) => state.id));
-  const [deltaLimit, setDeltaLimit] = useState<10 | 50 | 200 | "all">(50);
+  const [deltaLimit, setDeltaLimit] = useState<10 | 50 | 200 | "all">(200);
+  const [sourceBandLimit, setSourceBandLimit] = useState<20 | 50 | 200 | "all">(20);
   const [pending, setPending] = useState(false);
   const [progress, setProgress] = useState<RunProgress>();
   const [error, setError] = useState<string>();
   const svgRef = useRef<SVGSVGElement>(null);
+  const sourceBandSvgRef = useRef<SVGSVGElement>(null);
 
   useEffect(() => {
     const nextSearch = result.treeHmm.initialSubsetSearch ?? result.treeHmm.subsetSearch;
@@ -106,7 +149,9 @@ export function FsartHypothesisSpace({ result, onPolish }: Props) {
   const selected = selectedKey === undefined ? undefined : hypothesisByKey.get(selectedKey);
   const checked = new Set(selectedTreeIds);
   const exactKeys = new Set(exactVerifiedKeys);
-  const bestFinite = hypotheses.map(criterionValue).filter(Number.isFinite).sort((a, b) => a - b)[0];
+  const rankedHypotheses = hypotheses.slice().sort(compareHypotheses);
+  const rankByKey = new Map(rankedHypotheses.map((hypothesis, index) => [hypothesis.key, index + 1]));
+  const bestFinite = rankedHypotheses.map(criterionValue).find(Number.isFinite);
   const bestOne = hypotheses.filter((hypothesis) => hypothesis.stateCount === 1 && Number.isFinite(criterionValue(hypothesis))).sort((a, b) => criterionValue(a) - criterionValue(b))[0];
   const bestMultiple = hypotheses.filter((hypothesis) => hypothesis.stateCount > 1 && Number.isFinite(criterionValue(hypothesis))).sort((a, b) => criterionValue(a) - criterionValue(b))[0];
   const visible = hypotheses.filter((hypothesis) => {
@@ -121,16 +166,21 @@ export function FsartHypothesisSpace({ result, onPolish }: Props) {
   const margin = { left: 76, right: 24, top: 30, bottom: 58 };
   const plotWidth = width - margin.left - margin.right;
   const plotHeight = height - margin.top - margin.bottom;
-  const maximumStates = Math.max(1, search?.maximumStates ?? 1);
+  const maximumStates = Math.max(1, ...hypotheses.map((hypothesis) => hypothesis.stateCount));
+  const stateTickStep = maximumStates <= 12 ? 1 : Math.ceil(maximumStates / 10);
+  const stateTicks = Array.from(new Set([
+    1,
+    ...Array.from({ length: Math.ceil(maximumStates / stateTickStep) }, (_value, index) => Math.min(maximumStates, 1 + index * stateTickStep)),
+    maximumStates,
+  ])).sort((first, second) => first - second);
   const finiteDeltas = visible.map((hypothesis) => criterionValue(hypothesis) - (bestFinite ?? 0)).filter(Number.isFinite);
   const maximumDelta = Math.max(1, ...finiteDeltas);
   const x = (states: number, key: string): number => margin.left
     + (states - 0.5 + 0.52 * stableJitter(key)) / maximumStates * plotWidth;
   const y = (hypothesis: TreeHmmSubsetHypothesis): number => {
     const value = criterionValue(hypothesis);
-    if (!Number.isFinite(value) || bestFinite === undefined) return margin.top + plotHeight;
-    const delta = Math.max(0, value - bestFinite);
-    return margin.top + Math.log1p(delta) / Math.log1p(maximumDelta) * (plotHeight - 12);
+    const delta = bestFinite === undefined ? Number.POSITIVE_INFINITY : value - bestFinite;
+    return fsartHypothesisDeltaY(delta, maximumDelta, margin.top, plotHeight);
   };
   const visibleKeys = new Set(visible.map((hypothesis) => hypothesis.key));
   const edges = transitions.filter((transition) =>
@@ -139,6 +189,40 @@ export function FsartHypothesisSpace({ result, onPolish }: Props) {
   const nearby = selected === undefined ? [] : hypotheses.filter((hypothesis) =>
     hypothesis.key !== selected.key && moveDistance(hypothesis.profileIndexes, selected.profileIndexes) <= 2)
     .sort((first, second) => criterionValue(first) - criterionValue(second)).slice(0, 8);
+  const sourceBandHypotheses = selectRankedSourceBandHypotheses(hypotheses, search?.nullKey ?? "", sourceBandLimit);
+  const profileById = new Map(result.treeHmmProfiles.map((profile) => [profile.id, profile]));
+  const alignmentSites = Math.max(1, result.diagnostics.sites);
+  const sourceWidth = 1120;
+  const sourceMargin = { left: 238, right: 24, top: 38, bottom: 42 };
+  const sourcePlotWidth = sourceWidth - sourceMargin.left - sourceMargin.right;
+  const sourceRowHeights = sourceBandHypotheses.map((hypothesis) => Math.max(28, 14 + 2 * hypothesis.stateCount));
+  const sourceRowOffsets: number[] = [];
+  let sourcePlotHeight = 0;
+  for (const rowHeight of sourceRowHeights) {
+    sourceRowOffsets.push(sourcePlotHeight);
+    sourcePlotHeight += rowHeight;
+  }
+  const sourceHeight = sourceMargin.top + sourcePlotHeight + sourceMargin.bottom;
+  const sourceX = (siteBoundary: number): number => sourceMargin.left
+    + Math.max(0, Math.min(alignmentSites, siteBoundary)) / alignmentSites * sourcePlotWidth;
+  const sourceTickX = (site: number): number => sourceMargin.left
+    + (site - 1) / Math.max(1, alignmentSites - 1) * sourcePlotWidth;
+  const sourceTicks = Array.from(new Set([0, 0.25, 0.5, 0.75, 1]
+    .map((fraction) => Math.min(alignmentSites, Math.max(1, Math.round(1 + fraction * (alignmentSites - 1)))))));
+  const stateCountForKey = (candidateKey: string | undefined): number | undefined => candidateKey === undefined
+    ? undefined
+    : hypothesisByKey.get(candidateKey)?.stateCount ?? (candidateKey.length === 0 ? 0 : candidateKey.split(",").length);
+  const beamBoundaryWinningStages = [
+    ["rapid winner", search?.selectedKey],
+    ["exact-finalist winner", search?.exactSelectedKey],
+    ["final automatic subset", search?.finalSelectedKey],
+  ].filter((entry): entry is [string, string] => entry[1] !== undefined && stateCountForKey(entry[1]) === search?.maximumStates)
+    .map(([label]) => label);
+  const legacyBoundaryUnprobed = search !== undefined
+    && search.floatingIterationLimit === undefined
+    && search.maximumStates < result.treeHmmProfiles.length
+    && maximumStates <= search.maximumStates
+    && beamBoundaryWinningStages.length > 0;
 
   const selectHypothesis = (hypothesis: TreeHmmSubsetHypothesis): void => {
     setSelectedKey(hypothesis.key);
@@ -173,24 +257,31 @@ export function FsartHypothesisSpace({ result, onPolish }: Props) {
     <div className="result-stats fsart-hypothesis-stats">
       <div><span>Actually evaluated</span><strong>{search.evaluatedSubsets.toLocaleString()}</strong><small>rapid scaled-forward subsets</small></div>
       <div><span>Exact-checked</span><strong>{exactVerifiedKeys.length}</strong><small>finalists and floating cleanup</small></div>
-      <div><span>Full-tree bank</span><strong>{result.treeHmmProfiles.length}</strong><small>{bank === undefined ? "independent frozen fits" : `${bank.distinctResolvedTopologies} topology signatures · same-topology fits preserved`}</small></div>
+      <div><span>Scored full-tree set</span><strong>{result.treeHmmProfiles.length}</strong><small>{bank === undefined ? "independent frozen fits" : `${bank.distinctResolvedTopologies} topology signatures · same-topology fits preserved`}</small></div>
+      {bank !== undefined && <div><span>Fit-to-search accounting</span><strong>{bank.familyFits} → {result.treeHmmProfiles.length}</strong><small>{bank.unresolvedFits} structurally unresolved · {bank.truncatedFullTreeFits} excluded by Scored full-tree limit · {bank.failedProfileScores} scoring failures</small></div>}
+      <div><span>Beam expansion depth</span><strong>{search.maximumStates} tree{search.maximumStates === 1 ? "" : "s"}</strong><small>floating moves can grow beyond this</small></div>
+      <div><span>Largest subset evaluated</span><strong>{maximumStates} tree{maximumStates === 1 ? "" : "s"}</strong><small>{result.treeHmmProfiles.length} fitted-tree candidates available</small></div>
       <div><span>Best multi-tree vs one-tree</span><strong>{multiAdvantage === undefined ? "—" : `${multiAdvantage >= 0 ? "+" : ""}${multiAdvantage.toFixed(2)}`}</strong><small>positive favors the multi-tree subset</small></div>
       <div><span>Final automatic subset</span><strong>{automaticTreeIds.join(" + ") || "—"}</strong><small>after exact floating cleanup</small></div>
       <div><span>AICc finite through</span><strong>{bank === undefined ? "—" : `${bank.maximumAiccStates} state${bank.maximumAiccStates === 1 ? "" : "s"}`}</strong><small>n − k − 1 must stay positive</small></div>
     </div>
+    {bank !== undefined && bank.unresolvedFits > 0 && <p className="method-note"><strong>Why fitted trees can be absent from the scored set:</strong> all {bank.familyFits} source windows completed a FastTree fit, but {bank.unresolvedFits} output tree{bank.unresolvedFits === 1 ? " was" : "s were"} excluded because the unrooted structure had fewer than n − 3 nontrivial splits. This check ignores root placement and branch lengths: a binary zero-length edge is retained; a genuine internal multifurcation is not.</p>}
+    {bank !== undefined && bank.truncatedFullTreeFits > 0 && <p className="method-note fsart-critical-warning" role="alert"><strong>FULL-TREE CANDIDATE TRUNCATION:</strong> {bank.truncatedFullTreeFits} of {bank.resolvedFits} structurally resolved source-window trees were excluded before likelihood scoring and hypothesis search because the run's <em>Scored full-tree limit</em> was {bank.resolvedFits - bank.truncatedFullTreeFits}. This search did not consider the complete resolved tree family. Raise the setting and rerun before interpreting the selected hypothesis.</p>}
     {result.treeHmm.criterion === "aicc" && bank !== undefined && bank.maximumAiccStates <= 1 && <p className="method-note method-note--warning"><strong>AICc feasibility warning:</strong> with {result.diagnostics.taxa} taxa and {result.diagnostics.sites} aligned sites, every multi-tree model has n − k − 1 ≤ 0 and therefore infinite AICc. That is a criterion limitation, not numerical likelihood underflow; use AIC or BIC only if that model-selection choice is scientifically appropriate.</p>}
+    {legacyBoundaryUnprobed && <p className="method-note fsart-critical-warning" role="alert"><strong>LEGACY HYPOTHESIS-SIZE BOUNDARY:</strong> the {beamBoundaryWinningStages.join(", ")} used {search.maximumStates} trees, but this saved result contains no larger evaluated hypothesis even though {result.treeHmmProfiles.length} fitted-tree candidates were available. It predates unrestricted floating additions; rerun FSART before treating the selected size as a local optimum.</p>}
+    {!search.converged && search.floatingIterationLimit !== undefined && <p className="method-note fsart-critical-warning" role="alert"><strong>FLOATING SEARCH ITERATION LIMIT REACHED:</strong> add/drop/swap search used its emergency budget of {search.floatingIterationLimit} improving moves without establishing a one-move local optimum. The selected subset is search-limited and should not be interpreted as locally optimal.</p>}
     <div className="figure-card fsart-hypothesis-card">
-      <div className="figure-toolbar"><div><strong>Searched topology-subset landscape</strong><span>x = number of full-tree states · y = Δ{result.treeHmm.criterion.toUpperCase()} on a log scale · outlined nodes received an exact check</span></div><div className="figure-actions"><span>Show Δ ≤</span>{([10, 50, 200, "all"] as const).map((limit) => <button type="button" className={`button button--quiet ${deltaLimit === limit ? "is-active" : ""}`} key={limit} onClick={() => setDeltaLimit(limit)}>{limit}</button>)}<button type="button" className="button button--secondary" onClick={() => downloadHypotheses(hypotheses)}>Hypothesis CSV</button><button type="button" className="button button--secondary button--svg" onClick={() => svgRef.current !== null && downloadSvg(svgRef.current, "FSART searched hypothesis space")}>Export SVG</button></div></div>
+      <div className="figure-toolbar"><div><strong>Searched topology-subset landscape</strong><span>x = number of full-tree states · y = Δ{result.treeHmm.criterion.toUpperCase()} on a log scale, with larger values higher · outlined nodes received an exact check</span></div><div className="figure-actions"><span>{visible.length.toLocaleString()} of {hypotheses.length.toLocaleString()} shown · Δ ≤</span>{([10, 50, 200, "all"] as const).map((limit) => <button type="button" className={`button button--quiet ${deltaLimit === limit ? "is-active" : ""}`} key={limit} onClick={() => setDeltaLimit(limit)}>{limit}</button>)}<button type="button" className="button button--secondary" onClick={() => downloadHypotheses(hypotheses)}>Hypothesis CSV</button><button type="button" className="button button--secondary button--svg" onClick={() => svgRef.current !== null && downloadSvg(svgRef.current, "FSART searched hypothesis space")}>Export SVG</button></div></div>
       <div className="figure-scroll"><svg ref={svgRef} className="fsart-hypothesis-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="FSART full-tree-subset hypothesis search landscape">
         <rect x={margin.left} y={margin.top} width={plotWidth} height={plotHeight} className="hypothesis-plot-bg" />
-        {Array.from({ length: maximumStates }, (_value, index) => index + 1).map((states) => {
+        {stateTicks.map((states) => {
           const column = margin.left + (states - 0.5) / maximumStates * plotWidth;
           return <g key={states}><line x1={column} x2={column} y1={margin.top} y2={margin.top + plotHeight} className="hypothesis-grid" /><text x={column} y={height - 28} textAnchor="middle" className="hypothesis-axis-label">{states}</text></g>;
         })}
         <text x={margin.left + plotWidth / 2} y={height - 8} textAnchor="middle" className="hypothesis-axis-title">Full-tree states in subset</text>
         <text x={18} y={margin.top + plotHeight / 2} transform={`rotate(-90 18 ${margin.top + plotHeight / 2})`} textAnchor="middle" className="hypothesis-axis-title">Δ{result.treeHmm.criterion.toUpperCase()} (log scale; lower is better)</text>
-        <text x={margin.left - 8} y={margin.top + 4} textAnchor="end" className="hypothesis-axis-label">0</text>
-        <text x={margin.left - 8} y={margin.top + plotHeight} textAnchor="end" className="hypothesis-axis-label">{maximumDelta.toFixed(maximumDelta < 10 ? 1 : 0)}{hypotheses.some((hypothesis) => !Number.isFinite(criterionValue(hypothesis))) ? " / ∞" : ""}</text>
+        <text x={margin.left - 8} y={margin.top + 4} textAnchor="end" className="hypothesis-axis-label">{maximumDelta.toFixed(maximumDelta < 10 ? 1 : 0)}{hypotheses.some((hypothesis) => !Number.isFinite(criterionValue(hypothesis))) ? " / ∞" : ""}</text>
+        <text x={margin.left - 8} y={margin.top + plotHeight} textAnchor="end" className="hypothesis-axis-label">0</text>
         {edges.map((edge) => {
           const from = hypothesisByKey.get(edge.fromKey)!;
           const to = hypothesisByKey.get(edge.toKey)!;
@@ -211,6 +302,43 @@ export function FsartHypothesisSpace({ result, onPolish }: Props) {
         })}
       </svg></div>
       <div className="figure-note"><strong>What is drawn:</strong> every node is a subset whose rapid O(sites × states) scaled-forward score was computed. Lines are actual add/drop/swap requests touching the selected node. Exact checks are rings; rapid, exact-shortlist, final-cleanup, and null roles are labeled independently. “∞” nodes are mathematically undefined under AICc, not floating-point failures.</div>
+    </div>
+    <div className="figure-card fsart-source-band-card">
+      <div className="figure-toolbar"><div><strong>Ranked hypotheses and tree-estimation sources</strong><span>best criterion at top · each thin bar spans the alignment region used to fit one retained full tree</span></div><div className="figure-actions"><span>Show top</span>{([20, 50, 200, "all"] as const).map((limit) => <button type="button" className={`button button--quiet ${sourceBandLimit === limit ? "is-active" : ""}`} key={limit} onClick={() => setSourceBandLimit(limit)}>{limit}</button>)}<span>+ null</span><button type="button" className="button button--secondary button--svg" onClick={() => sourceBandSvgRef.current !== null && downloadSvg(sourceBandSvgRef.current, "FSART ranked hypothesis tree sources")}>Export SVG</button></div></div>
+      <div className="figure-scroll"><svg ref={sourceBandSvgRef} className="fsart-source-band-svg" viewBox={`0 0 ${sourceWidth} ${sourceHeight}`} role="img" aria-label="FSART hypotheses ranked by information criterion with source ranges for every retained full tree">
+        <rect x={sourceMargin.left} y={sourceMargin.top} width={sourcePlotWidth} height={sourcePlotHeight} className="hypothesis-plot-bg" />
+        {sourceTicks.map((site) => {
+          const position = sourceTickX(site);
+          return <g key={site}><line x1={position} x2={position} y1={sourceMargin.top} y2={sourceMargin.top + sourcePlotHeight} className="hypothesis-grid" /><text x={position} y={sourceMargin.top - 12} textAnchor={site === 1 ? "start" : site === alignmentSites ? "end" : "middle"} className="hypothesis-axis-label">{site.toLocaleString()}</text></g>;
+        })}
+        <text x={sourceMargin.left + sourcePlotWidth / 2} y={sourceHeight - 8} textAnchor="middle" className="hypothesis-axis-title">Tree-estimation source coordinates (aligned nucleotide sites)</text>
+        {sourceBandHypotheses.map((hypothesis, rowIndex) => {
+          const rowTop = sourceMargin.top + sourceRowOffsets[rowIndex]!;
+          const rowHeight = sourceRowHeights[rowIndex]!;
+          const profiles = hypothesis.treeIds.map((treeId) => profileById.get(treeId)).filter((profile): profile is NonNullable<typeof profile> => profile !== undefined)
+            .slice().sort((first, second) => first.sourceStart - second.sourceStart || first.sourceEnd - second.sourceEnd || first.id.localeCompare(second.id));
+          const laneHeight = (rowHeight - 11) / Math.max(1, profiles.length);
+          const barHeight = Math.max(1, Math.min(2.4, laneHeight * 0.68));
+          const value = criterionValue(hypothesis);
+          const delta = Number.isFinite(value) && bestFinite !== undefined ? Math.max(0, value - bestFinite) : Number.POSITIVE_INFINITY;
+          const isSelected = hypothesis.key === selectedKey;
+          const isNull = hypothesis.key === search.nullKey;
+          const roles = [isNull ? "null" : "", hypothesis.key === search.selectedKey ? "rapid best" : "", hypothesis.key === search.exactSelectedKey ? "exact best" : "", hypothesis.key === search.finalSelectedKey ? "final" : ""].filter(Boolean);
+          return <g key={hypothesis.key} className={`hypothesis-source-row ${isSelected ? "is-selected" : ""}`} onClick={() => selectHypothesis(hypothesis)}>
+            <title>{`Rank ${rankByKey.get(hypothesis.key)} · ${hypothesis.treeIds.join(" + ")} · ${result.treeHmm.criterion.toUpperCase()} ${numberLabel(value)}`}</title>
+            <rect x={0} y={rowTop} width={sourceWidth} height={rowHeight} className="hypothesis-source-row-bg" />
+            <text x={sourceMargin.left - 12} y={rowTop + 10} textAnchor="end" className="hypothesis-source-rank">#{rankByKey.get(hypothesis.key)} · Δ{result.treeHmm.criterion.toUpperCase()} {Number.isFinite(delta) ? delta.toFixed(delta < 10 ? 2 : 1) : "∞"} · {hypothesis.stateCount} tree{hypothesis.stateCount === 1 ? "" : "s"}{roles.length > 0 ? ` · ${roles.join("/")}` : ""}</text>
+            <text x={sourceMargin.left - 12} y={rowTop + 21} textAnchor="end" className="hypothesis-source-ids">{compactTreeIds(hypothesis.treeIds)}</text>
+            {profiles.flatMap((profile, profileIndex) => profileRanges(profile).map(([start, end], rangeIndex) => {
+              const x1 = sourceX(Math.max(0, start - 1));
+              const x2 = sourceX(Math.min(alignmentSites, end));
+              const rangeLabel = profileRanges(profile).map((range) => `${range[0]}–${range[1]}`).join(", ");
+              return <rect key={`${profile.id}-${rangeIndex}`} data-tree-id={profile.id} x={x1} y={rowTop + 6 + profileIndex * laneHeight} width={Math.max(1, x2 - x1)} height={barHeight} className={`hypothesis-source-bar hypothesis-source-bar--${sourceColorIndex(profile.id)} ${start === 1 && end === alignmentSites ? "is-global" : ""}`}><title>{`${profile.id} · fitted on ${rangeLabel} · hypothesis rank ${rankByKey.get(hypothesis.key)} · ${result.treeHmm.criterion.toUpperCase()} ${numberLabel(value)}`}</title></rect>;
+            }))}
+          </g>;
+        })}
+      </svg></div>
+      <div className="figure-note"><strong>How to read it:</strong> rows use the same searched hypotheses and criterion values as the landscape above, sorted from best to worst. Bars on separate micro-lanes are independently fitted full trees; their horizontal spans are the source sites used for those fits, including every disjoint source range when present. Hover a bar for its tree ID and exact coordinates; click a row to select that hypothesis. The null is always included even when it falls outside the displayed rank cutoff.</div>
     </div>
     {selected !== undefined && <div className="fsart-hypothesis-inspector">
       <div><span>Selected searched hypothesis</span><strong>{selected.treeIds.join(" + ")}</strong><small>{selected.stateCount} state{selected.stateCount === 1 ? "" : "s"} · k={selected.parameterCount} · rapid resets {selected.expectedResets.toPrecision(3)}</small></div>

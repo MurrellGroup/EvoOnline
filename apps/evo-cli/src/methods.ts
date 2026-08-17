@@ -212,7 +212,7 @@ function fsartOptions(parameters: ParameterValues, reporter: ProgressReporter) {
     maximumPartitionCandidates: numberValue(parameters, "maximumPartitionCandidates", 24),
     fastTreeFastest: Boolean(parameters.fastTreeFastest ?? true),
     runTreeHmm: Boolean(parameters.runTreeHmm ?? true),
-    maximumTreeHypotheses: numberValue(parameters, "maximumTreeHypotheses", 48),
+    maximumTreeHypotheses: numberValue(parameters, "maximumTreeHypotheses", 1000),
     maximumTreeBankCandidates: numberValue(parameters, "maximumTreeBankCandidates", 12),
     onStage: (stage: string, fraction: number, detail?: { readonly message?: string }) => progress(reporter, stage, fraction, detail),
   };

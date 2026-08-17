@@ -295,7 +295,7 @@ export class FsartClient {
       if (!Boolean(parameters.runTreeHmm ?? true)) return replaceTreeHmm(completed, skippedTreeHmm("Rapid topology-set HMM search was disabled.", criterion));
 
       const treeHmmStarted = performance.now();
-      const maximumTrees = Math.max(2, Math.min(64, Math.round(Number(parameters.maximumTreeHypotheses ?? 48))));
+      const maximumTrees = Math.max(2, Math.min(1000, Math.round(Number(parameters.maximumTreeHypotheses ?? 1000))));
       const hypotheses = selectTreeHypotheses(familyFits, result.diagnostics.sites, maximumTrees);
       const resolvedFits = familyFits.filter((candidate) => isFullyResolvedTopology(candidate.tree));
       completed = {

@@ -119,7 +119,7 @@ function options(parameters: ParameterValues, taxa: number, sites: number, varia
     maximumPartitionCandidates: Number(parameters.maximumPartitionCandidates ?? 24),
     fastTreeFastest: Boolean(parameters.fastTreeFastest ?? true),
     runTreeHmm: Boolean(parameters.runTreeHmm ?? true),
-    maximumTreeHypotheses: Number(parameters.maximumTreeHypotheses ?? 48),
+    maximumTreeHypotheses: Number(parameters.maximumTreeHypotheses ?? 1000),
     maximumTreeBankCandidates: Number(parameters.maximumTreeBankCandidates ?? 12),
   };
 }

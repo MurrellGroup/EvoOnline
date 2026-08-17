@@ -153,9 +153,9 @@ export function selectTreeBankBreakpoints(
 export function selectTreeHypotheses(
   segments: readonly SegmentLikelihood[],
   sites: number,
-  maximumTrees = 8,
+  maximumTrees = 1000,
 ): TreeHypothesisEntry[] {
-  const limit = Math.max(1, Math.min(64, Math.round(maximumTrees)));
+  const limit = Math.max(1, Math.min(1000, Math.round(maximumTrees)));
   const resolved = segments.flatMap((segment, sourceIndex): TreeHypothesisEntry[] => (
     isFullyResolvedTopology(segment.tree)
       ? [{ segment, signature: canonicalTopologySignature(segment.tree), sourceIndex }]

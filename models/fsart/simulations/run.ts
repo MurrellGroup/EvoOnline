@@ -209,7 +209,7 @@ async function fitTreeHmmBenchmark(
   if (global?.gtrFrequencies === undefined || global.gtrRates === undefined) {
     return { breakpoints: [], topologyRf: null, wallMs: performance.now() - started, fastTreeFits: evaluator.diagnostics().freshFits - fitsBefore, status: "No shared GTR fit." };
   }
-  const hypotheses = selectTreeHypotheses(topologySources, sites, 48);
+  const hypotheses = selectTreeHypotheses(topologySources, sites, 1000);
   const hasGlobalNull = hypotheses[0]?.segment.start === 1 && hypotheses[0]?.segment.end === sites;
   if (hypotheses.length < 2 || !hasGlobalNull) {
     return { breakpoints: [], topologyRf: partitionTopologyRf([global], truth), wallMs: performance.now() - started, fastTreeFits: evaluator.diagnostics().freshFits - fitsBefore, status: `Only one resolved full-tree fit from ${jobs.length} family fits.` };
